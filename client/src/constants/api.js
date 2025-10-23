@@ -9,7 +9,7 @@ export const API_ENDPOINTS = {
   SIGNUP: `${BASE_URL}/auth/signup`,
   PROFILE: `${BASE_URL}/auth/profile`,
   UPDATE_PROFILE: `${BASE_URL}/auth/profile`,
-  
+   
   // ============ API KEYS ============
   CREATE_API_KEY: `${BASE_URL}/create`,
   GET_API_KEY: `${BASE_URL}/get`,
