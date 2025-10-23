@@ -91,7 +91,7 @@ const BalancePage = () => {
                   <div className="balance-content">
                     <div className="balance-label">Available Wallet Balance</div>
                     <div className="balance-amount">
-                      {formatCurrency(balance.balance?.available_wallet_balance || 0)}
+                      {formatCurrency(balance.balance?.available_balance || 0)}
                     </div>
                     <div className="balance-description">
                       ✓ Ready to withdraw
@@ -107,7 +107,7 @@ const BalancePage = () => {
                   <div className="balance-content">
                     <div className="balance-label">Unsettled Balance</div>
                     <div className="balance-amount">
-                      {formatCurrency(balance.balance?.unsettled_balance || 0)}
+                      {formatCurrency(balance.balance?.unsettled_revenue || 0)}
                     </div>
                     <div className="balance-description">
                       ⏳ Waiting for settlement
@@ -123,7 +123,7 @@ const BalancePage = () => {
                   <div className="balance-content">
                     <div className="balance-label">Pending Payouts</div>
                     <div className="balance-amount">
-                      {formatCurrency(balance.balance?.pending_payouts_amount || 0)}
+                      {formatCurrency(balance.balance?.pending_payouts || 0)}
                     </div>
                     <div className="balance-description">
                       Waiting for approval

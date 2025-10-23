@@ -43,12 +43,79 @@ const PayoutsPage = () => {
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [requestLoading, setRequestLoading] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
+  const [feePreview, setFeePreview] = useState({
+  grossAmount: 0,
+  commission: 0,
+  netAmount: 0,
+  note: '',
+  warning: ''
+});
+
   const [eligibility, setEligibility] = useState({
     can_request_payout: false,
     minimum_payout_amount: 0,
     maximum_payout_amount: 0
   });
+  const FEE_FLAT_500_1000 = 35.40;
+const FEE_PERCENT_ABOVE_1000 = 0.0177; // 1.77%
+const SMALL_TXN_EXTRA_CHARGE = 10; // when freePayoutsRemaining === 0 and amount < 500
 
+const computePayoutCharge = (amount, freePayoutsRemaining) => {
+  // Ensure numeric
+  const a = Number(amount) || 0;
+
+  // Default — no commission
+  let commission = 0;
+  let note = '';
+
+  // If merchant has free payouts left, treat as free for amounts < 500
+  // but you asked: apply special rules only when freePayoutsRemaining == 0
+  if (freePayoutsRemaining === 0) {
+    if (a < 500) {
+      commission = SMALL_TXN_EXTRA_CHARGE;
+      note = `Since free payouts are exhausted, ₹${SMALL_TXN_EXTRA_CHARGE} will be charged for amounts below ₹500.`;
+    } else if (a >= 500 && a <= 1000) {
+      commission = FEE_FLAT_500_1000;
+      note = `Flat fee of ₹${FEE_FLAT_500_1000.toFixed(2)} applies for amounts between ₹500 and ₹1000.`;
+    } else if (a > 1000) {
+      commission = parseFloat((a * FEE_PERCENT_ABOVE_1000).toFixed(2));
+      note = `Fee of 1.77% applies for amounts above ₹1000 (₹${commission.toFixed(2)}).`;
+    }
+  } else {
+    // If free payouts remain, preserve original behavior (no charge shown),
+    // but still apply tiered charges if you want: current request says only when freePayoutsRemaining == 0
+    if (a >= 500 && a <= 1000) {
+      commission = FEE_FLAT_500_1000; // optional: keep visible even when free remain (you can change)
+      note = `Flat fee of ₹${FEE_FLAT_500_1000.toFixed(2)} applies for amounts between ₹500 and ₹1000.`;
+    } else if (a > 1000) {
+      commission = parseFloat((a * FEE_PERCENT_ABOVE_1000).toFixed(2));
+      note = `Fee of 1.77% applies for amounts above ₹1000 (₹${commission.toFixed(2)}).`;
+    }
+  }
+
+  const grossAmount = a;
+  const netAmount = parseFloat((grossAmount - commission).toFixed(2));
+
+  // Special warning text for the exact use-cases you requested
+  let warning = '';
+  if (a === 500) {
+    warning = `Payout will be created for ₹${(a + FEE_FLAT_500_1000).toFixed(2)} (₹${a} + ₹${FEE_FLAT_500_1000.toFixed(2)} fee).`;
+  } else if (a < 500 && freePayoutsRemaining === 0) {
+    warning = `Payout will be created for ₹${(a + SMALL_TXN_EXTRA_CHARGE).toFixed(2)} (₹${a} + ₹${SMALL_TXN_EXTRA_CHARGE} fee).`;
+  } else if (a > 1000) {
+    warning = `Payout will be created for ₹${(a + commission).toFixed(2)} (₹${a} + ₹${commission.toFixed(2)} fee).`;
+  } else if (commission > 0) {
+    warning = `Payout will be created for ₹${(a + commission).toFixed(2)} (₹${a} + ₹${commission.toFixed(2)} fee).`;
+  }
+
+  return {
+    grossAmount,
+    commission,
+    netAmount,
+    note,
+    warning
+  };
+};
   // Function to generate and download invoice PDF
   const downloadInvoicePDF = (payout) => {
     const doc = new jsPDF();
@@ -194,6 +261,25 @@ const PayoutsPage = () => {
         // ✅ Parse amount properly to avoid precision issues
         const payoutAmount = parseFloat(requestData.amount);
 
+
+      const freeLeft = (balance?.merchant?.freePayoutsRemaining ?? 0);
+      const { commission, netAmount, grossAmount, warning } = computePayoutCharge(payoutAmount, freeLeft);
+
+      // Show the required warnings to the user
+      if (warning) {
+        // You can show toast OR require explicit confirm for critical changes
+        const proceed = window.confirm(`${warning}\n\nProceed with payout request?`);
+        if (!proceed) {
+          throw new Error('Payout request cancelled by user.');
+        }
+      }
+
+
+
+
+
+
+
         if (!payoutAmount || payoutAmount <= 0) {
             throw new Error('Please enter a valid payout amount.');
         }
@@ -202,19 +288,23 @@ const PayoutsPage = () => {
             throw new Error(`The requested amount exceeds your available balance of ${formatCurrency(eligibility.maximum_payout_amount)}.`);
         }
 
+        
+// Build payout payload — include commission fields so backend can persist them
         const payoutData = {
-            amount: payoutAmount, // ✅ Use parsed number instead of string
-            transferMode: requestData.transferMode,
-            beneficiaryDetails: requestData.transferMode === 'upi'
-                ? { upiId: requestData.beneficiaryDetails.upiId }
-                : {
-                    accountNumber: requestData.beneficiaryDetails.accountNumber,
-                    ifscCode: requestData.beneficiaryDetails.ifscCode,
-                    accountHolderName: requestData.beneficiaryDetails.accountHolderName,
-                    bankName: requestData.beneficiaryDetails.bankName,
-                    branchName: requestData.beneficiaryDetails.branchName
-                },
-            notes: requestData.notes
+          amount: payoutAmount,
+          commission: commission,
+          netAmount: netAmount,
+          transferMode: requestData.transferMode,
+          beneficiaryDetails: requestData.transferMode === 'upi'
+            ? { upiId: requestData.beneficiaryDetails.upiId }
+            : {
+                accountNumber: requestData.beneficiaryDetails.accountNumber,
+                ifscCode: requestData.beneficiaryDetails.ifscCode,
+                accountHolderName: requestData.beneficiaryDetails.accountHolderName,
+                bankName: requestData.beneficiaryDetails.bankName,
+                branchName: requestData.beneficiaryDetails.branchName
+              },
+          notes: requestData.notes
         };
 
         await paymentService.requestPayout(payoutData);
@@ -251,23 +341,31 @@ const PayoutsPage = () => {
 
 
 
-  const handleInputChange = (field, value) => {
-    if (field.includes('.')) {
-      const [parent, child] = field.split('.');
-      setRequestData(prev => ({
-        ...prev,
-        [parent]: {
-          ...prev[parent],
-          [child]: value
-        }
-      }));
-    } else {
-      setRequestData(prev => ({
-        ...prev,
-        [field]: value
-      }));
-    }
-  };
+const handleInputChange = (field, value) => {
+  if (field.includes('.')) {
+    const [parent, child] = field.split('.');
+    setRequestData(prev => ({
+      ...prev,
+      [parent]: {
+        ...prev[parent],
+        [child]: value
+      }
+    }));
+  } else {
+    setRequestData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  }
+
+  // If amount changed, recompute fee preview
+  if (field === 'amount') {
+    const freeLeft = (balance?.merchant?.freePayoutsRemaining ?? 0);
+    const preview = computePayoutCharge(value, freeLeft);
+    setFeePreview(preview);
+  }
+};
+
 
   const formatCurrency = (amount) => {
     return `₹${parseFloat(amount || 0).toLocaleString('en-IN', {
@@ -367,7 +465,7 @@ const PayoutsPage = () => {
                 <div className="balance-content">
                   <div className="balance-label">Available Wallet Balance</div>
                   <div className="balance-amount">
-                    {formatCurrency(balance.balance?.available_balance || 0)}
+                    {formatCurrency(balance.balance?.available_balance || 0)} 
                   </div>
                   <div className="balance-description">
                     ✓ Ready to withdraw
@@ -450,6 +548,12 @@ const PayoutsPage = () => {
                 <p><strong>Settlement Policy:</strong> T+1/2 settlement  </p>
                 <p><strong>Weekend Policy:</strong> {balance.settlement_info.weekend_policy}</p>
               </div>
+
+              <div className="settlement-policy">
+                <p><strong>Settlement Policy:</strong> T0 settlement  </p>
+                <p><strong>Description:</strong> {balance.settlement_info.weekend_policy2}</p>
+              </div>
+
               <div className="settlement-examples">
                 Once you request a payout, the amount will typically start reflecting in your bank the same day.
                 However, due to bank processing delays or if the amount exceeds ₹2 lakh, it may take 24–48 hours to appear in your account, as per bank policies.
@@ -531,6 +635,13 @@ const PayoutsPage = () => {
               </p>
 
               <form onSubmit={handleRequestPayout} className="payout-form">
+                {requestData.amount && (
+                  <div style={{ marginTop: 8, fontSize: 13, color: '#374151' }}>
+                    <strong>Fee preview:</strong> {feePreview.commission ? `₹${feePreview.commission.toFixed(2)} fee — ` : 'No fee — '}
+                    <span>{feePreview.warning || feePreview.note}</span>
+                  </div>
+                )}
+
                 <div className="form-group">
                   <label>Amount (₹) *</label>
                   <input
