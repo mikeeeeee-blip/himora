@@ -1,0 +1,659 @@
+/* Balance Page Specific Styles */
+
+.balance-container {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+/* Warning Balance Card */
+.balance-card.warning {
+  border-left-color: #ff9800;
+}
+/* Free Payouts Banner */
+.free-payouts-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border: 1px solid #6ee7b7;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  color: #065f46;
+  font-size: 15px;
+}
+
+.free-payouts-banner .banner-icon {
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+/* Free Commission Card */
+.commission-card.free {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border: 2px solid #6ee7b7;
+}
+
+.commission-card.free .commission-rate {
+  color: #065f46;
+}
+
+.commission-note {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 8px;
+}
+
+.balance-card.warning .card-icon {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.1) 0%, rgba(255, 193, 7, 0.1) 100%);
+  color: #ff9800;
+}/* Settlement Policy */
+.settlement-policy {
+  background: #f0f9ff;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.settlement-policy p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: #1e40af;
+}
+
+/* Settlement Examples */
+.settlement-examples {
+  background: #fef3c7;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.settlement-examples h5 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.settlement-examples ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.settlement-examples li {
+  margin: 6px 0;
+  font-size: 13px;
+  color: #78350f;
+}
+
+/* Eligibility Reason */
+.eligibility-reason {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f0f9ff;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1e40af;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.eligibility-reason svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Detail Card Icon Colors */
+.detail-icon.success {
+  color: #10b981;
+}
+
+.detail-icon.warning {
+  color: #ff9800;
+}
+
+.stat-value.info {
+  color: #3b82f6;
+}
+
+
+/* Settlement Info Banner */
+.settlement-info-banner {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border-left: 4px solid #ff9800;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.banner-icon {
+  font-size: 24px;
+  color: #ff9800;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.banner-content {
+  flex: 1;
+  font-size: 14px;
+  color: #e65100;
+  line-height: 1.6;
+}
+
+.banner-content strong {
+  color: #bf360c;
+}
+
+/* Breakdown Subsection */
+.breakdown-subsection {
+  padding: 12px 0;
+}
+
+.subsection-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #667eea;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.breakdown-value.warning {
+  color: #ff9800;
+}
+
+/* Settlement Section */
+.settlement-section {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+}
+
+.settlement-section h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settlement-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.settlement-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.stat-value.success {
+  color: #10b981;
+}
+
+.stat-value.warning {
+  color: #ff9800;
+}
+
+.settlement-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settlement-details .detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: white;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.settlement-details .detail-row svg {
+  color: #667eea;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Eligibility Note */
+.eligibility-note {
+  margin-top: 16px;
+  padding: 12px;
+  background: #fff3e0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #e65100;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.eligibility-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Balance Cards Grid */
+.balance-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.balance-card {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+  color: white;
+  padding: 24px;
+  border-radius: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.balance-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.balance-card.primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.balance-card.secondary {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.balance-card.tertiary {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.balance-card.quaternary {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.balance-icon {
+  width: 56px;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.balance-content {
+  flex: 1;
+}
+
+.balance-label {
+  font-size: 14px;
+  opacity: 0.9;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.balance-amount {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  line-height: 1;
+}
+
+.balance-description {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+/* Breakdown Section */
+.breakdown-section {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: var(--shadow);
+}
+
+.breakdown-section h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.breakdown-card {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--border);
+}
+
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.breakdown-row.highlight {
+  background: rgba(250, 112, 154, 0.05);
+  padding: 12px;
+  border-radius: 8px;
+  margin: 4px 0;
+}
+
+.breakdown-row.total {
+  background: rgba(102, 126, 234, 0.05);
+  padding: 16px 12px;
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+.breakdown-label {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.breakdown-value {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.breakdown-value.success {
+  color: #10b981;
+}
+
+.breakdown-value.primary {
+  color: var(--primary);
+  font-size: 20px;
+}
+
+.breakdown-row.negative .breakdown-value {
+  color: #ef4444;
+}
+
+.breakdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+
+/* Commission Section */
+.commission-section {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: var(--shadow);
+}
+
+.commission-section h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.commission-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.commission-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.commission-card:hover {
+  border-color: var(--primary);
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.commission-title {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.commission-rate {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.commission-description {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* Summary Section */
+.summary-section {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: var(--shadow);
+}
+
+.summary-section h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Eligibility Section */
+.eligibility-section {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: var(--shadow);
+}
+
+.eligibility-section h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.eligibility-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.eligibility-status {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.status-badge.eligible {
+  background: #10b981;
+  color: white;
+  padding: 8px 20px;
+  border-radius: 24px;
+  font-weight: 600;
+  font-size: 14px;
+  display: inline-block;
+}
+
+.status-badge.not-eligible {
+  background: #ef4444;
+  color: white;
+  padding: 8px 20px;
+  border-radius: 24px;
+  font-weight: 600;
+  font-size: 14px;
+  display: inline-block;
+}
+
+.eligibility-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.eligibility-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  background: white;
+  border-radius: 8px;
+}
+
+.eligibility-label {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.eligibility-value {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 14px;
+}
+
+/* Merchant Section */
+.merchant-section {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: var(--shadow);
+}
+
+.merchant-section h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.merchant-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.merchant-detail {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.merchant-detail:last-child {
+  border-bottom: none;
+}
+
+.merchant-label {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.merchant-value {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.merchant-value.mono {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+}
+
+/* Spinning Animation */
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .balance-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .commission-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .eligibility-details {
+    grid-template-columns: 1fr;
+  }
+  
+  .merchant-card {
+    grid-template-columns: 1fr;
+  }
+}
