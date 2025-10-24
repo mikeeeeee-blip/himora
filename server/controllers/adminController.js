@@ -394,6 +394,8 @@ exports.requestPayout = async (req, res) => {
         const {
             amount,
             transferMode,
+            commission,
+            netAmount,
             beneficiaryDetails,
             notes,
             description
@@ -469,8 +471,8 @@ exports.requestPayout = async (req, res) => {
         // --- Balance and Commission Calculation ---
         const merchant = await User.findById(req.merchantId);
         const payoutCommissionInfo = calculatePayoutCommission(finalAmount, merchant);
-        const payoutCommission = payoutCommissionInfo.commission;
-        const netAmount = payoutCommissionInfo.netAmount;
+        const payoutCommission = commission;
+        
 
         // --- Create Payout Request ---
         const payoutId = `PAYOUT_REQ_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;

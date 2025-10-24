@@ -283,17 +283,17 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
         if (!payoutAmount || payoutAmount <= 0) {
             throw new Error('Please enter a valid payout amount.');
         }
-
-        // if (payoutAmount > eligibility.maximum_payout_amount) {
-        //     throw new Error(`The requested amount exceeds your available balance of ${formatCurrency(eligibility.maximum_payout_amount)}.`);
-        // }
+        console.log((payoutAmount + commission) , "hi " , eligibility.maximum_payout_amount)
+        if ( (payoutAmount + commission) > balance.balance.available_balance) {
+            throw new Error(`The requested amount exceeds your available balance of ${formatCurrency(balance.balance.available_balance)}.`);
+        }
 
         
-// Build payout payload — include commission fields so backend can persist them
+      // Build payout payload — include commission fields so backend can persist them
         const payoutData = {
-          amount: payoutAmount,
-          commission: commission,
-          netAmount: netAmount,
+          amount: payoutAmount + commission,
+          commission ,
+          netAmount: netAmount + commission,
           transferMode: requestData.transferMode,
           beneficiaryDetails: requestData.transferMode === 'upi'
             ? { upiId: requestData.beneficiaryDetails.upiId }
