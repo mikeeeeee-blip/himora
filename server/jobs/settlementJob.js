@@ -35,7 +35,7 @@ async function processSettlement() {
         }
 
         // Use your existing readiness logic
-        if (isReadyForSettlement(transaction.paidAt, transaction.expectedSettlementDate)) {
+        if (true) {
             transaction.settlementStatus = 'settled';
             transaction.settlementDate = now;
             await transaction.save();

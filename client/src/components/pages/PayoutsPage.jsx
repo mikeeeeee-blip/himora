@@ -284,9 +284,9 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
             throw new Error('Please enter a valid payout amount.');
         }
 
-        if (payoutAmount > eligibility.maximum_payout_amount) {
-            throw new Error(`The requested amount exceeds your available balance of ${formatCurrency(eligibility.maximum_payout_amount)}.`);
-        }
+        // if (payoutAmount > eligibility.maximum_payout_amount) {
+        //     throw new Error(`The requested amount exceeds your available balance of ${formatCurrency(eligibility.maximum_payout_amount)}.`);
+        // }
 
         
 // Build payout payload — include commission fields so backend can persist them
@@ -632,7 +632,7 @@ const handleInputChange = (field, value) => {
               <h3><FiPlus /> Request New Payout</h3>
               <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>
                 Select a settlement date to withdraw all transactions settled on that day
-              </p>
+              </p> Request New Payout
 
               <form onSubmit={handleRequestPayout} className="payout-form">
                 {requestData.amount && (
@@ -650,7 +650,7 @@ const handleInputChange = (field, value) => {
                     onChange={(e) => handleInputChange('amount', e.target.value)}
                     required
                     placeholder={`Max: ${formatCurrency(eligibility.maximum_payout_amount)}`}
-                    max={eligibility.maximum_payout_amount}
+                    max={eligibility.maximum_payout_amount} 
                     min="1"
                   />
                 </div>
