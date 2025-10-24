@@ -291,9 +291,7 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
         
       // Build payout payload — include commission fields so backend can persist them
         const payoutData = {
-          amount: payoutAmount + commission,
-          commission ,
-          netAmount: netAmount + commission,
+          amount: payoutAmount , // todo : remove the commition if you are calculating int the backed 
           transferMode: requestData.transferMode,
           beneficiaryDetails: requestData.transferMode === 'upi'
             ? { upiId: requestData.beneficiaryDetails.upiId }

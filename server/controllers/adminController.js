@@ -389,148 +389,183 @@ exports.getTransactionById = async (req, res) => {
         });
     }
 };
+
+
+
 exports.requestPayout = async (req, res) => {
-    try {
-        const {
-            amount,
-            transferMode,
-            commission,
-            netAmount,
-            beneficiaryDetails,
-            notes,
-            description
-        } = req.body;
+  try {
+    const {
+      amount,
+      transferMode,
+      beneficiaryDetails,
+      notes,
+      description
+    } = req.body;
 
-        console.log(`💰 Admin ${req.user.name} requesting payout`);
+    console.log(`💰 Admin ${req.user.name} requesting payout`);
 
-        // Validation
-        if (!transferMode || !beneficiaryDetails) {
-            return res.status(400).json({
-                success: false,
-                error: 'transferMode and beneficiaryDetails are required'
-            });
-        }
-
-        // ✅ Calculate total settled balance (all paid transactions that haven't been paid out)
-        const settledTransactions = await Transaction.find({
-            merchantId: req.merchantId,
-            status: 'paid',
-            settlementStatus: 'settled'
-        });
-
-        if (settledTransactions.length === 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'No settled balance available for payout'
-            });
-        }
-
-        // ✅ Calculate total available balance
-        const totalSettledAmount = settledTransactions.reduce((sum, t) => sum + t.amount, 0);
-
-        // ✅ Get total already paid out
-        const completedPayouts = await Payout.find({
-            merchantId: req.merchantId,
-            status: { $in: ['requested', 'processing', 'completed'] }
-        });
-
-        const totalPaidOut = completedPayouts.reduce((sum, p) => sum + p.amount, 0);
-
-        // ✅ Calculate available balance
-        const availableBalance = totalSettledAmount - totalPaidOut;
-
-        if (availableBalance <= 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'No balance available for payout',
-                availableBalance: 0
-            });
-        }
-
-        // ✅ Determine final payout amount
-        let finalAmount = amount || availableBalance;
-
-        // ✅ Validate requested amount
-        if (finalAmount <= 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'Requested amount must be greater than 0'
-            });
-        }
-
-        if (finalAmount > availableBalance) {
-            return res.status(400).json({
-                success: false,
-                error: `Requested amount ₹${finalAmount} exceeds available balance ₹${availableBalance}`,
-                availableBalance: availableBalance
-            });
-        }
-
-        console.log(`📊 Payout requested: ₹${finalAmount} out of ₹${availableBalance} available`);
-
-        // --- Balance and Commission Calculation ---
-        const merchant = await User.findById(req.merchantId);
-        const payoutCommissionInfo = calculatePayoutCommission(finalAmount, merchant);
-        const payoutCommission = commission;
-        
-
-        // --- Create Payout Request ---
-        const payoutId = `PAYOUT_REQ_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-
-        const payout = new Payout({
-            payoutId,
-            merchantId: req.merchantId,
-            merchantName: req.merchantName,
-            amount: finalAmount,
-            commission: payoutCommission,
-            commissionType: payoutCommissionInfo.commissionType,
-            commissionBreakdown: payoutCommissionInfo.breakdown,
-            netAmount,
-            description: description || '',
-            currency: 'INR',
-            transferMode,
-            beneficiaryDetails,
-            status: 'requested',
-            adminNotes: notes || '',
-            requestedBy: req.user._id,
-            requestedByName: req.user.name,
-            requestedAt: new Date()
-        });
-
-        await payout.save();
-
-        // --- Decrement Free Payouts if applicable ---
-        if (payoutCommissionInfo.commissionType === 'free') {
-            merchant.freePayoutsUnder500 -= 1;
-            await merchant.save();
-        }
-
-        console.log(`✅ Payout request created: ${payoutId} for ₹${finalAmount}`);
-
-        res.json({
-            success: true,
-            payout: {
-                payoutId,
-                amount: amount || 'full',
-                actualAmount: finalAmount,
-                commission: payoutCommission,
-                netAmount,
-                status: 'requested',
-                requestedAt: payout.requestedAt,
-                remaining_balance: availableBalance - finalAmount
-            },
-            message: amount
-                ? `Payout request of ₹${finalAmount} submitted successfully`
-                : `Full payout request of ₹${finalAmount} submitted successfully`
-        });
-
-    } catch (error) {
-        console.error('❌ Request Payout Error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to create payout request'
-        });
+    // Basic validation
+    if (!transferMode || !beneficiaryDetails) {
+      return res.status(400).json({
+        success: false,
+        error: 'transferMode and beneficiaryDetails are required'
+      });
     }
+
+    // ✅ Get settled transactions and compute available balance
+    const settledTransactions = await Transaction.find({
+      merchantId: req.merchantId,
+      status: 'paid',
+      settlementStatus: 'settled'
+    });
+
+    if (!settledTransactions || settledTransactions.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No settled balance available for payout'
+      });
+    }
+
+    const totalSettledAmount = settledTransactions.reduce((sum, t) => sum + t.amount, 0);
+
+    // ✅ Get already requested/processing/completed payouts to compute what's already been reserved/paid
+    const completedPayouts = await Payout.find({
+      merchantId: req.merchantId,
+      status: { $in: ['requested', 'processing', 'completed'] }
+    });
+
+    const totalPaidOut = completedPayouts.reduce((sum, p) => sum + p.amount + (p.commission || 0), 0);
+    // NOTE: include commission if you're storing it separately in Payout.amount or not.
+    // Above assumes p.amount is the requested amount (not including commission). If p.amount already includes commission adjust accordingly.
+
+    // Available balance that can be used to cover new payout + commission
+    const availableBalance = totalSettledAmount - totalPaidOut;
+
+    if (availableBalance <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No balance available for payout',
+        availableBalance: 0
+      });
+    }
+
+    // Final requested amount: either the provided amount or the full available balance
+    let finalAmount = typeof amount === 'number' && !isNaN(amount) ? amount : availableBalance;
+
+    // Validate requested amount
+    if (finalAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Requested amount must be greater than 0'
+      });
+    }
+
+    if (finalAmount > availableBalance) {
+      return res.status(400).json({
+        success: false,
+        error: `Requested amount ₹${finalAmount} exceeds available balance ₹${availableBalance}`,
+        availableBalance
+      });
+    }
+
+    console.log(`📊 Payout requested: ₹${finalAmount} out of ₹${availableBalance} available`);
+
+    // Fetch merchant data (for free payouts, etc.)
+    const merchant = await User.findById(req.merchantId);
+
+    // Calculate commission & netAmount using your function
+    const payoutCommissionInfo = calculatePayoutCommission(finalAmount, merchant);
+    const payoutCommission = payoutCommissionInfo.commission;
+    const commissionType = payoutCommissionInfo.commissionType;
+    const commissionBreakdown = payoutCommissionInfo.breakdown;
+    const netAmount = typeof payoutCommissionInfo.netAmount === 'number'
+      ? payoutCommissionInfo.netAmount
+      : parseFloat((finalAmount - payoutCommission).toFixed(2));
+
+    // --- Step 1 / Step 2: Ensure amount + commission fits in availableBalance ---
+    const totalDebit = parseFloat((finalAmount + payoutCommission).toFixed(2)); // what will be deducted from merchant's available balance
+
+    if (totalDebit > availableBalance) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient available balance to cover amount + commission. Required ₹${totalDebit}, Available ₹${availableBalance}`,
+        required: totalDebit,
+        availableBalance
+      });
+    }
+
+    // Extra guard: do not create payout if netAmount is non-positive
+    if (netAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Net payout amount must be positive. Computed net amount: ₹${netAmount}`,
+        commission: payoutCommission,
+        commissionType
+      });
+    }
+
+    // --- Create Payout Request ---
+    const payoutId = `PAYOUT_REQ_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+
+    const payout = new Payout({
+      payoutId,
+      merchantId: req.merchantId,
+      merchantName: req.merchantName,
+      amount: (finalAmount + payoutCommission ),                  // amount requested (gross)
+      commission: payoutCommission,         // commission amount
+      commissionType,
+      commissionBreakdown,
+      netAmount : amount,                            // amount to be transferred to beneficiary
+      description: description || '',
+      currency: 'INR',
+      transferMode,
+      beneficiaryDetails,
+      status: 'requested',
+      adminNotes: notes || '',
+      requestedBy: req.user._id,
+      requestedByName: req.user.name,
+      requestedAt: new Date()
+    });
+
+    await payout.save();
+
+    // --- Decrement Free Payouts if free was used ---
+    if (commissionType === 'free' && merchant && typeof merchant.freePayoutsUnder500 === 'number') {
+      merchant.freePayoutsUnder500 = Math.max(0, merchant.freePayoutsUnder500 - 1);
+      await merchant.save();
+    }
+
+    console.log(`✅ Payout request created: ${payoutId} for ₹${finalAmount} (commission ₹${payoutCommission})`);
+
+    // Remaining balance after reserving amount + commission
+    const remaining_balance = parseFloat((availableBalance - totalDebit).toFixed(2));
+
+    res.json({
+      success: true,
+      payout: {
+        payoutId,
+        amount: amount || 'full',
+        actualAmount: finalAmount,
+        commission: payoutCommission,
+        commissionType,
+        commissionBreakdown,
+        netAmount,
+        status: 'requested',
+        requestedAt: payout.requestedAt,
+        remaining_balance
+      },
+      message: amount
+        ? `Payout request of ₹${finalAmount} submitted successfully`
+        : `Full payout request of ₹${finalAmount} submitted successfully`
+    });
+
+  } catch (error) {
+    console.error('❌ Request Payout Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create payout request'
+    });
+  }
 };
 
 
