@@ -545,11 +545,11 @@ exports.requestPayout = async (req, res) => {
       payout: {
         payoutId,
         amount: amount || 'full',
-        actualAmount: finalAmount,
+        actualAmount: finalAmount + payoutCommission  ,
         commission: payoutCommission,
         commissionType,
         commissionBreakdown,
-        netAmount,
+        netAmount : amount,
         status: 'requested',
         requestedAt: payout.requestedAt,
         remaining_balance
