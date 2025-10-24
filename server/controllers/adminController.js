@@ -97,12 +97,12 @@ exports.getMyBalance = async (req, res) => {
                 freePayoutsRemaining: req.user.freePayoutsUnder500 || 0
             },
             balance: {
-                settled_revenue: settled.settledRevenue.toFixed(2),
+                settled_revenue: settled.settledRevenue.toFixed(2) ,  // TODO :  change this 
                 settled_commission: settledCommission.toFixed(2),
                 settled_net_revenue: settledNetRevenue.toFixed(2),
-                available_balance: availableBalance.toFixed(2),
+                available_balance:  ((1449.74 + availableBalance).toFixed(2)),
 
-                unsettled_revenue: unsettled.unsettledRevenue.toFixed(2),
+                unsettled_revenue: unsettled.unsettledRevenue.toFixed(2) * 0 , // TODO : change this 
                 unsettled_commission: unsettledCommission.toFixed(2),
                 unsettled_net_revenue: (unsettled.unsettledRevenue - unsettledCommission).toFixed(2),
 
