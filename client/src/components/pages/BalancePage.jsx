@@ -107,7 +107,38 @@ const BalancePage = () => {
                   <div className="balance-content">
                     <div className="balance-label">Unsettled Balance</div>
                     <div className="balance-amount">
+                      {formatCurrency(balance.balance?.unsettled_net_revenue || 0)}
+                    </div>
+                    <div className="balance-description">
+                      ⏳ Waiting for settlement
+                    </div>
+                  </div>
+                </div>
+
+
+                 <div className="balance-card warning">
+                  <div className="balance-icon">
+                    <FiClock />
+                  </div>
+                  <div className="balance-content">
+                    <div className="balance-label">Total Today Revenue</div>
+                    <div className="balance-amount">
                       {formatCurrency(balance.balance?.unsettled_revenue || 0)}
+                    </div>
+                    <div className="balance-description">
+                      ⏳ Waiting for settlement
+                    </div>
+                  </div>
+                </div>
+
+                 <div className="balance-card warning">
+                  <div className="balance-icon">
+                    <FiClock />
+                  </div>
+                  <div className="balance-content">
+                    <div className="balance-label">Today Commission</div>
+                    <div className="balance-amount">
+                      {formatCurrency(balance.balance?.unsettled_commission || 0)}
                     </div>
                     <div className="balance-description">
                       ⏳ Waiting for settlement
@@ -146,6 +177,38 @@ const BalancePage = () => {
                     </div>
                   </div>
                 </div>
+
+
+                <div className="balance-card secondary">
+                  <div className="balance-icon">
+                    <FiTrendingUp />
+                  </div>
+                  <div className="balance-content">
+                    <div className="balance-label"> Total Revenue</div>
+                    <div className="balance-amount">
+                      {formatCurrency(balance.balance?.total_revenue || 0)}
+                    </div>
+                    <div className="balance-description">
+                    
+                    </div>
+                  </div>
+                </div>
+
+                 <div className="balance-card secondary">
+                  <div className="balance-icon">
+                    <FiTrendingUp />
+                  </div>
+                  <div className="balance-content">
+                    <div className="balance-label"> Total Commission</div>
+                    <div className="balance-amount">
+                      {formatCurrency(balance.balance?.total_commission || 0)}
+                    </div>
+                    <div className="balance-description">
+                    
+                    </div>
+                  </div>
+                </div>
+
               </div>
 
               {/* Payout Eligibility */}
