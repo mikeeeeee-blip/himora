@@ -2,6 +2,7 @@ const Payout = require('../models/Payout');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
+const { sendMerchantWebhook } = require('./merchantWebhookController');
 
 // ============ GET ALL PAYOUTS (SuperAdmin) ============
 exports.getAllPayouts = async (req, res) => {
@@ -322,6 +323,9 @@ exports.processPayout = async (req, res) => {
         }
 
         await payout.save();
+        const updatedPayout = await Payout.findOne({ payoutId });
+
+        // console.log("new payout amount ",updatedPayout)
 
         // ✅ NOW update transactions to 'paid' status (actual money transferred)
         const updateResult = await Transaction.updateMany(
@@ -330,10 +334,29 @@ exports.processPayout = async (req, res) => {
                 $set: { 
                     payoutStatus: 'paid' // Mark as paid only after UTR is confirmed
                 }
-            }
+                
+            },
+                 { new: true }
         );
+        // console.log("updated transsaction " , updateResult)
+
 
         console.log(`✅ Payout ${payoutId} completed. ${updateResult.modifiedCount} transactions marked as paid.`);
+
+        // send webhook to merchant 
+
+        const webhookPayload = {
+            event: 'payment.success',
+                updatedPayout
+            }
+
+            console.log(webhookPayload)
+            const merchant = await User.findById(updatedPayout.merchantId)
+
+                 // Send merchant webhook if enabled
+            if (updatedPayout.merchantId) {
+            await sendMerchantWebhook(merchant, webhookPayload);
+            }
 
         res.json({
             success: true,

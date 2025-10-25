@@ -186,84 +186,93 @@ exports.deleteMerchantWebhook = async (req, res) => {
     }
 };
 
-// ============ SEND WEBHOOK TO MERCHANT (INTERNAL USE) ============
- exports.sendMerchantWebhook = async (merchant, payload, retries = 3) =>{
-    if (!merchant.webhookEnabled || !merchant.webhookUrl) {
-        console.log('⚠️ Webhook not enabled for merchant:', merchant.name);
-        return { success: false, error: 'Webhook not enabled' };
+// ========= SEND WEBHOOK TO MERCHANT (INTERNAL USE) =========
+/**
+ * Send a webhook to merchant with retries and exponential backoff.
+ *
+ * @param {Object} merchant - Merchant document (must include webhookEnabled, webhookUrl, webhookSecret, webhookEvents)
+ * @param {Object} payload - Payload to send (must include `event` string)
+ * @param {number} retries - Number of retry attempts (default 3)
+ */
+exports.sendMerchantWebhook = async function sendMerchantWebhook(merchant, payload, retries = 3) {
+  if (!merchant || !merchant.webhookEnabled || !merchant.webhookUrl) {
+    console.log('Webhook not enabled or missing merchant/webhook URL for merchant:', merchant && merchant.name);
+    return { success: false, error: 'Webhook not enabled' };
+  }
+
+  if (payload.event !== 'webhook.test' && !Array.isArray(merchant.webhookEvents)) {
+    console.log('Merchant webhookEvents missing or invalid for merchant:', merchant.name);
+    return { success: false, error: 'Event subscription info missing' };
+  }
+
+  if (payload.event !== 'webhook.test' && !merchant.webhookEvents.includes(payload.event)) {
+    console.log('Merchant not subscribed to event:', payload.event);
+    return { success: false, error: 'Event not subscribed' };
+  }
+
+  const timestamp = Date.now().toString();
+  const signaturePayload = timestamp + JSON.stringify(payload);
+  const signature = crypto
+    .createHmac('sha256', merchant.webhookSecret || '')
+    .update(signaturePayload)
+    .digest('hex');
+
+  const axiosConfig = {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-webhook-signature': signature,
+      'x-webhook-timestamp': timestamp,
+      'x-merchant-id': merchant._id ? merchant._id.toString() : '',
+      'x-event-type': payload.event
+    },
+    timeout: 10000,
+    validateStatus: (status) => status < 500 // treat 4xx as non-throwing errors
+  };
+
+  console.log(`Sending webhook to merchant: ${merchant.name}`);
+  console.log('Webhook URL:', merchant.webhookUrl);
+  console.log('Event:', payload.event);
+  console.log('Retries remaining:', retries);
+
+  try {
+    const response = await axios.post(merchant.webhookUrl, payload, axiosConfig);
+
+    if (response.status >= 200 && response.status < 300) {
+      console.log('Webhook delivered successfully to:', merchant.name, 'status:', response.status);
+      return { success: true, status: response.status, response: response.data };
     }
 
-    // Check if merchant wants this event
-    if (payload.event !== 'webhook.test' && !merchant.webhookEvents.includes(payload.event)) {
-        console.log('⚠️ Merchant not subscribed to event:', payload.event);
-        return { success: false, error: 'Event not subscribed' };
+    // 4xx responses (client errors) reach here because validateStatus doesn't throw
+    console.warn('Webhook returned non-2xx status for merchant:', merchant.name, 'status:', response.status);
+    console.warn('Response body:', response.data);
+    return { success: false, status: response.status, response: response.data, error: `HTTP ${response.status}` };
+  } catch (error) {
+    // Log useful debug info
+    console.error(`Webhook failed for merchant ${merchant.name}:`, error.message);
+    if (error.response) {
+      console.error('Webhook error response status:', error.response.status);
+      console.error('Webhook error response data:', error.response.data);
+    }
+    if (error.code) console.error('Axios error code:', error.code);
+
+    // Retry logic with exponential backoff
+    if (retries > 0 && error.code !== 'ENOTFOUND') {
+      const attempt = 4 - retries; // attempt number 1..n
+      const backoffMs = Math.min(30000, 1000 * Math.pow(2, attempt)); // 1s, 2s, 4s, 8s... capped 30s
+      console.log(`Retrying webhook in ${backoffMs}ms... (${retries - 1} retries left)`);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      // Call the exported function name to ensure correct reference
+      return await exports.sendMerchantWebhook(merchant, payload, retries - 1);
     }
 
-    // Generate webhook signature
-    const timestamp = Date.now().toString();
-    const signaturePayload = timestamp + JSON.stringify(payload);
-    
-    const signature = crypto
-        .createHmac('sha256', merchant.webhookSecret)
-        .update(signaturePayload)
-        .digest('hex');
-
-    try {
-        console.log(`📤 Sending webhook to merchant: ${merchant.name}`);
-        console.log(`🔗 Webhook URL: ${merchant.webhookUrl}`);
-        console.log(`📦 Event: ${payload.event}`);
-
-        const response = await axios.post(
-            merchant.webhookUrl,
-            payload,
-            {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-webhook-signature': signature,
-                    'x-webhook-timestamp': timestamp,
-                    'x-merchant-id': merchant._id.toString(),
-                    'x-event-type': payload.event
-                },
-                timeout: 10000, // 10 second timeout
-                validateStatus: (status) => status < 500 // Don't throw on 4xx
-            }
-        );
-
-        if (response.status >= 200 && response.status < 300) {
-            console.log('✅ Webhook delivered successfully to:', merchant.name);
-            return {
-                success: true,
-                status: response.status,
-                response: response.data
-            };
-        } else {
-            console.warn(`⚠️ Webhook returned status ${response.status}`);
-            return {
-                success: false,
-                status: response.status,
-                error: `HTTP ${response.status}`,
-                response: response.data
-            };
-        }
-
-    } catch (error) {
-        console.error(`❌ Webhook failed for merchant ${merchant.name}:`, error.message);
-
-        // Retry logic
-        if (retries > 0 && error.code !== 'ENOTFOUND') {
-            console.log(`🔄 Retrying webhook... (${retries} attempts left)`);
-            await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
-            return sendMerchantWebhook(merchant, payload, retries - 1);
-        }
-
-        return {
-            success: false,
-            error: error.message,
-            status: error.response?.status,
-            code: error.code
-        };
-    }
-}
+    return {
+      success: false,
+      error: error.message,
+      status: error.response?.status,
+      code: error.code
+    };
+  }
+};
 
 // ============ HELPER: Validate URL ============
 function isValidUrl(string) {

@@ -35,48 +35,54 @@ const TransactionsPage = () => {
   }, [filters.page, activeTab]);
 
   // ✅ UPDATED: Use search APIs instead of regular getTransactions/getPayouts
-  const fetchTransactions = async () => {
-    setLoading(true);
-    setError('');
+const fetchTransactions = async () => {
+  setLoading(true);
+  setError('');
 
-    try {
-      if (activeTab === 'payin') {
-        // ✅ Use searchTransactions with all filters
-        const data = await paymentService.searchTransactions({
-          page: filters.page,
-          limit: filters.limit,
-          status: filters.status,
-          paymentGateway: filters.payment_gateway,
-          paymentMethod: filters.payment_method,
-          startDate: filters.start_date,
-          endDate: filters.end_date,
-          search: filters.search, // Global search
-          sortBy: filters.sort_by,
-          sortOrder: filters.sort_order
-        });
-        setTransactions(data.transactions || []);
-        setPagination(data.pagination || {});
-      } else if (activeTab === 'payout') {
-        // ✅ Use searchPayouts with all filters
-        const data = await paymentService.searchPayouts({
-          page: filters.page,
-          limit: filters.limit,
-          status: filters.status,
-          startDate: filters.start_date,
-          endDate: filters.end_date,
-          search: filters.search, // Global search
-          sortBy: filters.sort_by,
-          sortOrder: filters.sort_order
-        });
-        setPayouts(data.payouts || []);
-        setPagination(data.pagination || {});
-      }
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
+  try {
+    if (activeTab === 'payin' || activeTab === 'settlement') {
+      // For settlement tab, force status=paid and settlementStatus=settled
+      const extra = activeTab === 'settlement'
+        ? { settlementStatus: 'settled', status: 'paid' }
+        : {};
+
+      const data = await paymentService.searchTransactions({
+        page: filters.page,
+        limit: filters.limit,
+        status: filters.status,               // user-controlled for payin, will be overridden for settlement by ...extra
+        paymentGateway: filters.payment_gateway,
+        paymentMethod: filters.payment_method,
+        startDate: filters.start_date,
+        endDate: filters.end_date,
+        search: filters.search,
+        sortBy: filters.sort_by,
+        sortOrder: filters.sort_order,
+        ...extra
+      });
+
+      setTransactions(data.transactions || []);
+      setPagination(data.pagination || {});
+    } else if (activeTab === 'payout') {
+      const data = await paymentService.searchPayouts({
+        page: filters.page,
+        limit: filters.limit,
+        status: filters.status,
+        startDate: filters.start_date,
+        endDate: filters.end_date,
+        search: filters.search,
+        sortBy: filters.sort_by,
+        sortOrder: filters.sort_order
+      });
+      setPayouts(data.payouts || []);
+      setPagination(data.pagination || {});
     }
-  };
+  } catch (error) {
+    setError(error.message || 'Failed to fetch data');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
@@ -146,25 +152,25 @@ const TransactionsPage = () => {
   };
 
   const formatForExport = () => {
-    if (activeTab === 'payin') {
+    if (activeTab === 'payin' || activeTab === 'settlement') {
       return transactions.map(txn => ({
-        'Transaction ID': txn.transaction_id || txn.transactionId,
-        'Order ID': txn.order_id || txn.orderId,
-        'UTR': txn.utr || txn.acquirerData?.utr || 'N/A',
-        'Bank Transaction ID': txn.bank_transaction_id || txn.acquirerData?.bank_transaction_id || 'N/A',
+        'Transaction ID': txn.transactionId || txn.transaction_id || '-',
+        'Order ID': txn.orderId || txn.order_id || '-',
+        'UTR': txn.acquirerData?.utr || txn.utr || 'N/A',
+        'Bank Transaction ID': txn.acquirerData?.bank_transaction_id || 'N/A',
         'Amount': `₹${txn.amount}`,
-        "Commition" : `₹${txn.commission}`,
-        "Net Amount" : `₹${txn.netAmount}`,
+        'Commission': `₹${txn.commission ?? 0}`,
+        'Net Amount': `₹${txn.netAmount ?? txn.net_amount ?? 0}`,
         'Status': txn.status,
-        'Payment Method': txn.payment_method || txn.paymentMethod || 'N/A',
-        'Customer Name': txn.customer_name || txn.customer?.name,
-        'Customer Email': txn.customer_email || txn.customer?.email,
-        'Customer Phone': txn.customer_phone || txn.customer?.phone,
+        'Payment Method': txn.paymentMethod || txn.payment_method || 'N/A',
+        'Customer Name': txn.customerName || txn.customer_name || (txn.customer && txn.customer.name) || '-',
+        'Customer Email': txn.customerEmail || txn.customer_email || (txn.customer && txn.customer.email) || '-',
+        'Customer Phone': txn.customerPhone || txn.customer_phone || (txn.customer && txn.customer.phone) || '-',
         'Description': txn.description || 'N/A',
-        'Gateway': txn.payment_gateway || txn.paymentGateway,
-        'Settlement Status': txn.settlement_status || txn.settlementStatus || 'unsettled',
-        'Created At': txn.created_at || txn.createdAt,
-        'Paid At': txn.paid_at || txn.paidAt || 'Not paid'
+        'Gateway': txn.paymentGateway || txn.payment_gateway || '-',
+        'Settlement Status': txn.settlementStatus || txn.settlement_status || '-',
+        'Paid At': txn.paidAt || txn.paid_at || '-',
+        'Settled At': txn.settlementDate || txn.settlement_date || txn.updatedAt || txn.updated_at || '-'
       }));
     } else {
       return payouts.map(payout => ({
@@ -181,6 +187,7 @@ const TransactionsPage = () => {
       }));
     }
   };
+
 
   return (
     <div className="page-container with-sidebar">
@@ -218,6 +225,15 @@ const TransactionsPage = () => {
             >
               Payout
             </button>
+
+            <button
+              className={`tab ${activeTab === 'settlement' ? 'active' : ''}`}
+              onClick={() => handleTabChange('settlement')}
+            >
+              Settlements
+            </button>
+
+
           </div>
 
           {/* Filter bar */}
@@ -424,6 +440,64 @@ const TransactionsPage = () => {
                   <p>No payout requests match your current filters.</p>
                 </div>
               ) : null}
+
+               {activeTab === 'settlement' && transactions.length > 0 ? (
+                <div className="table-card">
+                  <table className="tx-table">
+                    <thead>
+                      <tr>
+                        <th>Transaction ID</th>
+                        <th>Order ID</th>
+                        <th>Amount</th>
+                        <th>Commission</th>
+                        <th>Net Amount</th>
+                        <th>Status</th>
+                        <th>Payment Method</th>
+                        <th>Gateway</th>
+                        <th>Paid At</th>
+                        <th>Settled At</th>
+                        <th>UTR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transactions.map((txn, index) => {
+                        const settledAt = txn.settlementDate || txn.settlement_date || txn.updatedAt || txn.updated_at || txn.paidAt || txn.paid_at;
+                        return (
+                          <tr
+                            key={txn.transactionId || txn.transaction_id || index}
+                            className="clickable-row"
+                            onClick={() => navigate(`/admin/transactions/${txn.transactionId || txn.transaction_id}`)}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <td className="transaction-id">{txn.transactionId || txn.transaction_id || '-'}</td>
+                            <td className="order-id">{txn.orderId || txn.order_id || '-'}</td>
+                            <td className="amount">{formatAmount(txn.amount)}</td>
+                            <td className="amount">{formatAmount(txn.commission)}</td>
+                            <td className="amount" style={{ color: '#10b981', fontWeight: 600 }}>{formatAmount(txn.netAmount)}</td>
+                            <td>
+                              <span className={`transaction-status ${getStatusClass(txn.status)}`}>
+                                {txn.status || '-'}
+                              </span>
+                            </td>
+                            <td className="payment-method">{txn.paymentMethod || txn.payment_method || '-'}</td>
+                            <td className="gateway">{txn.paymentGateway || txn.payment_gateway || '-'}</td>
+                            <td className="date">{formatDate(txn.paidAt || txn.paid_at)}</td>
+                            <td className="date">{formatDate(settledAt)}</td>
+                            <td>{txn.acquirerData?.utr || txn.utr || '-'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : activeTab === 'settlement' && transactions.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon"><HiOutlineClipboardDocumentList /></div>
+                  <h3>No Settled Transactions</h3>
+                  <p>No settled transactions match your current filters.</p>
+                </div>
+              ) : null}
+
 
               {/* Pagination */}
               {pagination && Object.keys(pagination).length > 0 && (
