@@ -610,7 +610,7 @@ const handleInputChange = (field, value) => {
           <div className="info-message">
             <FiInfo /> <strong>Payout Charges:</strong>
             {balance?.merchant?.freePayoutsRemaining > 0 && ` Under ₹500: FREE (${balance.merchant.freePayoutsRemaining} left) | `}
-            ₹500-₹1000: Flat ₹35.40 | Above ₹1000: 1.77%
+            ₹500-₹1000: Flat ₹30.40 | Above ₹1000: 1.77%
           </div>
 
 
