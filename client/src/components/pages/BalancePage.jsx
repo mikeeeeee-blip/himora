@@ -123,7 +123,7 @@ const BalancePage = () => {
                   <div className="balance-content">
                     <div className="balance-label">Total Today Revenue</div>
                     <div className="balance-amount">
-                      {formatCurrency(balance.balance?.unsettled_revenue || 0)}
+                      {formatCurrency(balance.balance?.totalTodayRevenue || 0)}
                     </div>
                     <div className="balance-description">
                       ⏳ Waiting for settlement
@@ -136,9 +136,9 @@ const BalancePage = () => {
                     <FiClock />
                   </div>
                   <div className="balance-content">
-                    <div className="balance-label">Today Commission</div>
+                    <div className="balance-label">Today payin  Commission</div>
                     <div className="balance-amount">
-                      {formatCurrency(balance.balance?.unsettled_commission || 0)}
+                      {formatCurrency(balance.balance?.totalPayinCommission || 0)}
                     </div>
                     <div className="balance-description">
                       ⏳ Waiting for settlement
@@ -199,7 +199,7 @@ const BalancePage = () => {
                     <FiTrendingUp />
                   </div>
                   <div className="balance-content">
-                    <div className="balance-label"> Total Commission</div>
+                    <div className="balance-label"> Total Payin Commission</div>
                     <div className="balance-amount">
                       {formatCurrency(balance.balance?.total_commission || 0)}
                     </div>

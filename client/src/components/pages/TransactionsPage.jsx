@@ -153,6 +153,8 @@ const TransactionsPage = () => {
         'UTR': txn.utr || txn.acquirerData?.utr || 'N/A',
         'Bank Transaction ID': txn.bank_transaction_id || txn.acquirerData?.bank_transaction_id || 'N/A',
         'Amount': `₹${txn.amount}`,
+        "Commition" : `₹${txn.commission}`,
+        "Net Amount" : `₹${txn.netAmount}`,
         'Status': txn.status,
         'Payment Method': txn.payment_method || txn.paymentMethod || 'N/A',
         'Customer Name': txn.customer_name || txn.customer?.name,
@@ -324,6 +326,8 @@ const TransactionsPage = () => {
                         <th>Description</th>
                         <th>Customer</th>
                         <th>Amount</th>
+                        <th>Commission</th>
+                        <th>Net Amount</th>
                         <th>Status</th>
                         <th>Payment Method</th>
                         <th>Gateway</th>
@@ -347,6 +351,8 @@ const TransactionsPage = () => {
                             <div className="customer-email">{transaction.customer_email || transaction.customer?.email || '-'}</div>
                           </td>
                           <td className="amount">{formatAmount(transaction.amount)}</td>
+                           <td className="amount">{formatAmount(transaction.commission)}</td>
+                            <td className="amount">{formatAmount(transaction.netAmount)}</td>
                           <td>
                             <span className={`transaction-status ${getStatusClass(transaction.status)}`}>
                               {transaction.status || 'Pending'}
@@ -396,7 +402,7 @@ const TransactionsPage = () => {
                             {formatAmount(payout.netAmount)}
                           </td>
                           <td className="amount">{formatAmount(payout.commission)}</td>
-                          <td className="description">{payout.description || '-'}</td>
+                          <td className="description">{payout.adminNotes || '-'}</td>
                           <td>
                             <span className={`transaction-status ${getStatusClass(payout.status)}`}>
                               {payout.status || 'Pending'}

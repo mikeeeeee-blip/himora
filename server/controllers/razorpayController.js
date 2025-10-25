@@ -5,7 +5,8 @@ const { sendMerchantWebhook } = require('./merchantWebhookController');
 const User = require('../models/User');
 const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
 const axios = require('axios')    // Initialize Razorpay
-const {createPhonePePaymentLink} = require('./phonepeController')
+const {createPhonePePaymentLink} = require('./phonepeController');
+const { calculatePayinCommission } = require('../utils/commissionCalculator');
 const razorpay = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
     key_secret: process.env.RAZORPAY_KEY_SECRET
@@ -231,6 +232,8 @@ exports.createPhonePeDeepLink = async (req, res) => {
       customerEmail: customer_email || '',
       customerPhone: customer_phone,
       amount: parseFloat(amount),
+      commission : calculatePayinCommission(amount).commission,
+      netAmount : (parseFloat(amount) -  calculatePayinCommission(amount).commission),
       currency: 'INR',
       description: description || `Payment for ${merchantName}`,
       status: 'created',

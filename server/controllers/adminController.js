@@ -5,6 +5,9 @@ const User = require('../models/User');
 const { calculatePayinCommission, calculatePayoutCommission } = require('../utils/commissionCalculator');
 const { getSettlementStatusMessage } = require('../utils/settlementCalculator');
 const mongoose = require('mongoose');
+const { todayRevenueAndCommission } = require('../utils/todayRevenueAndCommission');
+const { getIstDayRange } = require('../utils/getIstDayRange');
+
 // ============ GET MY BALANCE (Updated with T+1 settlement tracking) ============
 
 // Use commission percentage/gst rate as needed (here: 3.8% + 18% GST)
@@ -50,6 +53,13 @@ exports.getMyBalance = async (req, res) => {
             status: 'paid',
             settlementStatus: 'unsettled'
         }).sort({ expectedSettlementDate: 1 });
+
+        // totalTodayRevenue 
+        // get all paid transactions that are created or updated today only and then calculate the amount and then 
+        // totalPayinCommission 
+        // get all transattion that are created and updated for today only and calculate them by the commission feild 
+          
+         const  { totalTodayRevenue , totalPayinCommission , transactionCount} = await todayRevenueAndCommission(merchantObjectId)
 
         // Aggregate payouts
         const completedPayoutAgg = await Payout.aggregate([
@@ -101,7 +111,8 @@ exports.getMyBalance = async (req, res) => {
                 settled_commission: settledCommission.toFixed(2),
                 settled_net_revenue: settledNetRevenue.toFixed(2),
                 available_balance:  (availableBalance.toFixed(2)),
-
+                totalTodayRevenue : totalTodayRevenue,
+                totalPayinCommission : totalPayinCommission,
                 unsettled_revenue: unsettled.unsettledRevenue.toFixed(2) ,
                 unsettled_commission: unsettledCommission.toFixed(2),
                 unsettled_net_revenue: (unsettled.unsettledRevenue - unsettledCommission).toFixed(2),

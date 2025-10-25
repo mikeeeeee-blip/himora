@@ -63,6 +63,14 @@ const TransactionSchema = new mongoose.Schema({
         required: true,
         min: 1,
     },
+    commission : {
+        type : Number,
+        required : false
+    },
+    netAmount : {
+        type : Number,
+        required : false
+    },
     currency: {
         type: String,
         default: 'INR',
