@@ -418,7 +418,7 @@ const fetchTransactions = async () => {
                             {formatAmount(payout.netAmount)}
                           </td>
                           <td className="amount">{formatAmount(payout.commission)}</td>
-                          <td className="description">{payout.adminNotes || '-'}</td>
+                          <td className="description">{payout.description || '-'}</td>
                           <td>
                             <span className={`transaction-status ${getStatusClass(payout.status)}`}>
                               {payout.status || 'Pending'}
