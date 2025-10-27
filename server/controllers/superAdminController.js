@@ -297,19 +297,19 @@ exports.processPayout = async (req, res) => {
         }
 
         // ✅ Check for duplicate UTR
-        const existingPayout = await Payout.findOne({ 
-            utr: utr.trim(), 
-            _id: { $ne: payout._id },
-            status: 'completed'
-        });
+        // const existingPayout = await Payout.findOne({ 
+        //     utr: utr.trim(), 
+        //     _id: { $ne: payout._id },
+        //     status: 'completed'
+        // });
 
-        if (existingPayout) {
-            return res.status(400).json({
-                success: false,
-                error: `UTR ${utr} is already used for another payout: ${existingPayout.payoutId}`,
-                duplicatePayoutId: existingPayout.payoutId
-            });
-        }
+        // if (existingPayout) {
+        //     return res.status(400).json({
+        //         success: false,
+        //         error: `UTR ${utr} is already used for another payout: ${existingPayout.payoutId}`,
+        //         duplicatePayoutId: existingPayout.payoutId
+        //     });
+        // }
 
         // ✅ Update payout as completed
         payout.status = 'completed';
