@@ -350,7 +350,7 @@ exports.processPayout = async (req, res) => {
                 updatedPayout
             }
 
-            console.log(webhookPayload)
+            console.log("sending the webhook payload ",webhookPayload)
             const merchant = await User.findById(updatedPayout.merchantId)
 
                  // Send merchant webhook if enabled

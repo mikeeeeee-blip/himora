@@ -579,7 +579,7 @@ exports.requestPayout = async (req, res) => {
       commissionType,
       commissionBreakdown,
       netAmount: finalAmount, // amount that will be delivered to beneficiary
-      description: description || '',
+      description: notes || '',
       currency: 'INR',
       transferMode,
       beneficiaryDetails,
