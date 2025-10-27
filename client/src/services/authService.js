@@ -33,7 +33,7 @@ class AuthService {
       // Store token and role in localStorage
       localStorage.setItem('token', token);
       localStorage.setItem('role', normalizedRole);
-      
+      localStorage.setItem('businessName' , user.businessName)
       this.token = token;
       this.role = normalizedRole;
 

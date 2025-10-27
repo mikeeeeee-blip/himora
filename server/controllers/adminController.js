@@ -189,7 +189,7 @@ exports.getMyBalance = async (req, res) => {
 exports.searchTransactions = async (req, res) => {
   try {
     const {
-      merchantId,
+      // merchantId,
       minAmount,
       maxAmount,
       startDate,
@@ -212,7 +212,10 @@ exports.searchTransactions = async (req, res) => {
 
     const query = {};
 
-    if (merchantId) query.merchantId = mongoose.Types.ObjectId(merchantId);
+    // TODO :  get the merchant id from middleware 
+    const merchantId = req.merchantId
+    if (merchantId) query.merchantId = new mongoose.Types.ObjectId(merchantId);
+    console.table(query.merchantId)
     if (status) query.status = status;
     if (paymentGateway) query.paymentGateway = paymentGateway;
     if (paymentMethod) query.paymentMethod = paymentMethod;
@@ -242,6 +245,7 @@ exports.searchTransactions = async (req, res) => {
     // Global text search
     if (search) {
       query.$or = [
+// add the realmid to fetch only user raltive transaction 
         { transactionId: { $regex: search, $options: 'i' } },
         { orderId: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },

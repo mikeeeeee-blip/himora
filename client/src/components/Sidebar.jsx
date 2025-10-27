@@ -59,9 +59,28 @@ const Sidebar = () => {
         ))}
       </nav>
 
-      <div className="sidebar-footer">
-        <button className="logout" onClick={() => { authService.logout(); navigate('/login'); }}><FiLogOut /> {!collapsed && 'Logout'}</button>
-      </div>
+        
+        <div className="sidebar-footer">
+      {!collapsed && (
+        <div className="business-info">
+          <div className="business-label">Business</div>
+          <div className="business-name">
+            {localStorage.getItem('businessName') || 'Your Business'}
+          </div>
+        </div>
+      )}
+
+      <button
+        className="logout"
+        onClick={() => {
+          authService.logout();
+          navigate('/login');
+        }}
+      >
+        <FiLogOut /> {!collapsed && 'Logout'}
+      </button>
+    </div>
+
     </aside>
   );
 };

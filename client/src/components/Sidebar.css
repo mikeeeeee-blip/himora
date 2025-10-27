@@ -1,3 +1,61 @@
+
+
+
+/* ===== Professional Footer Styling ===== */
+.sidebar-footer {
+  margin-top: auto;
+  padding: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.business-info {
+  text-align: left;
+  padding: 0.5rem 0;
+}
+
+.business-label {
+  font-size: 0.75rem;
+  color: #9ca3af; /* subtle gray */
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.business-name {
+  font-size: 0.95rem;
+  color: #000000;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.logout {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  color: #f87171;
+  font-weight: 500;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.logout:hover {
+  color: #ef4444;
+}
+
+
+
+
+
 /* Left Sidebar */
 .sidebar {
   position: fixed;

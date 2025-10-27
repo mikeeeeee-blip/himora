@@ -5,3 +5,6 @@ epic
     taks 2 : settlement time testing 
 
     https://github.com/Om2123/cashfree_backend
+
+
+    in dashboard total transaction is 4 for new user means we are getting wrong info from backend
