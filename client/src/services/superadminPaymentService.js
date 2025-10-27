@@ -116,7 +116,9 @@ async triggerManualSettlement() {
         },
         params: {
           page: filters.page || 1,
-          limit: filters.limit || 20,
+          // limit: filters.limit || 20,
+          // TODO : fix the pagination issue in ui 
+          limit:  20000000000,
           status: filters.status || undefined,
           merchantId: filters.merchantId || undefined,
           isAutoPayout: filters.isAutoPayout || undefined,
