@@ -243,7 +243,7 @@ const AdminDashboard = () => {
               <div className="card-content">
                 <div className="metric-label">Today's Payin</div>
                 <div className="metric-value">
-                  {dashboardStats.loading ? '...' : formatCurrency(todayPayin.amount)}
+                  {dashboardStats.loading ? '...' : formatCurrency(dashboardStats.balance?.balance.totalTodayRevenue)}
                 </div>
                 <div className="metric-sub">{todayPayin.count} Transactions</div>
               </div>
@@ -284,6 +284,7 @@ const AdminDashboard = () => {
               <div className="card-content">
                 <div className="metric-label">Available Balance</div>
                 <div className="metric-value">
+                  {/*  */}
                   {dashboardStats.balance?.balance.available_balance}
                 </div>
                 <div className="metric-sub">Ready to withdraw</div>

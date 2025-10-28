@@ -638,101 +638,164 @@ exports.requestPayout = async (req, res) => {
 
 
 // ============ GET MY PAYOUTS (Unchanged) ============
+// ============ GET MY PAYOUTS (Improved) ============
 exports.getMyPayouts = async (req, res) => {
-    try {
-        const {
-            page = 1,
-            limit = 20,
-            status,
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      description = "",
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
 
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const pageLimit = Math.max(1, parseInt(limit, 10) || 20);
 
-            sortBy = 'createdAt',
-            sortOrder = 'desc'
-        } = req.query;
+    console.log(`📋 Admin ${req.user.name} fetching their payouts - Page ${pageNum}`);
 
-        console.log(`📋 Admin ${req.user.name} fetching their payouts - Page ${page}`);
+    // Base query for listing (applies merchant, optional status, optional description)
+    const listQuery = { merchantId: req.merchantId };
 
-        let query = { merchantId: req.merchantId };
-
-        if (status) {
-            if (status.includes(',')) {
-                query.status = { $in: status.split(',') };
-            } else {
-                query.status = status;
-            }
-        }
-
-
-
-        const totalCount = await Payout.countDocuments(query);
-
-        const sort = {};
-        sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
-
-        const payouts = await Payout.find(query)
-            .sort(sort)
-            .limit(parseInt(limit))
-            .skip((parseInt(page) - 1) * parseInt(limit))
-            .populate('processedBy', 'name email')
-            .populate('approvedBy', 'name email')
-            .populate('rejectedBy', 'name email')
-            .select('-beneficiaryDetails.accountNumber')
-            .lean();
-
-        const maskedPayouts = payouts.map(payout => {
-            if (payout.beneficiaryDetails?.accountNumber) {
-                const accNum = payout.beneficiaryDetails.accountNumber;
-                payout.beneficiaryDetails.accountNumber = 'XXXX' + accNum.slice(-4);
-            }
-            return payout;
-        });
-
-        const allMyPayouts = await Payout.find({ merchantId: req.merchantId });
-        const totalRequested = allMyPayouts.reduce((sum, p) => sum + p.amount, 0);
-        const totalCompleted = allMyPayouts.filter(p => p.status === 'completed').reduce((sum, p) => sum + p.netAmount, 0);
-        const totalPending = allMyPayouts.filter(p => p.status === 'requested' || p.status === 'pending' || p.status === 'processing').reduce((sum, p) => sum + p.netAmount, 0);
-        const totalCommission = allMyPayouts.reduce((sum, p) => sum + p.commission, 0);
-
-        res.json({
-            success: true,
-            payouts: maskedPayouts,
-            pagination: {
-                currentPage: parseInt(page),
-                totalPages: Math.ceil(totalCount / parseInt(limit)),
-                totalCount,
-                limit: parseInt(limit),
-                hasNextPage: parseInt(page) < Math.ceil(totalCount / parseInt(limit)),
-                hasPrevPage: parseInt(page) > 1
-            },
-            summary: {
-                total_payout_requests: allMyPayouts.length,
-                requested_payouts: allMyPayouts.filter(p => p.status === 'requested').length,
-                pending_payouts: allMyPayouts.filter(p => p.status === 'pending' || p.status === 'processing').length,
-                completed_payouts: allMyPayouts.filter(p => p.status === 'completed').length,
-                failed_payouts: allMyPayouts.filter(p => p.status === 'failed').length,
-                cancelled_payouts: allMyPayouts.filter(p => p.status === 'cancelled').length,
-                total_amount_requested: totalRequested.toFixed(2),
-                total_completed: totalCompleted.toFixed(2),
-                total_pending: totalPending.toFixed(2),
-                total_commission_paid: totalCommission.toFixed(2)
-            },
-            merchant_info: {
-                merchantId: req.merchantId,
-                merchantName: req.merchantName,
-                merchantEmail: req.user.email
-            }
-        });
-
-        console.log(`✅ Returned ${maskedPayouts.length} payouts to admin ${req.user.name}`);
-
-    } catch (error) {
-        console.error('❌ Get My Payouts Error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to fetch payout history'
-        });
+    if (status) {
+      if (status.includes(",")) {
+        listQuery.status = { $in: status.split(",").map(s => s.trim()) };
+      } else {
+        listQuery.status = status;
+      }
     }
+
+    // Add description text search if provided (case-insensitive substring match)
+    if (description && description.trim().length) {
+      // assuming payouts have a `description` field; adjust fields if you want to search others
+      listQuery.description = { $regex: description.trim(), $options: "i" };
+    }
+
+    // total count for pagination (respects filters)
+    const totalCount = await Payout.countDocuments(listQuery);
+
+    // sorting object
+    const sort = {};
+    sort[sortBy] = sortOrder === "asc" ? 1 : -1;
+
+    // fetch paginated list
+    const payouts = await Payout.find(listQuery)
+      .sort(sort)
+      .limit(pageLimit)
+      .skip((pageNum - 1) * pageLimit)
+      .populate("processedBy", "name email")
+      .populate("approvedBy", "name email")
+      .populate("rejectedBy", "name email")
+      .select("-beneficiaryDetails.accountNumber")
+      .lean();
+
+    // mask account numbers if present (we still selected without accountNumber, but keep this safe)
+    const maskedPayouts = payouts.map(payout => {
+      if (payout.beneficiaryDetails && payout.beneficiaryDetails.accountNumber) {
+        const accNum = String(payout.beneficiaryDetails.accountNumber);
+        payout.beneficiaryDetails.accountNumber = "XXXX" + accNum.slice(-4);
+      }
+      return payout;
+    });
+
+    // === Compute merchant-wide summary using aggregation (fast, no full-document fetch) ===
+    const summaryAgg = await Payout.aggregate([
+      { $match: { merchantId: req.merchantId } },
+      {
+        $group: {
+          _id: null,
+          totalRequestedAmount: { $sum: { $ifNull: ["$amount", 0] } },
+          totalCompletedAmount: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "completed"] }, { $ifNull: ["$netAmount", 0] }, 0],
+            },
+          },
+          totalPendingAmount: {
+            $sum: {
+              $cond: [
+                { $in: ["$status", ["requested", "pending", "processing"]] },
+                { $ifNull: ["$netAmount", 0] },
+                0,
+              ],
+            },
+          },
+          totalCommission: { $sum: { $ifNull: ["$commission", 0] } },
+
+          countAll: { $sum: 1 },
+          countRequested: {
+            $sum: { $cond: [{ $eq: ["$status", "requested"] }, 1, 0] },
+          },
+          countPending: {
+            $sum: { $cond: [{ $in: ["$status", ["pending", "processing"]] }, 1, 0] },
+          },
+          countCompleted: {
+            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
+          },
+          countFailed: {
+            $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] },
+          },
+          countCancelled: {
+            $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
+          },
+        },
+      },
+    ]);
+
+    const agg = (summaryAgg && summaryAgg[0]) || {
+      totalRequestedAmount: 0,
+      totalCompletedAmount: 0,
+      totalPendingAmount: 0,
+      totalCommission: 0,
+      countAll: 0,
+      countRequested: 0,
+      countPending: 0,
+      countCompleted: 0,
+      countFailed: 0,
+      countCancelled: 0,
+    };
+
+    // Response
+    res.json({
+      success: true,
+      payouts: maskedPayouts,
+      pagination: {
+        currentPage: pageNum,
+        totalPages: pageLimit > 0 ? Math.ceil(totalCount / pageLimit) : 0,
+        totalCount,
+        limit: pageLimit,
+        hasNextPage: pageNum < (pageLimit > 0 ? Math.ceil(totalCount / pageLimit) : 0),
+        hasPrevPage: pageNum > 1,
+      },
+      summary: {
+        total_payout_requests: agg.countAll,
+        requested_payouts: agg.countRequested,
+        pending_payouts: agg.countPending,
+        completed_payouts: agg.countCompleted,
+        failed_payouts: agg.countFailed,
+        cancelled_payouts: agg.countCancelled,
+        total_amount_requested: Number(agg.totalRequestedAmount || 0).toFixed(2),
+        total_completed: Number(agg.totalCompletedAmount || 0).toFixed(2),
+        total_pending: Number(agg.totalPendingAmount || 0).toFixed(2),
+        total_commission_paid: Number(agg.totalCommission || 0).toFixed(2),
+      },
+      merchant_info: {
+        merchantId: req.merchantId,
+        merchantName: req.merchantName,
+        merchantEmail: req.user.email,
+      },
+    });
+
+    console.log(`✅ Returned ${maskedPayouts.length} payouts to admin ${req.user.name}`);
+  } catch (error) {
+    console.error("❌ Get My Payouts Error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch payout history",
+    });
+  }
 };
+
 
 // ============ CANCEL PAYOUT REQUEST (Unchanged) ============
 exports.cancelPayoutRequest = async (req, res) => {
