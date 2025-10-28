@@ -28,7 +28,7 @@ exports.getPaymentStatus = async (req, res) => {
                 transaction_id: transaction.transactionId,
                 order_id: transaction.orderId,
                 payment_gateway: transaction.paymentGateway, // 'razorpay' or 'cashfree'
-                
+                utr : transaction?.utr || "not provided",
                 // Razorpay specific fields
                 razorpay_payment_link_id: transaction.razorpayPaymentLinkId,
                 razorpay_payment_id: transaction.razorpayPaymentId,
