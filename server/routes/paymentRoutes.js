@@ -14,7 +14,8 @@ const {
     getAllPayouts,
     approvePayout,
     rejectPayout,
-    processPayout
+    processPayout,
+    settleTransaction
 } = require('../controllers/superAdminController.js');
 
 // ✅ MAKE SURE ALL THESE FUNCTIONS EXIST IN THE CONTROLLER
@@ -34,7 +35,7 @@ const {
     searchTransactions,
     searchPayouts,
     getTransactionReport,
-    getPayoutReport
+    getPayoutReport,
 } = require('../controllers/adminController.js');
 
 // ============ MERCHANT APIs (API Key Auth) ============
@@ -56,6 +57,7 @@ router.post('/admin/payout/:payoutId/approve', superAdminAuth, approvePayout);
 router.post('/admin/payout/:payoutId/reject', superAdminAuth, rejectPayout);
 router.post('/admin/payout/:payoutId/process', superAdminAuth, processPayout);
 router.get('/admin/transactions', superAdminAuth, getAllTransactions);
+router.put('/admin/transactions/:transactionId/settle', superAdminAuth, settleTransaction);
 router.get('/merchant/transactions/search', auth, searchTransactions); // For transactions
 
 

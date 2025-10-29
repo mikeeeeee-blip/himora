@@ -545,6 +545,38 @@ exports.getAllTransactions = async (req, res) => {
     }
 };
 
+exports.settleTransaction = async (req, res) => {
+    try {
+        const { transactionId } = req.params;
+
+        const transaction = await Transaction.findOne({ transactionId });
+
+        if (!transaction) {
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found'
+            });
+        }
+
+        transaction.settlementStatus = 'settled';
+        transaction.settlementDate = new Date();
+        await transaction.save();
+
+        res.json({
+            success: true,
+            message: 'Transaction settled successfully',
+            transaction: transaction
+        });
+    }
+    catch (error) {
+        console.error('❌ Settle Transaction Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to settle transaction'
+        });
+    }
+};
+
 
  // controllers/superadminController.js
 

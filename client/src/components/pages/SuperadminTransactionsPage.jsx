@@ -14,7 +14,8 @@ import {
   FiCopy,
   FiSearch,
   FiCalendar,
-  FiShield
+  FiShield,
+  FiCheck
 } from 'react-icons/fi';
 import { HiOutlineChartBar } from 'react-icons/hi2';
 import { RiShieldCheckLine } from 'react-icons/ri';
@@ -34,6 +35,7 @@ const SuperadminTransactionsPage = () => {
   const [error, setError] = useState('');
   const [toast, setToast] = useState({ message: '', type: 'success' });
   const [showFilters, setShowFilters] = useState(false);
+  const [settlingTransactionId, setSettlingTransactionId] = useState(null);
   
   const [filters, setFilters] = useState({
     page: 1,
@@ -99,6 +101,35 @@ const SuperadminTransactionsPage = () => {
       sortOrder: 'desc'
     });
     fetchTransactions();
+  };
+
+  const handleSettleTransaction = async (transactionId) => {
+    if (!window.confirm('Are you sure you want to manually settle this transaction?')) {
+      return;
+    }
+
+    setSettlingTransactionId(transactionId);
+    try {
+      const result = await superadminPaymentService.settleTransaction(transactionId);
+      setToast({ message: 'Transaction settled successfully!', type: 'success' });
+      
+      // Update the transaction in the list
+      setTransactions(prev => 
+        prev.map(txn => 
+          txn.transactionId === transactionId || txn._id === transactionId
+            ? { ...txn, settlementStatus: 'settled', settlementDate: new Date().toISOString() }
+            : txn
+        )
+      );
+
+      // Refresh the list to get updated summary
+      fetchTransactions();
+    } catch (error) {
+      setToast({ message: error.message || 'Failed to settle transaction', type: 'error' });
+      setError(error.message || 'Failed to settle transaction');
+    } finally {
+      setSettlingTransactionId(null);
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -456,15 +487,15 @@ const SuperadminTransactionsPage = () => {
               <table className="premium-table">
                <thead>
   <tr>
-    <th style={{ width: '120px' }}>Transaction ID</th>
-    <th style={{ width: '110px' }}>Order ID</th>
-    <th style={{ width: '120px' }}>Merchant</th>
-    <th style={{ width: '130px' }}>Customer</th>
-    <th style={{ width: '90px' }}>Amount</th>
-    <th style={{ width: '100px' }}>Status</th>
-    <th style={{ width: '100px' }}>Settlement</th>
-    <th style={{ width: '100px' }}>Created</th>
-    <th style={{ width: '90px' }}>Actions</th>
+    <th style={{ width: '100px' }}>Transaction ID</th>
+    <th style={{ width: '90px' }}>Order ID</th>
+    <th style={{ width: '90px' }}>Merchant</th>
+    <th style={{ width: '100px' }}>Customer</th>
+    <th style={{ width: '80px' }}>Amount</th>
+    <th style={{ width: '85px' }}>Status</th>
+    <th style={{ width: '130px' }}>Settlement</th>
+    <th style={{ width: '90px' }}>Created</th>
+    <th style={{ width: '80px' }}>Actions</th>
   </tr>
 </thead>
 
@@ -528,9 +559,30 @@ const SuperadminTransactionsPage = () => {
                       </td>
 
                       <td>
-                        <span className={`settlement-badge-premium ${getSettlementBadgeClass(txn.settlementStatus)}`}>
-                          {txn.settlementStatus?.toUpperCase() || 'UNSETTLED'}
-                        </span>
+                        {txn.settlementStatus?.toLowerCase() !== 'settled' ? (
+                          <button
+                            onClick={() => handleSettleTransaction(txn.transactionId)}
+                            disabled={settlingTransactionId === txn.transactionId || settlingTransactionId !== null}
+                            className={`settlement-btn-premium ${getSettlementBadgeClass(txn.settlementStatus)}`}
+                            title="Click to settle this transaction"
+                          >
+                            {settlingTransactionId === txn.transactionId ? (
+                              <>
+                                <FiRefreshCw className="spinning" size={12} />
+                                <span>Settling...</span>
+                              </>
+                            ) : (
+                              <>
+                                <FiCheck size={12} />
+                                <span>Settle</span>
+                              </>
+                            )}
+                          </button>
+                        ) : (
+                          <span className={`settlement-badge-premium ${getSettlementBadgeClass(txn.settlementStatus)}`}>
+                            {txn.settlementStatus?.toUpperCase() || 'SETTLED'}
+                          </span>
+                        )}
                       </td>
 
                       <td>

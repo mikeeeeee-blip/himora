@@ -99,6 +99,34 @@ async triggerManualSettlement() {
     }
   }
 
+  async settleTransaction(transactionId) {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      console.log('Settling transaction:', transactionId);
+
+      const response = await axios.put(
+        API_ENDPOINTS.ADMIN_SETTLE_TRANSACTION(transactionId),
+        {},
+        {
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('Settle transaction response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Settle transaction error:', error);
+      this.handleError(error, 'Failed to settle transaction');
+    }
+  }
+
   // ============ PAYOUTS ============
   async getAllPayouts(filters = {}) {
     try {

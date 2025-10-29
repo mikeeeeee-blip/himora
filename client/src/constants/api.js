@@ -56,6 +56,7 @@ export const API_ENDPOINTS = {
   
   // ============ SUPERADMIN - TRANSACTIONS ============
   ADMIN_TRANSACTIONS: `${BASE_URL}/payments/admin/transactions`,
+  ADMIN_SETTLE_TRANSACTION: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}/settle`,
   
   // ============ RAZORPAY WEBHOOK (No Auth) ============
   RAZORPAY_WEBHOOK: `${BASE_URL}/razorpay/webhook`,

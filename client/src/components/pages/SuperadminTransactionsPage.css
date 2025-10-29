@@ -367,7 +367,8 @@
 .premium-table-container {
   background: white;
   border-radius: 16px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: visible;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   border: 1px solid #e5e7eb;
 }
@@ -376,6 +377,8 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  table-layout: auto;
+  min-width: 935px; /* Total of all column widths */
 }
 
 .premium-table thead {
@@ -384,7 +387,7 @@
 }
 
 .premium-table thead th {
-  padding: 16px 20px;
+  padding: 12px 14px;
   text-align: left;
   font-size: 12px;
   font-weight: 700;
@@ -410,7 +413,7 @@
 }
 
 .premium-table tbody td {
-  padding: 18px 20px;
+  padding: 14px 14px;
   vertical-align: middle;
 }
 
@@ -559,6 +562,41 @@
   border: 1px solid #fcd34d;
 }
 
+/* Settlement Button (clickable badge for unsettled transactions) */
+.settlement-btn-premium {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.settlement-btn-premium.settlement-unsettled {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.settlement-btn-premium.settlement-unsettled:hover:not(:disabled) {
+  background: linear-gradient(135deg, #fde68a 0%, #fcd34d 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(251, 191, 36, 0.4);
+}
+
+.settlement-btn-premium:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Date Cell */
 .date-cell-premium {
   display: flex;
@@ -581,9 +619,35 @@
 .view-btn-premium {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-btn-premium:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.view-btn-premium:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Settle Button */
+.settle-btn-premium {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -593,9 +657,14 @@
   transition: all 0.2s;
 }
 
-.view-btn-premium:hover {
+.settle-btn-premium:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.settle-btn-premium:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Error Message */
@@ -730,7 +799,7 @@
   }
 
   .premium-table {
-    min-width: 900px;
+    min-width: 935px;
   }
 
   .filters-premium-grid {
@@ -744,10 +813,4 @@
   .filters-premium-actions button {
     width: 100%;
   }
-}
-.premium-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-  table-layout: fixed; /* ✅ ADD THIS LINE */
 }
