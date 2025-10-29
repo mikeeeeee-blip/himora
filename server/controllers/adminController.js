@@ -7,6 +7,18 @@ const { getSettlementStatusMessage } = require('../utils/settlementCalculator');
 const mongoose = require('mongoose');
 const { todayRevenueAndCommission } = require('../utils/todayRevenueAndCommission');
 const { getIstDayRange } = require('../utils/getIstDayRange');
+const ExcelJS = require('exceljs');
+// Helper: parse comma-separated list into array, trim and ignore empties
+function parseList(value) {
+  if (!value) return null;
+  if (Array.isArray(value)) return value;
+  return value
+    .toString()
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 
 // ============ GET MY BALANCE (Updated with T+1 settlement tracking) ============
 
@@ -314,11 +326,14 @@ exports.searchPayouts = async (req, res) => {
     if (payoutId) query.payoutId = payoutId;
     if (status) query.status = status;
 
-    // Amount filter
+    // Amount filter (filter by netAmount - amount after commission, consistent with getPayoutReport)
     if (minAmount || maxAmount) {
-      query.amount = {};
-      if (minAmount) query.amount.$gte = parseFloat(minAmount);
-      if (maxAmount) query.amount.$lte = parseFloat(maxAmount);
+      query.netAmount = {};
+      const minA = parseFloat(minAmount);
+      const maxA = parseFloat(maxAmount);
+      if (minAmount && !isNaN(minA)) query.netAmount.$gte = minA;
+      if (maxAmount && !isNaN(maxA)) query.netAmount.$lte = maxA;
+      if (Object.keys(query.netAmount).length === 0) delete query.netAmount;
     }
 
     // Date range
@@ -406,6 +421,521 @@ exports.getTransactionById = async (req, res) => {
     }
 };
 
+/**
+ * GET /api/reports/transactions
+ * Query params supported (all optional):
+ *  - startDate (ISO date)
+ *  - endDate (ISO date)
+ *  - status (single or comma-separated)
+ *  - paymentMethod (single or comma-separated)
+ *  - minAmount, maxAmount
+ *  - transactionId
+ *  - orderId
+ *  - customerEmail
+ *  - customerPhone
+ *  - payoutStatus
+ *  - settlementStatus
+ *  - paymentGateway (gateway)
+ *  - q  -> free-text search across customerName, customerEmail, customerPhone, merchantName, description
+ *  - limit -> optional numeric cap for query (default: no cap; but Excel streaming means memory use depends on row count)
+ *  - sortBy -> e.g. createdAt:desc or amount:asc  (format: field:asc|desc)
+ *
+ * Response: streamed Excel .xlsx file attachment
+ */
+exports.getTransactionReport = async (req, res) => {
+  try {
+    // merchantId must always be applied
+    const merchantId = req.merchantId;
+    if (!merchantId) {
+      return res.status(400).json({ error: 'merchantId missing from request' });
+    }
+
+    const q = req.query || {};
+    const query = { merchantId: new mongoose.Types.ObjectId(merchantId) };
+
+    // Date range
+    if (q.startDate || q.endDate) {
+      query.createdAt = {};
+      if (q.startDate) {
+        const sd = new Date(q.startDate);
+        if (!isNaN(sd)) query.createdAt.$gte = sd;
+      }
+      if (q.endDate) {
+        const ed = new Date(q.endDate);
+        if (!isNaN(ed)) {
+          // include the entire endDate day if user passed a date without time? 
+          query.createdAt.$lte = ed;
+        }
+      }
+      // if createdAt ended up empty (both dates invalid), remove it
+      if (Object.keys(query.createdAt).length === 0) delete query.createdAt;
+    }
+
+    // Status (supports comma-separated)
+    const statuses = parseList(q.status);
+    if (statuses && statuses.length) {
+      query.status = { $in: statuses };
+    }
+
+    // Payment method
+    const methods = parseList(q.paymentMethod);
+    if (methods && methods.length) query.paymentMethod = { $in: methods };
+
+    // Amount range
+    if (q.minAmount || q.maxAmount) {
+      query.amount = {};
+      const minA = Number(q.minAmount);
+      const maxA = Number(q.maxAmount);
+      if (!Number.isNaN(minA)) query.amount.$gte = minA;
+      if (!Number.isNaN(maxA)) query.amount.$lte = maxA;
+      if (Object.keys(query.amount).length === 0) delete query.amount;
+    }
+
+    // Direct equals filters
+    if (q.transactionId) query.transactionId = q.transactionId;
+    if (q.orderId) query.orderId = q.orderId;
+    if (q.customerEmail) query.customerEmail = q.customerEmail;
+    if (q.customerPhone) query.customerPhone = q.customerPhone;
+    if (q.payoutStatus) query.payoutStatus = q.payoutStatus;
+    if (q.settlementStatus) query.settlementStatus = q.settlementStatus;
+    if (q.paymentGateway) query.paymentGateway = q.paymentGateway;
+
+    // Free-text search across common fields (q)
+    if (q.q) {
+      const re = new RegExp(q.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); // escape user input
+      query.$or = [
+        { customerName: re },
+        { customerEmail: re },
+        { customerPhone: re },
+        { merchantName: re },
+        { description: re },
+        { 'acquirerData.utr': re },
+        { transactionId: re },
+        { orderId: re },
+      ];
+    }
+
+    // Sorting
+    let sort = { createdAt: -1 }; // default recent first
+    if (q.sortBy) {
+      // expect e.g. 'createdAt:desc' or 'amount:asc'
+      const [field, dir] = q.sortBy.split(':').map((s) => s.trim());
+      if (field) sort = { [field]: dir === 'asc' ? 1 : -1 };
+    }
+
+    // Limit (optional)
+    let limit = null;
+    if (q.limit) {
+      const l = parseInt(q.limit, 10);
+      if (!Number.isNaN(l) && l > 0) limit = l;
+    }
+
+    // Projection - pick fields to include in the Excel. Add or remove fields as needed
+    const projection = {
+      transactionId: 1,
+      orderId: 1,
+      merchantId: 1,
+      merchantName: 1,
+      customerId: 1,
+      customerName: 1,
+      customerEmail: 1,
+      customerPhone: 1,
+      amount: 1,
+      commission: 1,
+      netAmount: 1,
+      currency: 1,
+      status: 1,
+      paymentMethod: 1,
+      paymentGateway: 1,
+      acquirerData: 1,
+      settlementStatus: 1,
+      settlementDate: 1,
+      payoutId: 1,
+      payoutStatus: 1,
+      paidAt: 1,
+      refundAmount: 1,
+      refundedAt: 1,
+      failureReason: 1,
+      failureCode: 1,
+      description: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    // Query the DB as a cursor to stream results
+    let cursor = Transaction.find(query, projection).sort(sort).cursor();
+
+    // Apply limit by taking only first N rows from cursor if specified
+    if (limit) {
+      // convert to limited cursor by wrapping manual counter
+      const originalCursor = cursor;
+      let count = 0;
+      cursor = {
+        async next() {
+          if (count >= limit) return null;
+          const doc = await originalCursor.next();
+          if (doc) count += 1;
+          return doc;
+        },
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+    }
+
+    // Create streaming Excel workbook
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: res, // write directly to response
+      useStyles: true,
+      useSharedStrings: true,
+    });
+
+    const worksheet = workbook.addWorksheet('Transactions');
+
+    // Define worksheet columns (friendly header / key name)
+    worksheet.columns = [
+      { header: 'Transaction ID', key: 'transactionId', width: 30 },
+      { header: 'Order ID', key: 'orderId', width: 25 },
+      { header: 'Merchant ID', key: 'merchantId', width: 24 },
+      { header: 'Merchant Name', key: 'merchantName', width: 30 },
+      { header: 'Customer ID', key: 'customerId', width: 24 },
+      { header: 'Customer Name', key: 'customerName', width: 30 },
+      { header: 'Customer Email', key: 'customerEmail', width: 30 },
+      { header: 'Customer Phone', key: 'customerPhone', width: 18 },
+      { header: 'Amount', key: 'amount', width: 12 },
+      { header: 'Commission', key: 'commission', width: 12 },
+      { header: 'Net Amount', key: 'netAmount', width: 12 },
+      { header: 'Currency', key: 'currency', width: 8 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Payment Method', key: 'paymentMethod', width: 15 },
+      { header: 'Payment Gateway', key: 'paymentGateway', width: 15 },
+      { header: 'UTR', key: 'utr', width: 25 },
+      { header: 'RRN', key: 'rrn', width: 25 },
+      { header: 'Bank Txn ID', key: 'bank_transaction_id', width: 25 },
+      { header: 'Card Last4', key: 'card_last4', width: 8 },
+      { header: 'Bank Name', key: 'bank_name', width: 20 },
+      { header: 'Settlement Status', key: 'settlementStatus', width: 15 },
+      { header: 'Settlement Date', key: 'settlementDate', width: 20 },
+      { header: 'Payout ID', key: 'payoutId', width: 24 },
+      { header: 'Payout Status', key: 'payoutStatus', width: 15 },
+      { header: 'Paid At', key: 'paidAt', width: 20 },
+      { header: 'Refund Amount', key: 'refundAmount', width: 12 },
+      { header: 'Refunded At', key: 'refundedAt', width: 20 },
+      { header: 'Failure Reason', key: 'failureReason', width: 40 },
+      { header: 'Description', key: 'description', width: 60 },
+      { header: 'Created At', key: 'createdAt', width: 20 },
+      { header: 'Updated At', key: 'updatedAt', width: 20 },
+    ];
+
+    // set response headers BEFORE writing stream
+    const filename = `transactions_report_${merchantId}_${Date.now()}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // iterate cursor and add rows
+    for await (const doc of cursor) {
+      // normalize fields safely
+      worksheet.addRow({
+        transactionId: doc.transactionId,
+        orderId: doc.orderId,
+        merchantId: String(doc.merchantId),
+        merchantName: doc.merchantName,
+        customerId: doc.customerId,
+        customerName: doc.customerName,
+        customerEmail: doc.customerEmail,
+        customerPhone: doc.customerPhone,
+        amount: doc.amount,
+        commission: doc.commission,
+        netAmount: doc.netAmount,
+        currency: doc.currency,
+        status: doc.status,
+        paymentMethod: doc.paymentMethod,
+        paymentGateway: doc.paymentGateway,
+        utr: doc.acquirerData?.utr,
+        rrn: doc.acquirerData?.rrn,
+        bank_transaction_id: doc.acquirerData?.bank_transaction_id,
+        card_last4: doc.acquirerData?.card_last4,
+        bank_name: doc.acquirerData?.bank_name,
+        settlementStatus: doc.settlementStatus,
+        settlementDate: doc.settlementDate ? doc.settlementDate.toISOString() : '',
+        payoutId: doc.payoutId ? String(doc.payoutId) : '',
+        payoutStatus: doc.payoutStatus,
+        paidAt: doc.paidAt ? doc.paidAt.toISOString() : '',
+        refundAmount: doc.refundAmount,
+        refundedAt: doc.refundedAt ? doc.refundedAt.toISOString() : '',
+        failureReason: doc.failureReason,
+        description: doc.description,
+        createdAt: doc.createdAt ? doc.createdAt.toISOString() : '',
+        updatedAt: doc.updatedAt ? doc.updatedAt.toISOString() : '',
+      }).commit(); // commit each row for streaming
+    }
+
+    // finalize worksheet and workbook
+    worksheet.commit();
+    await workbook.commit(); // this will end the response stream gracefully
+    // NOTE: no res.send after streaming; workbook.commit() flushes stream
+  } catch (err) {
+    console.error('Error generating transaction report:', err);
+    // If headers already sent, cannot send JSON; attempt to end response
+    if (res.headersSent) {
+      return res.end();
+    }
+    return res.status(500).json({ error: 'Failed to generate report', detail: err.message });
+  }
+};
+
+/**
+ * GET /api/payments/merchant/payout/report
+ * Query params supported (all optional):
+ *  - startDate (ISO date)
+ *  - endDate (ISO date)
+ *  - status (single or comma-separated)
+ *  - transferMode (bank_transfer|upi)
+ *  - minAmount, maxAmount
+ *  - payoutId
+ *  - description
+ *  - beneficiaryName
+ *  - q  -> free-text search across payoutId, merchantName, description, adminNotes, beneficiaryName
+ *  - limit -> optional numeric cap for query (default: no cap)
+ *  - sortBy -> e.g. createdAt:desc or amount:asc  (format: field:asc|desc)
+ *
+ * Response: streamed Excel .xlsx file attachment
+ * NOTE: Only returns payouts for the authenticated merchant (req.merchantId)
+ */
+exports.getPayoutReport = async (req, res) => {
+  try {
+    // merchantId must always be applied - ensures only merchant's payouts are returned
+    const merchantId = req.merchantId;
+    if (!merchantId) {
+      return res.status(400).json({ error: 'merchantId missing from request' });
+    }
+
+    const q = req.query || {};
+    const query = { merchantId: new mongoose.Types.ObjectId(merchantId) }; // ✅ SECURITY: Only this merchant's payouts
+
+    // Date range
+    if (q.startDate || q.endDate) {
+      query.createdAt = {};
+      if (q.startDate) {
+        const sd = new Date(q.startDate);
+        if (!isNaN(sd)) query.createdAt.$gte = sd;
+      }
+      if (q.endDate) {
+        const ed = new Date(q.endDate);
+        if (!isNaN(ed)) {
+          // include the entire endDate day
+          query.createdAt.$lte = ed;
+        }
+      }
+      if (Object.keys(query.createdAt).length === 0) delete query.createdAt;
+    }
+
+    // Status (supports comma-separated)
+    const statuses = parseList(q.status);
+    if (statuses && statuses.length) {
+      query.status = { $in: statuses };
+    }
+
+    // Transfer mode
+    if (q.transferMode) {
+      query.transferMode = q.transferMode;
+    }
+
+    // Amount range
+    if (q.minAmount || q.maxAmount) {
+      query.netAmount = {};
+      const minA = Number(q.minAmount);
+      const maxA = Number(q.maxAmount);
+      if (!Number.isNaN(minA)) query.netAmount.$gte = minA;
+      if (!Number.isNaN(maxA)) query.netAmount.$lte = maxA;
+      if (Object.keys(query.netAmount).length === 0) delete query.netAmount;
+    }
+
+    // Direct equals filters
+    if (q.payoutId) query.payoutId = q.payoutId;
+    if (q.description) query.description = { $regex: q.description, $options: 'i' };
+    if (q.beneficiaryName) query['beneficiaryDetails.accountHolderName'] = { $regex: q.beneficiaryName, $options: 'i' };
+
+    // Free-text search across common fields (q)
+    if (q.q) {
+      const re = new RegExp(q.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); // escape user input
+      query.$or = [
+        { payoutId: re },
+        { merchantName: re },
+        { description: re },
+        { adminNotes: re },
+        { 'beneficiaryDetails.accountHolderName': re },
+        { 'beneficiaryDetails.upiId': re },
+        { utr: re },
+      ];
+    }
+
+    // Sorting
+    let sort = { createdAt: -1 }; // default recent first
+    if (q.sortBy) {
+      // expect e.g. 'createdAt:desc' or 'amount:asc'
+      const [field, dir] = q.sortBy.split(':').map((s) => s.trim());
+      if (field) sort = { [field]: dir === 'asc' ? 1 : -1 };
+    }
+
+    // Limit (optional)
+    let limit = null;
+    if (q.limit) {
+      const l = parseInt(q.limit, 10);
+      if (!Number.isNaN(l) && l > 0) limit = l;
+    }
+
+    // Projection - pick fields to include in the Excel
+    const projection = {
+      payoutId: 1,
+      merchantId: 1,
+      merchantName: 1,
+      amount: 1,
+      commission: 1,
+      commissionType: 1,
+      commissionBreakdown: 1,
+      netAmount: 1,
+      currency: 1,
+      transferMode: 1,
+      beneficiaryDetails: 1,
+      status: 1,
+      description: 1,
+      adminNotes: 1,
+      utr: 1,
+      requestedBy: 1,
+      requestedByName: 1,
+      requestedAt: 1,
+      approvedBy: 1,
+      approvedByName: 1,
+      approvedAt: 1,
+      processedBy: 1,
+      processedByName: 1,
+      processedAt: 1,
+      rejectedBy: 1,
+      rejectedByName: 1,
+      rejectedAt: 1,
+      rejectionReason: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    // Query the DB as a cursor to stream results
+    let cursor = Payout.find(query, projection).sort(sort).cursor();
+
+    // Apply limit by taking only first N rows from cursor if specified
+    if (limit) {
+      const originalCursor = cursor;
+      let count = 0;
+      cursor = {
+        async next() {
+          if (count >= limit) return null;
+          const doc = await originalCursor.next();
+          if (doc) count += 1;
+          return doc;
+        },
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+    }
+
+    // Create streaming Excel workbook
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: res, // write directly to response
+      useStyles: true,
+      useSharedStrings: true,
+    });
+
+    const worksheet = workbook.addWorksheet('Payouts');
+
+    // Define worksheet columns
+    worksheet.columns = [
+      { header: 'Payout ID', key: 'payoutId', width: 30 },
+      { header: 'Merchant ID', key: 'merchantId', width: 24 },
+      { header: 'Merchant Name', key: 'merchantName', width: 30 },
+      { header: 'Amount (Gross)', key: 'amount', width: 15 },
+      { header: 'Commission', key: 'commission', width: 12 },
+      { header: 'Commission Type', key: 'commissionType', width: 15 },
+      { header: 'Net Amount', key: 'netAmount', width: 15 },
+      { header: 'Currency', key: 'currency', width: 8 },
+      { header: 'Transfer Mode', key: 'transferMode', width: 15 },
+      { header: 'Beneficiary Name', key: 'beneficiaryName', width: 30 },
+      { header: 'Account Number', key: 'accountNumber', width: 20 },
+      { header: 'IFSC Code', key: 'ifscCode', width: 12 },
+      { header: 'Bank Name', key: 'bankName', width: 25 },
+      { header: 'Branch Name', key: 'branchName', width: 25 },
+      { header: 'UPI ID', key: 'upiId', width: 25 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Description', key: 'description', width: 40 },
+      { header: 'Admin Notes', key: 'adminNotes', width: 40 },
+      { header: 'UTR', key: 'utr', width: 25 },
+      { header: 'Requested By', key: 'requestedByName', width: 25 },
+      { header: 'Requested At', key: 'requestedAt', width: 20 },
+      { header: 'Approved By', key: 'approvedByName', width: 25 },
+      { header: 'Approved At', key: 'approvedAt', width: 20 },
+      { header: 'Processed By', key: 'processedByName', width: 25 },
+      { header: 'Processed At', key: 'processedAt', width: 20 },
+      { header: 'Rejected By', key: 'rejectedByName', width: 25 },
+      { header: 'Rejected At', key: 'rejectedAt', width: 20 },
+      { header: 'Rejection Reason', key: 'rejectionReason', width: 40 },
+      { header: 'Created At', key: 'createdAt', width: 20 },
+      { header: 'Updated At', key: 'updatedAt', width: 20 },
+    ];
+
+    // set response headers BEFORE writing stream
+    const filename = `payouts_report_${merchantId}_${Date.now()}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // iterate cursor and add rows
+    for await (const doc of cursor) {
+      // normalize fields safely
+      worksheet.addRow({
+        payoutId: doc.payoutId,
+        merchantId: String(doc.merchantId),
+        merchantName: doc.merchantName,
+        amount: doc.amount,
+        commission: doc.commission || 0,
+        commissionType: doc.commissionType || '',
+        netAmount: doc.netAmount,
+        currency: doc.currency || 'INR',
+        transferMode: doc.transferMode === 'bank_transfer' ? 'Bank Transfer' : 'UPI',
+        beneficiaryName: doc.beneficiaryDetails?.accountHolderName || '',
+        accountNumber: doc.beneficiaryDetails?.accountNumber || '',
+        ifscCode: doc.beneficiaryDetails?.ifscCode || '',
+        bankName: doc.beneficiaryDetails?.bankName || '',
+        branchName: doc.beneficiaryDetails?.branchName || '',
+        upiId: doc.beneficiaryDetails?.upiId || '',
+        status: doc.status,
+        description: doc.description || '',
+        adminNotes: doc.adminNotes || '',
+        utr: doc.utr || '',
+        requestedByName: doc.requestedByName || '',
+        requestedAt: doc.requestedAt ? doc.requestedAt.toISOString() : '',
+        approvedByName: doc.approvedByName || '',
+        approvedAt: doc.approvedAt ? doc.approvedAt.toISOString() : '',
+        processedByName: doc.processedByName || '',
+        processedAt: doc.processedAt ? doc.processedAt.toISOString() : '',
+        rejectedByName: doc.rejectedByName || '',
+        rejectedAt: doc.rejectedAt ? doc.rejectedAt.toISOString() : '',
+        rejectionReason: doc.rejectionReason || '',
+        createdAt: doc.createdAt ? doc.createdAt.toISOString() : '',
+        updatedAt: doc.updatedAt ? doc.updatedAt.toISOString() : '',
+      }).commit(); // commit each row for streaming
+    }
+
+    // finalize worksheet and workbook
+    worksheet.commit();
+    await workbook.commit(); // this will end the response stream gracefully
+  } catch (err) {
+    console.error('Error generating payout report:', err);
+    // If headers already sent, cannot send JSON; attempt to end response
+    if (res.headersSent) {
+      return res.end();
+    }
+    return res.status(500).json({ error: 'Failed to generate payout report', detail: err.message });
+  }
+};
 
 
 // Assumes: calculatePayoutCommission(amount, merchant) is a synchronous pure function

@@ -32,7 +32,9 @@ const {
     getTransactionById,
     getPayoutStatusById,
     searchTransactions,
-    searchPayouts
+    searchPayouts,
+    getTransactionReport,
+    getPayoutReport
 } = require('../controllers/adminController.js');
 
 // ============ MERCHANT APIs (API Key Auth) ============
@@ -56,12 +58,16 @@ router.post('/admin/payout/:payoutId/process', superAdminAuth, processPayout);
 router.get('/admin/transactions', superAdminAuth, getAllTransactions);
 router.get('/merchant/transactions/search', auth, searchTransactions); // For transactions
 
+
 // ============ ADMIN APIs (JWT Auth - Merchant Dashboard) ============
 router.get('/merchant/payouts', auth, getMyPayouts);
 router.post('/merchant/payout/request', auth, requestPayout);
 router.get('/merchant/balance', auth, getMyBalance);
 router.post('/merchant/payout/:payoutId/cancel', auth, cancelPayoutRequest);
 router.get('/merchant/transactions/:transactionId', auth, getTransactionById);
+router.get('/merchant/transaction/report', auth, getTransactionReport);
+router.get('/merchant/payout/report', auth, getPayoutReport);
+
 
 router.get('/merchant/payout/:payoutId/status', auth, getPayoutStatusById);
 // ============ SEARCH APIs ============

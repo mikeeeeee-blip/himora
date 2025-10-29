@@ -470,6 +470,136 @@ console.log(url);
       throw new Error(this.getApiErrorMessage(error, 'Failed to request payout'));
     }
   }
+
+  // Download Transaction Report - requires JWT token, returns Excel file blob
+  async downloadTransactionReport(filters = {}) {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      if (filters.status) params.append('status', filters.status);
+      if (filters.paymentMethod) params.append('paymentMethod', filters.paymentMethod);
+      if (filters.paymentGateway) params.append('paymentGateway', filters.paymentGateway);
+      if (filters.minAmount) params.append('minAmount', filters.minAmount);
+      if (filters.maxAmount) params.append('maxAmount', filters.maxAmount);
+      if (filters.transactionId) params.append('transactionId', filters.transactionId);
+      if (filters.orderId) params.append('orderId', filters.orderId);
+      if (filters.customerEmail) params.append('customerEmail', filters.customerEmail);
+      if (filters.customerPhone) params.append('customerPhone', filters.customerPhone);
+      if (filters.payoutStatus) params.append('payoutStatus', filters.payoutStatus);
+      if (filters.settlementStatus) params.append('settlementStatus', filters.settlementStatus);
+      if (filters.q) params.append('q', filters.q); // Global text search
+      if (filters.sortBy) params.append('sortBy', filters.sortBy);
+      if (filters.limit) params.append('limit', filters.limit);
+
+      const url = `${API_ENDPOINTS.TRANSACTION_REPORT}${params.toString() ? `?${params.toString()}` : ''}`;
+
+      const response = await axios.get(url, {
+        headers: {
+          'x-auth-token': `${token}`,
+        },
+        responseType: 'blob', // Important: handle binary data
+      });
+
+      // Create a blob URL and trigger download
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url_blob = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url_blob;
+      
+      // Extract filename from Content-Disposition header if available
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'transactions_report.xlsx';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url_blob);
+
+      return { success: true, filename };
+    } catch (error) {
+      console.error('Download transaction report error:', error);
+      throw new Error(this.getApiErrorMessage(error, 'Failed to download transaction report'));
+    }
+  }
+
+  // Download Payout Report - requires JWT token, returns Excel file blob
+  async downloadPayoutReport(filters = {}) {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      if (filters.status) params.append('status', filters.status);
+      if (filters.transferMode) params.append('transferMode', filters.transferMode);
+      if (filters.minAmount) params.append('minAmount', filters.minAmount);
+      if (filters.maxAmount) params.append('maxAmount', filters.maxAmount);
+      if (filters.payoutId) params.append('payoutId', filters.payoutId);
+      if (filters.description) params.append('description', filters.description);
+      if (filters.beneficiaryName) params.append('beneficiaryName', filters.beneficiaryName);
+      if (filters.q) params.append('q', filters.q); // Global text search
+      if (filters.sortBy) params.append('sortBy', filters.sortBy);
+      if (filters.limit) params.append('limit', filters.limit);
+
+      const url = `${API_ENDPOINTS.PAYOUT_REPORT}${params.toString() ? `?${params.toString()}` : ''}`;
+
+      const response = await axios.get(url, {
+        headers: {
+          'x-auth-token': `${token}`,
+        },
+        responseType: 'blob', // Important: handle binary data
+      });
+
+      // Create a blob URL and trigger download
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url_blob = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url_blob;
+      
+      // Extract filename from Content-Disposition header if available
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'payouts_report.xlsx';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url_blob);
+
+      return { success: true, filename };
+    } catch (error) {
+      console.error('Download payout report error:', error);
+      throw new Error(this.getApiErrorMessage(error, 'Failed to download payout report'));
+    }
+  }
 }
 
 export default new PaymentService();
