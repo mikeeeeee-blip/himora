@@ -213,7 +213,9 @@ exports.searchTransactions = async (req, res) => {
     const query = {};
 
     // TODO :  get the merchant id from middleware 
+
     const merchantId = req.merchantId
+
     if (merchantId) query.merchantId = new mongoose.Types.ObjectId(merchantId);
     console.table(query.merchantId)
     if (status) query.status = status;
@@ -290,7 +292,6 @@ exports.searchTransactions = async (req, res) => {
 exports.searchPayouts = async (req, res) => {
   try {
     const {
-      merchantId,
       payoutId,
       minAmount,
       maxAmount,
@@ -308,8 +309,8 @@ exports.searchPayouts = async (req, res) => {
     } = req.query;
 
     const query = {};
-
-    if (merchantId) query.merchantId = mongoose.Types.ObjectId(merchantId);
+    const merchantId = req.merchantId
+    if (merchantId) query.merchantId = new mongoose.Types.ObjectId(merchantId);
     if (payoutId) query.payoutId = payoutId;
     if (status) query.status = status;
 
