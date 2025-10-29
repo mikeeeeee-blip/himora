@@ -1583,3 +1583,46 @@
     justify-content: flex-end;
   }
 }
+
+.deep-link-section {
+  margin-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1rem;
+}
+
+.deep-link-section h4 {
+  margin-bottom: 0.8rem;
+  font-size: 1.05rem;
+  color: #333;
+}
+
+.deep-link-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.deep-link-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.deep-link-item span {
+  font-weight: 500;
+  color: #444;
+}
+
+.deep-link-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.copy-btn.redirect {
+  background-color: #0077ff;
+  color: white;
+}
+
+.copy-btn.redirect:hover {
+  opacity: 0.9;
+}

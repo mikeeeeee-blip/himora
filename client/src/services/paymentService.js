@@ -385,9 +385,14 @@ console.log(url);
         expiresAt: api.expires_at ? new Date(api.expires_at * 1000).toISOString() : null,
         message: api.message || 'Payment link created successfully',
         success: api.success || false,
+        phonepe_deep_link : api.phonepe_deep_link,
+        gpay_deep_link :  api.gpay_deep_link,
+        gpay_intent : api.gpay_intent,
+        upi_deep_link : api.upi_deep_link,
         // Preserve raw for any advanced views
         raw: api,
       };
+
 
       return normalized;
     } catch (error) {

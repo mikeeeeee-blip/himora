@@ -150,6 +150,10 @@ const TransactionSchema = new mongoose.Schema({
     refundReason: String,
     refundedAt: Date,
     refundId: String,
+    deepLinks: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
+        },
     
     createdAt: {
         type: Date,

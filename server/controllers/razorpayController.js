@@ -187,9 +187,10 @@ exports.createPhonePeDeepLink = async (req, res) => {
       description,
       callback_url,
       success_url,
-      failure_url
+      failure_url,
+       // new optional param from client
     } = req.body;
-
+    const upi_id =  "7049407951@ptaxis"
     const merchantId = req.merchantId;
     const merchantName = req.merchantName;
 
@@ -211,20 +212,38 @@ exports.createPhonePeDeepLink = async (req, res) => {
 
     // Determine final callback URL
     const merchant = await User.findById(merchantId);
-    const finalCallbackUrl = callback_url || merchant?.successUrl || `${process.env.FRONTEND_URL}/phonepe-success.html`;
+    const finalCallbackUrl = callback_url || merchant?.successUrl || `https://payments.ninex-group.com/`;
 
-    // Create PhonePe payment link
+    // Determine the VPA (pa) to use for deep-links:
+    // Priority: request.upi_id -> merchant.upiId -> none
+    const pa = (upi_id && String(upi_id).trim()) || (merchant && (merchant.upiId || merchant.vpa)) || '';
+
+    // Create PhonePe payment link via helper (amount in paisa if your flow expects that)
     const paymentLink = await createPhonePePaymentLink({
-      amount: parseFloat(amount * 100), // amount in paisa
+      amount: parseFloat(amount * 100), // paisa as before
       redirectUrl: success_url || finalCallbackUrl,
-      udf1: transactionId,             // store internal transactionId
+      pa, // pass the VPA so helper will generate deep-links
+      udf1: transactionId,
       udf2: description || `Payment for ${merchantName}`
     });
 
-    // Save transaction to DB
+    // Normalize values for backward compatibility
+    const checkoutUrl =
+      (paymentLink && (paymentLink.checkoutUrl || paymentLink.url)) ||
+      (typeof paymentLink === 'string' ? paymentLink : null);
+
+    const paymentLinkId = (paymentLink && paymentLink.id) || transactionId;
+    const paymentUrl = (paymentLink && (paymentLink.url || checkoutUrl)) || (typeof paymentLink === 'string' ? paymentLink : null);
+
+    const phonepeDeepLink = paymentLink?.phonePeDeepLink || null;
+    const gPayDeepLink = paymentLink?.gPayDeepLink || null;
+    const gPayIntent = paymentLink?.gPayIntent || null;
+    const upiDeepLink = paymentLink?.upiDeepLink || null;
+
+    // Save transaction to DB (store deep links inside transaction for future reference)
     const transaction = new Transaction({
       transactionId,
-      orderId: paymentLink.id || transactionId,
+      orderId: paymentLinkId,
       merchantId,
       merchantName,
       customerId: `CUST_${customer_phone}_${Date.now()}`,
@@ -232,8 +251,8 @@ exports.createPhonePeDeepLink = async (req, res) => {
       customerEmail: customer_email || '',
       customerPhone: customer_phone,
       amount: parseFloat(amount),
-      commission : calculatePayinCommission(amount).commission,
-      netAmount : (parseFloat(amount) -  calculatePayinCommission(amount).commission),
+      commission: calculatePayinCommission(amount).commission,
+      netAmount: (parseFloat(amount) - calculatePayinCommission(amount).commission),
       currency: 'INR',
       description: description || `Payment for ${merchantName}`,
       status: 'created',
@@ -242,25 +261,41 @@ exports.createPhonePeDeepLink = async (req, res) => {
       callbackUrl: finalCallbackUrl,
       successUrl: success_url,
       failureUrl: failure_url,
+      deepLinks: {
+        checkoutUrl,
+        phonepeDeepLink,
+        gPayDeepLink,
+        gPayIntent,
+        upiDeepLink,
+        pa: pa || null
+      },
       createdAt: new Date(),
       updatedAt: new Date()
     });
 
     await transaction.save();
 
+    // Return response — keep original fields and add the extra deep-link fields (nullable)
     res.json({
       success: true,
       transaction_id: transactionId,
-      payment_link_id: paymentLink.id || transactionId,
-      payment_url: paymentLink.url || paymentLink,
+      payment_link_id: paymentLinkId,
+      payment_url: paymentUrl,
       order_amount: parseFloat(amount),
       order_currency: 'INR',
       merchant_id: merchantId.toString(),
       merchant_name: merchantName,
       callback_url: finalCallbackUrl,
-      message: 'Payment link created successfully. Share this URL with the customer.'
-    });
+      message: 'Payment link created successfully. Share this URL with the customer.',
 
+      // Extra fields added for UI stability (nullable)
+      checkout_url: checkoutUrl || null,
+      phonepe_deep_link: phonepeDeepLink,
+      gpay_deep_link: gPayDeepLink,
+      gpay_intent: gPayIntent, // new field (Android intent)
+      upi_deep_link: upiDeepLink,
+      pa: pa || null
+    });
   } catch (error) {
     console.error('❌ PhonePe Payment Link Error:', error);
     res.status(500).json({
@@ -270,6 +305,8 @@ exports.createPhonePeDeepLink = async (req, res) => {
     });
   }
 };
+
+
 
 
 

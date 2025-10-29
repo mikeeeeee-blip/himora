@@ -26,27 +26,26 @@ const PaymentsPage = () => {
     setError('');
     setSuccess('');
     
-    // Validate phone number
     if (paymentData.customerPhone && paymentData.customerPhone.length !== 10) {
       setError('Phone number must be exactly 10 digits');
       setToast({ message: 'Phone number must be exactly 10 digits', type: 'error' });
       setCreateLoading(false);
       return;
     }
-    
+
     try {
-      const linkData = {
+      const result = await paymentService.createPaymentLink({
         amount: parseFloat(paymentData.amount),
         customerName: paymentData.customerName,
         customerEmail: paymentData.customerEmail,
         customerPhone: paymentData.customerPhone,
         description: paymentData.description
-      };
-      
-      const result = await paymentService.createPaymentLink(linkData);
+      });
+
       setCreatedLink(result);
       setSuccess('Payment link created successfully!');
       setToast({ message: 'Payment link created successfully!', type: 'success' });
+
       setPaymentData({
         amount: '',
         customerName: '',
@@ -62,23 +61,13 @@ const PaymentsPage = () => {
     }
   };
 
-  const handleInputChange = (field, value) => {
-    setPaymentData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    setSuccess('Link copied to clipboard!');
-    setToast({ message: 'Link copied to clipboard!', type: 'success' });
+    setToast({ message: 'Copied to clipboard!', type: 'success' });
   };
 
   const openPaymentLink = (url) => {
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -97,11 +86,11 @@ const PaymentsPage = () => {
             </button>
           </div>
         </div>
-        
+
         <div className="page-content">
           {error && <div className="error-message">{error}</div>}
           {success && <div className="success-message">{success}</div>}
-          
+
           {showCreateForm && (
             <div className="create-form-card">
               <h3>Create New Payment Link</h3>
@@ -112,7 +101,7 @@ const PaymentsPage = () => {
                     <input
                       type="number"
                       value={paymentData.amount}
-                      onChange={(e) => handleInputChange('amount', e.target.value)}
+                      onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
                       required
                       placeholder="500"
                     />
@@ -122,19 +111,20 @@ const PaymentsPage = () => {
                     <input
                       type="text"
                       value={paymentData.customerName}
-                      onChange={(e) => handleInputChange('customerName', e.target.value)}
+                      onChange={(e) => setPaymentData({ ...paymentData, customerName: e.target.value })}
                       required
                       placeholder="Amit Kumar"
                     />
                   </div>
                 </div>
+
                 <div className="form-row">
                   <div className="form-group">
                     <label>Customer Email</label>
                     <input
                       type="email"
                       value={paymentData.customerEmail}
-                      onChange={(e) => handleInputChange('customerEmail', e.target.value)}
+                      onChange={(e) => setPaymentData({ ...paymentData, customerEmail: e.target.value })}
                       required
                       placeholder="amit@example.com"
                     />
@@ -144,24 +134,26 @@ const PaymentsPage = () => {
                     <input
                       type="tel"
                       value={paymentData.customerPhone}
-                      onChange={(e) => handleInputChange('customerPhone', e.target.value)}
+                      onChange={(e) => setPaymentData({ ...paymentData, customerPhone: e.target.value })}
                       required
                       placeholder="9876543210"
                       maxLength="10"
                     />
                   </div>
                 </div>
+
                 <div className="form-row">
                   <div className="form-group">
                     <label>Description (Optional)</label>
                     <input
                       type="text"
                       value={paymentData.description}
-                      onChange={(e) => handleInputChange('description', e.target.value)}
+                      onChange={(e) => setPaymentData({ ...paymentData, description: e.target.value })}
                       placeholder="Product purchase"
                     />
                   </div>
                 </div>
+
                 <div className="form-actions">
                   <button type="button" onClick={() => setShowCreateForm(false)} className="secondary-btn">
                     Cancel
@@ -173,104 +165,84 @@ const PaymentsPage = () => {
               </form>
             </div>
           )}
-          
+
           {createdLink && (
             <div className="created-link-card">
               <h3>✅ Payment Link Created Successfully</h3>
               <div className="link-details">
+
+                {/* Primary Payment Link */}
                 <div className="link-item">
                   <label>Payment Link:</label>
                   <div className="link-container">
                     <input 
                       type="text" 
-                      value={createdLink.paymentLink || createdLink.link || 'Link generated'} 
+                      value={createdLink.paymentLink || 'Link generated'} 
                       readOnly 
                       className="link-input"
                     />
-                    <button 
-                      onClick={() => copyToClipboard(createdLink.paymentLink || createdLink.link)} 
-                      className="copy-btn"
-                      title="Copy link"
-                    >
+                    <button onClick={() => copyToClipboard(createdLink.paymentLink)} className="copy-btn">
                       <FiCopy />
                     </button>
-                    <button 
-                      onClick={() => openPaymentLink(createdLink.paymentLink || createdLink.link)} 
-                      className="copy-btn redirect"
-                      title="Open payment link"
-                    >
+                    <button onClick={() => openPaymentLink(createdLink.paymentLink)} className="copy-btn redirect">
                       <FiExternalLink />
                     </button>
                   </div>
                 </div>
-                {createdLink.qrCode && (
-                  <div className="link-item">
-                    <label>QR Code:</label>
-                    <img src={createdLink.qrCode} alt="Payment QR" style={{ maxWidth: '220px', borderRadius: '8px', border: '1px solid #c3e6cb' }} />
-                  </div>
-                )}
-                <div className="link-item">
-                  <label>Order ID:</label>
-                  <div className="link-container">
-                    <input 
-                      type="text" 
-                      value={createdLink.orderId || createdLink.id || 'N/A'} 
-                      readOnly 
-                      className="link-input"
-                    />
-                    <button 
-                      onClick={() => copyToClipboard(createdLink.orderId || createdLink.id)} 
-                      className="copy-btn"
-                      title="Copy Order ID"
-                    >
-                      <FiCopy />
-                    </button>
-                  </div>
-                </div>
-                <div className="link-item">
-                  <label>Amount:</label>
-                  <span className="link-value">₹{createdLink.amount || paymentData.amount}</span>
-                </div>
-                <div className="link-item">
-                  <label>Customer:</label>
-                  <span className="link-value">{createdLink.customerName || paymentData.customerName}</span>
-                </div>
-                {createdLink.expiresAt && (
-                  <div className="link-item">
-                    <label>Expires At:</label>
-                    <span className="link-value">{createdLink.expiresAt}</span>
+
+                {/* Deep Links Section */}
+                {(createdLink.phonepe_deep_link || createdLink.gpay_deep_link || createdLink.upi_deep_link) && (
+                  <div className="deep-link-section">
+                    <h4>💡 UPI Deep Links</h4>
+                    <div className="deep-link-buttons">
+
+                      {createdLink.phonepe_deep_link && (
+                        <div className="deep-link-item">
+                          <span>PhonePe:</span>
+                          <div className="deep-link-actions">
+                            <button onClick={() => copyToClipboard(createdLink.phonepe_deep_link)} className="copy-btn">
+                              <FiCopy />
+                            </button>
+                            <button onClick={() => openPaymentLink(createdLink.phonepe_deep_link)} className="copy-btn redirect">
+                              <FiExternalLink />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {createdLink.gpay_deep_link && (
+                        <div className="deep-link-item">
+                          <span>Google Pay:</span>
+                          <div className="deep-link-actions">
+                            <button onClick={() => copyToClipboard(createdLink.gpay_deep_link)} className="copy-btn">
+                              <FiCopy />
+                            </button>
+                            <button onClick={() => openPaymentLink(createdLink.gpay_intent || createdLink.gpay_deep_link)} className="copy-btn redirect">
+                              <FiExternalLink />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {createdLink.upi_deep_link && (
+                        <div className="deep-link-item">
+                          <span>UPI (Generic):</span>
+                          <div className="deep-link-actions">
+                            <button onClick={() => copyToClipboard(createdLink.upi_deep_link)} className="copy-btn">
+                              <FiCopy />
+                            </button>
+                            <button onClick={() => openPaymentLink(createdLink.upi_deep_link)} className="copy-btn redirect">
+                              <FiExternalLink />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
           )}
-          
-          <div className="payment-info">
-            <h3>Payment Link Information</h3>
-            <div className="info-cards">
-              <div className="info-card">
-                <div className="info-icon"><FiLock /></div>
-                <div className="info-content">
-                  <h4>Secure Payments</h4>
-                  <p>All payments are processed securely with industry-standard encryption.</p>
-                </div>
-              </div>
-              <div className="info-card">
-                <div className="info-icon"><FiZap /></div>
-                <div className="info-content">
-                  <h4>Instant Processing</h4>
-                  <p>Payment links are generated instantly and ready to use immediately.</p>
-                </div>
-              </div>
-              <div className="info-card">
-                <div className="info-icon"><FiSmartphone /></div>
-                <div className="info-content">
-                  <h4>Mobile Friendly</h4>
-                  <p>Payment links work seamlessly on all devices and platforms.</p>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </main>
       <Toast 
