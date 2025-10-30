@@ -937,6 +937,203 @@ exports.getPayoutReport = async (req, res) => {
   }
 };
 
+// GET /api/payments/merchant/report/combined
+// Query params: transaction filters prefixed with t_*, payout filters prefixed with p_*
+exports.getCombinedReport = async (req, res) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) {
+      return res.status(400).json({ error: 'merchantId missing from request' });
+    }
+
+    // Helpers
+    const parseList = (value) => {
+      if (!value) return null;
+      if (Array.isArray(value)) return value;
+      return value.toString().split(',').map((s) => s.trim()).filter(Boolean);
+    };
+
+    // Build Transactions query from t_* params
+    const tq = req.query || {};
+    const tQuery = { merchantId: new mongoose.Types.ObjectId(merchantId) };
+
+    // Date range
+    if (tq.t_startDate || tq.t_endDate) {
+      tQuery.createdAt = {};
+      const sd = tq.t_startDate && new Date(tq.t_startDate);
+      const ed = tq.t_endDate && new Date(tq.t_endDate);
+      if (sd && !isNaN(sd)) tQuery.createdAt.$gte = sd;
+      if (ed && !isNaN(ed)) tQuery.createdAt.$lte = ed;
+      if (Object.keys(tQuery.createdAt).length === 0) delete tQuery.createdAt;
+    }
+    if (tq.t_status) {
+      const statuses = parseList(tq.t_status);
+      if (statuses) tQuery.status = { $in: statuses };
+    }
+    if (tq.t_paymentMethod) tQuery.paymentMethod = tq.t_paymentMethod;
+    if (tq.t_paymentGateway) tQuery.paymentGateway = tq.t_paymentGateway;
+    if (tq.t_minAmount || tq.t_maxAmount) {
+      tQuery.amount = {};
+      const minA = Number(tq.t_minAmount);
+      const maxA = Number(tq.t_maxAmount);
+      if (!Number.isNaN(minA)) tQuery.amount.$gte = minA;
+      if (!Number.isNaN(maxA)) tQuery.amount.$lte = maxA;
+      if (Object.keys(tQuery.amount).length === 0) delete tQuery.amount;
+    }
+    if (tq.t_q) {
+      const re = new RegExp(tq.t_q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      tQuery.$or = [
+        { customerName: re },
+        { customerEmail: re },
+        { customerPhone: re },
+        { merchantName: re },
+        { description: re },
+        { 'acquirerData.utr': re },
+        { transactionId: re },
+        { orderId: re },
+      ];
+    }
+    if (tq.t_settlementStatus) tQuery.settlementStatus = tq.t_settlementStatus;
+    let tSort = { createdAt: -1 };
+    if (tq.t_sortBy) {
+      const [field, dir] = String(tq.t_sortBy).split(':');
+      if (field) tSort = { [field]: dir === 'asc' ? 1 : -1 };
+    }
+
+    // Build Payouts query from p_* params
+    const pq = req.query || {};
+    const pQuery = { merchantId: new mongoose.Types.ObjectId(merchantId) };
+    if (pq.p_startDate || pq.p_endDate) {
+      pQuery.createdAt = {};
+      const sd = pq.p_startDate && new Date(pq.p_startDate);
+      const ed = pq.p_endDate && new Date(pq.p_endDate);
+      if (sd && !isNaN(sd)) pQuery.createdAt.$gte = sd;
+      if (ed && !isNaN(ed)) pQuery.createdAt.$lte = ed;
+      if (Object.keys(pQuery.createdAt).length === 0) delete pQuery.createdAt;
+    }
+    if (pq.p_status) {
+      const statuses = parseList(pq.p_status);
+      if (statuses) pQuery.status = { $in: statuses };
+    }
+    if (pq.p_transferMode) pQuery.transferMode = pq.p_transferMode;
+    if (pq.p_minAmount || pq.p_maxAmount) {
+      pQuery.netAmount = {};
+      const minA = Number(pq.p_minAmount);
+      const maxA = Number(pq.p_maxAmount);
+      if (!Number.isNaN(minA)) pQuery.netAmount.$gte = minA;
+      if (!Number.isNaN(maxA)) pQuery.netAmount.$lte = maxA;
+      if (Object.keys(pQuery.netAmount).length === 0) delete pQuery.netAmount;
+    }
+    if (pq.p_q) {
+      const re = new RegExp(pq.p_q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      pQuery.$or = [
+        { payoutId: re },
+        { merchantName: re },
+        { description: re },
+        { adminNotes: re },
+        { 'beneficiaryDetails.accountHolderName': re },
+        { 'beneficiaryDetails.upiId': re },
+        { utr: re },
+      ];
+    }
+    let pSort = { createdAt: -1 };
+    if (pq.p_sortBy) {
+      const [field, dir] = String(pq.p_sortBy).split(':');
+      if (field) pSort = { [field]: dir === 'asc' ? 1 : -1 };
+    }
+
+    // Set headers BEFORE starting the stream
+    const filename = `combined_report_${merchantId}_${Date.now()}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Excel streaming workbook (writes directly to res)
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: res,
+      useStyles: true,
+      useSharedStrings: true,
+    });
+
+    // Sheet 1: Transactions
+    const tSheet = workbook.addWorksheet('Transactions');
+    tSheet.columns = [
+      { header: 'Transaction ID', key: 'transactionId', width: 30 },
+      { header: 'Order ID', key: 'orderId', width: 25 },
+      { header: 'Customer Name', key: 'customerName', width: 28 },
+      { header: 'Customer Email', key: 'customerEmail', width: 30 },
+      { header: 'Amount', key: 'amount', width: 12 },
+      { header: 'Commission', key: 'commission', width: 12 },
+      { header: 'Net Amount', key: 'netAmount', width: 12 },
+      { header: 'Status', key: 'status', width: 14 },
+      { header: 'Payment Method', key: 'paymentMethod', width: 16 },
+      { header: 'Gateway', key: 'paymentGateway', width: 14 },
+      { header: 'Settlement Status', key: 'settlementStatus', width: 16 },
+      { header: 'Paid At', key: 'paidAt', width: 20 },
+      { header: 'Created At', key: 'createdAt', width: 20 },
+    ];
+
+    const tCursor = Transaction.find(tQuery).sort(tSort).cursor();
+    for await (const doc of tCursor) {
+      tSheet.addRow({
+        transactionId: doc.transactionId,
+        orderId: doc.orderId,
+        customerName: doc.customerName || '',
+        customerEmail: doc.customerEmail || '',
+        amount: doc.amount || 0,
+        commission: doc.commission || 0,
+        netAmount: doc.netAmount || 0,
+        status: doc.status || '',
+        paymentMethod: doc.paymentMethod || '',
+        paymentGateway: doc.paymentGateway || '',
+        settlementStatus: doc.settlementStatus || '',
+        paidAt: doc.paidAt ? doc.paidAt.toISOString() : '',
+        createdAt: doc.createdAt ? doc.createdAt.toISOString() : '',
+      }).commit();
+    }
+    tSheet.commit();
+
+    // Sheet 2: Payouts
+    const pSheet = workbook.addWorksheet('Payouts');
+    pSheet.columns = [
+      { header: 'Payout ID', key: 'payoutId', width: 30 },
+      { header: 'Amount (Gross)', key: 'amount', width: 15 },
+      { header: 'Commission', key: 'commission', width: 12 },
+      { header: 'Net Amount', key: 'netAmount', width: 15 },
+      { header: 'Status', key: 'status', width: 14 },
+      { header: 'Transfer Mode', key: 'transferMode', width: 16 },
+      { header: 'Beneficiary', key: 'beneficiaryName', width: 26 },
+      { header: 'Requested At', key: 'requestedAt', width: 20 },
+      { header: 'Processed At', key: 'processedAt', width: 20 },
+      { header: 'Completed At', key: 'completedAt', width: 20 },
+      { header: 'UTR', key: 'utr', width: 26 },
+    ];
+
+    const pCursor = Payout.find(pQuery).sort(pSort).cursor();
+    for await (const doc of pCursor) {
+      pSheet.addRow({
+        payoutId: doc.payoutId,
+        amount: doc.amount || 0,
+        commission: doc.commission || 0,
+        netAmount: doc.netAmount || 0,
+        status: doc.status || '',
+        transferMode: doc.transferMode === 'bank_transfer' ? 'Bank Transfer' : (doc.transferMode || ''),
+        beneficiaryName: doc.beneficiaryDetails?.accountHolderName || '',
+        requestedAt: doc.requestedAt ? doc.requestedAt.toISOString() : '',
+        processedAt: doc.processedAt ? doc.processedAt.toISOString() : '',
+        completedAt: doc.completedAt ? doc.completedAt.toISOString() : '',
+        utr: doc.utr || '',
+      }).commit();
+    }
+    pSheet.commit();
+
+    await workbook.commit();
+  } catch (err) {
+    console.error('Error generating combined report:', err);
+    if (res.headersSent) return res.end();
+    return res.status(500).json({ error: 'Failed to generate combined report', detail: err.message });
+  }
+};
+
 
 // Assumes: calculatePayoutCommission(amount, merchant) is a synchronous pure function
 // and User, Transaction, Payout, crypto are in scope.

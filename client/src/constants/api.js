@@ -20,6 +20,7 @@ export const API_ENDPOINTS = {
   TRANSACTION_DETAIL: (transactionId) => `${BASE_URL}/payments/merchant/transactions/${transactionId}`,
   TRANSACTION_REPORT: `${BASE_URL}/payments/merchant/transaction/report`,
   PAYOUT_REPORT: `${BASE_URL}/payments/merchant/payout/report`,
+  COMBINED_REPORT: `${BASE_URL}/payments/merchant/report/combined`,
   PAYOUTS: `${BASE_URL}/payments/merchant/payouts`,
   PAYOUT_REQUEST: `${BASE_URL}/payments/merchant/payout/request`,
   PAYOUT_CANCEL: (payoutId) => `${BASE_URL}/payments/merchant/payout/${payoutId}/cancel`,

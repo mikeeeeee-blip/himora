@@ -600,6 +600,71 @@ console.log(url);
       throw new Error(this.getApiErrorMessage(error, 'Failed to download payout report'));
     }
   }
+
+  // Download Combined Report (Transactions + Payouts in one Excel)
+  async downloadCombinedReport(tFilters = {}, pFilters = {}) {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const params = new URLSearchParams();
+      // Transaction filters (prefix t_)
+      if (tFilters.startDate) params.append('t_startDate', tFilters.startDate);
+      if (tFilters.endDate) params.append('t_endDate', tFilters.endDate);
+      if (tFilters.status) params.append('t_status', tFilters.status);
+      if (tFilters.paymentMethod) params.append('t_paymentMethod', tFilters.paymentMethod);
+      if (tFilters.paymentGateway) params.append('t_paymentGateway', tFilters.paymentGateway);
+      if (tFilters.minAmount) params.append('t_minAmount', tFilters.minAmount);
+      if (tFilters.maxAmount) params.append('t_maxAmount', tFilters.maxAmount);
+      if (tFilters.q) params.append('t_q', tFilters.q);
+      if (tFilters.sortBy) params.append('t_sortBy', tFilters.sortBy);
+      if (tFilters.settlementStatus) params.append('t_settlementStatus', tFilters.settlementStatus);
+      if (tFilters.limit) params.append('t_limit', tFilters.limit);
+
+      // Payout filters (prefix p_)
+      if (pFilters.startDate) params.append('p_startDate', pFilters.startDate);
+      if (pFilters.endDate) params.append('p_endDate', pFilters.endDate);
+      if (pFilters.status) params.append('p_status', pFilters.status);
+      if (pFilters.transferMode) params.append('p_transferMode', pFilters.transferMode);
+      if (pFilters.minAmount) params.append('p_minAmount', pFilters.minAmount);
+      if (pFilters.maxAmount) params.append('p_maxAmount', pFilters.maxAmount);
+      if (pFilters.q) params.append('p_q', pFilters.q);
+      if (pFilters.sortBy) params.append('p_sortBy', pFilters.sortBy);
+      if (pFilters.limit) params.append('p_limit', pFilters.limit);
+
+      const url = `${API_ENDPOINTS.COMBINED_REPORT}${params.toString() ? `?${params.toString()}` : ''}`;
+
+      const response = await axios.get(url, {
+        headers: { 'x-auth-token': `${token}` },
+        responseType: 'blob',
+      });
+
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url_blob = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url_blob;
+      const cd = response.headers['content-disposition'];
+      let filename = 'combined_report.xlsx';
+      if (cd) {
+        const m = cd.match(/filename="?(.+?)"?$/i);
+        if (m) filename = m[1];
+      }
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url_blob);
+
+      return { success: true, filename };
+    } catch (error) {
+      console.error('Download combined report error:', error);
+      throw new Error(this.getApiErrorMessage(error, 'Failed to download combined report'));
+    }
+  }
 }
 
 export default new PaymentService();

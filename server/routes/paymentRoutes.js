@@ -40,6 +40,7 @@ const {
     searchPayouts,
     getTransactionReport,
     getPayoutReport,
+    getCombinedReport
 } = require('../controllers/adminController.js');
 
 // ============ MERCHANT APIs (API Key Auth) ============
@@ -79,6 +80,8 @@ router.post('/merchant/payout/:payoutId/cancel', auth, cancelPayoutRequest);
 router.get('/merchant/transactions/:transactionId', auth, getTransactionById);
 router.get('/merchant/transaction/report', auth, getTransactionReport);
 router.get('/merchant/payout/report', auth, getPayoutReport);
+// Combined Excel: Sheet1 = Transactions, Sheet2 = Payouts
+router.get('/merchant/report/combined', auth, getCombinedReport);
 
 
 router.get('/merchant/payout/:payoutId/status', auth, getPayoutStatusById);

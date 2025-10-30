@@ -272,6 +272,46 @@ const fetchTransactions = async () => {
     }));
   };
 
+  // Combined report using current modal filters when available, otherwise current page filters
+  const handleDownloadCombinedReport = async () => {
+    setDownloading(true);
+    setError('');
+    try {
+      const t = {
+        startDate: downloadFilters.startDate || filters.start_date || undefined,
+        endDate: downloadFilters.endDate || filters.end_date || undefined,
+        status: downloadFilters.status || (activeTab === 'settlement' ? 'paid' : filters.status) || undefined,
+        paymentMethod: downloadFilters.paymentMethod || filters.payment_method || undefined,
+        paymentGateway: downloadFilters.paymentGateway || filters.payment_gateway || undefined,
+        minAmount: downloadFilters.minAmount || undefined,
+        maxAmount: downloadFilters.maxAmount || undefined,
+        q: downloadFilters.search || filters.search || undefined,
+        sortBy: downloadFilters.sortBy ? `${downloadFilters.sortBy}:${downloadFilters.sortOrder}` : `${filters.sort_by}:${filters.sort_order}`,
+        settlementStatus: activeTab === 'settlement' ? 'settled' : (downloadFilters.settlementStatus || undefined),
+      };
+      const p = {
+        startDate: payoutDownloadFilters.startDate || filters.start_date || undefined,
+        endDate: payoutDownloadFilters.endDate || filters.end_date || undefined,
+        status: payoutDownloadFilters.status || (activeTab === 'payout' ? filters.status : '') || undefined,
+        transferMode: payoutDownloadFilters.transferMode || undefined,
+        minAmount: payoutDownloadFilters.minAmount || undefined,
+        maxAmount: payoutDownloadFilters.maxAmount || undefined,
+        q: payoutDownloadFilters.search || filters.search || undefined,
+        sortBy: payoutDownloadFilters.sortBy ? `${payoutDownloadFilters.sortBy}:${payoutDownloadFilters.sortOrder}` : `${filters.sort_by}:${filters.sort_order}`,
+      };
+
+      // remove undefineds
+      Object.keys(t).forEach(k => t[k] === undefined && delete t[k]);
+      Object.keys(p).forEach(k => p[k] === undefined && delete p[k]);
+
+      await paymentService.downloadCombinedReport(t, p);
+    } catch (err) {
+      setError(err.message || 'Failed to download combined report');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleString('en-IN', {
@@ -358,7 +398,7 @@ const fetchTransactions = async () => {
     <div className="page-container with-sidebar">
       <Sidebar />
       <main className="page-main">
-        <div className="page-header">
+        <div className="page-header scroll-header">
           <h1>Transactions</h1>
           <p>View and manage all payment transactions</p>
 
@@ -396,7 +436,6 @@ const fetchTransactions = async () => {
             />
           </div>
         </div>
-
         <div className="page-content">
           {/* Tabs */}
           <div className="tabs">
@@ -507,6 +546,35 @@ const fetchTransactions = async () => {
               disabled={loading}
             >
               {loading ? 'Loading...' : 'Apply Filters'}
+            </button>
+          </div>
+
+          {/* Reports section */}
+          <div className="reports-bar" style={{ display: 'flex', gap: '8px', margin: '12px 0' }}>
+            <span style={{ alignSelf: 'center', color: '#6b7280', fontWeight: 600 }}>Reports:</span>
+            <button
+              onClick={handleOpenDownloadModal}
+              disabled={downloading || loading}
+              className="primary-btn"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              Download Transactions
+            </button>
+            <button
+              onClick={handleOpenPayoutDownloadModal}
+              disabled={downloading || loading}
+              className="primary-btn"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              Download Payouts
+            </button>
+            <button
+              onClick={handleDownloadCombinedReport}
+              disabled={downloading || loading}
+              className="secondary-btn"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              {downloading ? 'Preparing…' : 'Download Combined (2 sheets)'}
             </button>
           </div>
 
