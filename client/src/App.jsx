@@ -10,6 +10,7 @@ import PaymentsPage from './components/pages/PaymentsPage';
 import SuperadminSignupPage from './components/pages/SuperadminSignupPage';
 import SuperadminTransactionsPage from './components/pages/SuperadminTransactionsPage';
 import SuperadminPayoutsPage from './components/pages/PayoutsManagement';
+import SuperadminMerchantsPage from './components/pages/SuperadminMerchantsPage';
 import WebhookPage from './components/pages/WebhookPage';
 import WebhookHowTo from './components/pages/WebhookHowTo';
 import AuthWrapper from './components/AuthWrapper';
@@ -50,6 +51,14 @@ function App() {
           element={
             <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
               <SuperadminPayoutsPage />
+            </AuthWrapper>
+          }
+        />
+        <Route
+          path="/superadmin/merchants"
+          element={
+            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+              <SuperadminMerchantsPage />
             </AuthWrapper>
           }
         />

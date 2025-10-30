@@ -21,6 +21,7 @@ const Sidebar = () => {
     if (userRole === USER_ROLES.SUPERADMIN) {
       return [
         { path: '/superadmin', label: 'Dashboard', icon: <MdDashboard /> },
+        { path: '/superadmin/merchants', label: 'Merchants', icon: <HiOutlineChartBar /> },
         { path: '/superadmin/signup', label: 'Signup', icon: <HiOutlineChartBar /> },
         { path: '/superadmin/transactions', label: 'Transactions', icon: <HiOutlineChartBar /> },
         { path: '/superadmin/payouts', label: 'Payouts', icon: <TbArrowsTransferDown /> },

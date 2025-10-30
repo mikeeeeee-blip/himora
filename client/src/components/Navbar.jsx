@@ -37,6 +37,7 @@ const Navbar = () => {
     if (userRole === USER_ROLES.SUPERADMIN) {
       return [
         { path: '/superadmin', label: 'Dashboard', icon: '🏠' },
+        { path: '/superadmin/merchants', label: 'Merchants', icon: '👥' },
         { path: '/superadmin/signup', label: 'Signup', icon: '👥' },
         { path: '/superadmin/transactions', label: 'Transactions', icon: '📊' },
         { path: '/superadmin/payouts', label: 'Payouts', icon: '💰' },

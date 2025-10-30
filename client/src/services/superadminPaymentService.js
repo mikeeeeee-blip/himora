@@ -30,6 +30,32 @@ class SuperadminPaymentService {
       this.handleError(error, 'Failed to fetch dashboard statistics');
     }
   }
+
+  // ============ MERCHANTS (COMPREHENSIVE) ============
+  async getAllMerchantsData(params = {}) {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await axios.get(API_ENDPOINTS.SUPERADMIN_MERCHANTS_COMPREHENSIVE, {
+        headers: {
+          'x-auth-token': token,
+          'Content-Type': 'application/json',
+        },
+        params: {
+          merchantId: params.merchantId || undefined,
+          status: params.status || undefined,
+          includeInactive: params.includeInactive === true ? 'true' : undefined,
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      this.handleError(error, 'Failed to fetch merchants data');
+    }
+  }
 // ============ MANUAL SETTLEMENT ============
 async triggerManualSettlement() {
   try {
