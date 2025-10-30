@@ -46,6 +46,8 @@ export const API_ENDPOINTS = {
   
   // ============ SUPERADMIN - DASHBOARD ============
   DASHBOARD_STATS: `${BASE_URL}/superadmin/dashboard/stats`,
+  // ============ SUPERADMIN - MERCHANTS ============
+  SUPERADMIN_MERCHANTS_COMPREHENSIVE: `${BASE_URL}/superadmin/merchants/comprehensive`,
   
   // ============ SUPERADMIN - PAYOUTS ============
   ADMIN_PAYOUTS: `${BASE_URL}/payments/admin/payouts/all`,
