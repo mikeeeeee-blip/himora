@@ -7,8 +7,11 @@ import Toast from '../ui/Toast';
 
 const WebhookPage = () => {
   const [webhookConfig, setWebhookConfig] = useState(null);
+  const [payoutWebhookConfig, setPayoutWebhookConfig] = useState(null);
   const [showConfigForm, setShowConfigForm] = useState(false);
+  const [showPayoutConfigForm, setShowPayoutConfigForm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [payoutLoading, setPayoutLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [toast, setToast] = useState({ message: '', type: 'success' });
@@ -16,11 +19,17 @@ const WebhookPage = () => {
     url: '',
     events: []
   });
+  const [payoutWebhookData, setPayoutWebhookData] = useState({
+    url: '',
+    events: []
+  });
 
   const webhookEvents = webhookService.getAvailableEvents();
+  const payoutEvents = webhookService.getAvailablePayoutEvents();
 
   useEffect(() => {
     fetchWebhookConfig();
+    fetchPayoutWebhookConfig();
   }, []);
 
   const fetchWebhookConfig = async () => {
@@ -43,6 +52,26 @@ const WebhookPage = () => {
     }
   };
 
+  const fetchPayoutWebhookConfig = async () => {
+    setPayoutLoading(true);
+    try {
+      const config = await webhookService.getPayoutWebhookConfig();
+      setPayoutWebhookConfig(config);
+      if (config) {
+        setPayoutWebhookData({
+          url: config.webhook_url || '',
+          events: config.webhook_events || []
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching payout webhook config:', error);
+      setError('Failed to fetch payout webhook configuration');
+      setToast({ message: 'Failed to fetch payout webhook configuration', type: 'error' });
+    } finally {
+      setPayoutLoading(false);
+    }
+  };
+
   const handleInputChange = (field, value) => {
     if (field === 'events') {
       setWebhookData(prev => ({
@@ -59,6 +88,15 @@ const WebhookPage = () => {
 
   const handleEventToggle = (eventId) => {
     setWebhookData(prev => ({
+      ...prev,
+      events: prev.events.includes(eventId)
+        ? prev.events.filter(e => e !== eventId)
+        : [...prev.events, eventId]
+    }));
+  };
+
+  const handlePayoutEventToggle = (eventId) => {
+    setPayoutWebhookData(prev => ({
       ...prev,
       events: prev.events.includes(eventId)
         ? prev.events.filter(e => e !== eventId)
@@ -100,6 +138,39 @@ const WebhookPage = () => {
     }
   };
 
+  const handlePayoutConfigure = async (e) => {
+    e.preventDefault();
+    setPayoutLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      // Validate required fields
+      if (!payoutWebhookData.url || payoutWebhookData.events.length === 0) {
+        throw new Error('Please fill in all required fields');
+      }
+
+      // Validate URL format
+      try {
+        new URL(payoutWebhookData.url);
+      } catch {
+        throw new Error('Please enter a valid URL');
+      }
+
+      const result = await webhookService.configurePayoutWebhook(payoutWebhookData);
+      setSuccess('Payout webhook configured successfully!');
+      setToast({ message: 'Payout webhook configured successfully!', type: 'success' });
+
+      await fetchPayoutWebhookConfig();
+      setShowPayoutConfigForm(false);
+    } catch (error) {
+      setError(error.message);
+      setToast({ message: error.message, type: 'error' });
+    } finally {
+      setPayoutLoading(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete the webhook configuration?')) {
       try {
@@ -126,6 +197,17 @@ const WebhookPage = () => {
     }
   };
 
+  const handlePayoutTest = async () => {
+    try {
+      await webhookService.testPayoutWebhook();
+      setSuccess('Test payout webhook sent successfully!');
+      setToast({ message: 'Test payout webhook sent successfully!', type: 'success' });
+    } catch (error) {
+      setError('Failed to send test payout webhook');
+      setToast({ message: 'Failed to send test payout webhook', type: 'error' });
+    }
+  };
+
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     setToast({ message: 'Copied to clipboard!', type: 'success' });
@@ -137,11 +219,14 @@ const WebhookPage = () => {
       <main className="page-main">
         <div className="page-header">
           <h1>Webhook Configuration</h1>
-          <p>Configure your webhook URL to receive real-time payment notifications</p>
+          <p>Configure your webhooks to receive real-time notifications</p>
           <div className="webhook-info">
             
           </div>
           <div className="header-actions">
+            <a href="/admin/webhooks/how-to" className="secondary-btn" style={{ marginRight: 12 }}>
+              How to setup
+            </a>
             {!webhookConfig ? (
               <button 
                 onClick={() => setShowConfigForm(!showConfigForm)} 
@@ -172,6 +257,34 @@ const WebhookPage = () => {
                 >
                   <FiTrash2 className="icon" />
                   Delete Webhook
+                </button>
+              </div>
+            )}
+            {/* Payout webhook actions */}
+            {!payoutWebhookConfig ? (
+              <button 
+                onClick={() => setShowPayoutConfigForm(!showPayoutConfigForm)} 
+                className="primary-btn"
+                style={{ marginLeft: 12 }}
+              >
+                <FiPlus className="icon" />
+                {showPayoutConfigForm ? 'Cancel' : 'Configure Payout Webhook'}
+              </button>
+            ) : (
+              <div className="webhook-actions" style={{ marginLeft: 12 }}>
+                <button 
+                  onClick={handlePayoutTest}
+                  className="secondary-btn"
+                >
+                  <FiPlay className="icon" />
+                  Test Payout Webhook
+                </button>
+                <button 
+                  onClick={() => setShowPayoutConfigForm(true)}
+                  className="secondary-btn"
+                >
+                  <FiEdit className="icon" />
+                  Edit Payout Webhook
                 </button>
               </div>
             )}
@@ -232,6 +345,61 @@ const WebhookPage = () => {
                   </button>
                   <button type="submit" disabled={loading} className="primary-btn">
                     {loading ? 'Configuring...' : 'Configure Webhook'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+          {showPayoutConfigForm && (
+            <div className="webhook-form-card">
+              <h3>Configure Payout Webhook</h3>
+              <form onSubmit={handlePayoutConfigure} className="webhook-form">
+                <div className="form-group">
+                  <label>Payout Webhook URL *</label>
+                  <input
+                    type="url"
+                    value={payoutWebhookData.url}
+                    onChange={(e) => setPayoutWebhookData(prev => ({ ...prev, url: e.target.value }))}
+                    required
+                    placeholder="https://yourdomain.com/api/webhooks/payout"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Payout Events to Subscribe *</label>
+                  <div className="events-grid">
+                    {payoutEvents.map(event => (
+                      <div key={event.id} className="event-option">
+                        <label className="checkbox-container">
+                          <input
+                            type="checkbox"
+                            checked={payoutWebhookData.events.includes(event.id)}
+                            onChange={() => handlePayoutEventToggle(event.id)}
+                          />
+                          <span className="checkmark"></span>
+                          <div className="event-info">
+                            <div className="event-label">{event.label}</div>
+                            <div className="event-description">{event.description}</div>
+                          </div>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="form-actions">
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setShowPayoutConfigForm(false);
+                      setPayoutWebhookData({ url: '', events: [] });
+                    }} 
+                    className="secondary-btn"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={payoutLoading} className="primary-btn">
+                    {payoutLoading ? 'Configuring...' : 'Configure Payout Webhook'}
                   </button>
                 </div>
               </form>
@@ -310,6 +478,73 @@ const WebhookPage = () => {
                   </div>
                 </div>
               </div>
+              {payoutWebhookConfig && (
+                <div className="webhook-card" style={{ marginTop: 16 }}>
+                  <div className="webhook-header">
+                    <div className="webhook-title">
+                      <FiLink className="webhook-icon" />
+                      <h4>Payout Webhook Configuration</h4>
+                      <span className={`status-badge ${payoutWebhookConfig.webhook_enabled ? 'active' : 'inactive'}`}>
+                        {payoutWebhookConfig.webhook_enabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="webhook-body">
+                    <div className="webhook-detail">
+                      <label>Webhook URL:</label>
+                      <div className="url-container">
+                        <span className="url-text">{payoutWebhookConfig.webhook_url}</span>
+                        <button 
+                          onClick={() => copyToClipboard(payoutWebhookConfig.webhook_url)}
+                          className="copy-btn small"
+                        >
+                          <FiCopy />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="webhook-detail">
+                      <label>Webhook Secret:</label>
+                      <div className="secret-container">
+                        <span className="secret-text">
+                          {payoutWebhookConfig.webhook_secret ? 
+                            `${payoutWebhookConfig.webhook_secret.substring(0, 8)}...` : 
+                            'Not available'
+                          }
+                        </span>
+                        {payoutWebhookConfig.webhook_secret && (
+                          <button 
+                            onClick={() => copyToClipboard(payoutWebhookConfig.webhook_secret)}
+                            className="copy-btn small"
+                          >
+                            <FiCopy />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="webhook-detail">
+                      <label>Subscribed Events:</label>
+                      <div className="events-list">
+                        {payoutWebhookConfig.webhook_events?.map(eventId => {
+                          const event = payoutEvents.find(e => e.id === eventId);
+                          return (
+                            <span key={eventId} className="event-tag">
+                              {event ? event.label : eventId}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="webhook-detail">
+                      <label>Retry Attempts:</label>
+                      <span className="webhook-value">{payoutWebhookConfig.webhook_retries || 3}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="empty-state">

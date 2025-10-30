@@ -73,6 +73,26 @@ const UserSchema = new mongoose.Schema({
         type: Number,
         default: 3
     },
+    payoutWebhookUrl: {
+        type: String,
+        default: null
+    },
+    payoutWebhookSecret: {
+        type: String,
+        default: null
+    },
+    payoutWebhookEnabled: {
+        type: Boolean,
+        default: false
+    },
+    payoutWebhookEvents: {
+        type: [String],
+        default: ['payment.success', 'payment.failed', 'payment.pending']
+    },
+    payoutWebhookRetries: {
+        type: Number,
+        default: 3
+    },
     
     // ✅ CALLBACK URLs (MISSING IN YOUR CODE)
     successUrl: {

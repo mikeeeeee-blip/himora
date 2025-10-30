@@ -23,7 +23,11 @@ const {
     configureMerchantWebhook,
     getMerchantWebhookConfig,
     testMerchantWebhook,
-    deleteMerchantWebhook
+    deleteMerchantWebhook,
+    configurePayoutWebhook,
+    updatePayoutWebhook,
+    getPayoutWebhookConfig,
+    testPayoutWebhook
 } = require('../controllers/merchantWebhookController.js');
 const {
     getMyPayouts,
@@ -48,6 +52,12 @@ router.post('/merchant/webhook/configure', auth, configureMerchantWebhook);
 router.get('/merchant/webhook/config', auth, getMerchantWebhookConfig);
 router.post('/merchant/webhook/test', auth, testMerchantWebhook);
 router.delete('/merchant/webhook', auth, deleteMerchantWebhook);
+
+// ============ MERCHANT PAYOUT WEBHOOK CONFIGURATION APIS ============
+router.post('/merchant/webhook/payout/configure', auth, configurePayoutWebhook);
+router.put('/merchant/webhook/payout', auth, updatePayoutWebhook);
+router.get('/merchant/webhook/payout/config', auth, getPayoutWebhookConfig);
+router.post('/merchant/webhook/payout/test', auth, testPayoutWebhook);
 
 
 

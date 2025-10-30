@@ -2,7 +2,9 @@ const Payout = require('../models/Payout');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
-const { sendMerchantWebhook } = require('./merchantWebhookController');
+const { sendMerchantWebhook, sendPayoutWebhook } = require('./merchantWebhookController');
+const mongoose = require('mongoose');
+const COMMISSION_RATE = 0.038; // 3.8%
 
 // ============ GET ALL PAYOUTS (SuperAdmin) ============
 exports.getAllPayouts = async (req, res) => {
@@ -343,20 +345,31 @@ exports.processPayout = async (req, res) => {
 
         console.log(`✅ Payout ${payoutId} completed. ${updateResult.modifiedCount} transactions marked as paid.`);
 
-        // send webhook to merchant 
-
+        // send payout webhook to merchant 
         const webhookPayload = {
-            event: 'payment.success',
-                updatedPayout
+            event: 'payout.completed',
+            timestamp: new Date().toISOString(),
+            payout: {
+                payout_id: updatedPayout.payoutId,
+                status: updatedPayout.status,
+                amount: updatedPayout.amount,
+                net_amount: updatedPayout.netAmount,
+                commission: updatedPayout.commission,
+                transfer_mode: updatedPayout.transferMode,
+                utr: updatedPayout.utr,
+                processed_at: updatedPayout.processedAt,
+                completed_at: updatedPayout.completedAt
             }
+        }
 
-            console.log("sending the webhook payload ",webhookPayload)
-            const merchant = await User.findById(updatedPayout.merchantId)
+        console.log("sending the payout webhook payload ", webhookPayload)
+        const merchant = await User.findById(updatedPayout.merchantId)
 
-                 // Send merchant webhook if enabled
-            if (updatedPayout.merchantId) {
-            await sendMerchantWebhook(merchant, webhookPayload);
-            }
+        if (updatedPayout.merchantId) {
+            await sendPayoutWebhook(merchant, webhookPayload);
+        }
+
+
 
         res.json({
             success: true,
@@ -724,6 +737,537 @@ exports.getDashboardStats = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to fetch dashboard statistics'
+        });
+    }
+};
+
+// ============ GET ALL MERCHANTS WITH COMPREHENSIVE DATA ============
+exports.getAllMerchantsData = async (req, res) => {
+    try {
+        console.log(`📊 SuperAdmin ${req.user.name} fetching all merchants comprehensive data`);
+
+        const { 
+            merchantId, 
+            status: merchantStatus,
+            includeInactive = 'false'
+        } = req.query;
+
+        // Build merchant query
+        let merchantQuery = { role: 'admin' };
+        if (merchantId) {
+            merchantQuery._id = new mongoose.Types.ObjectId(merchantId);
+        }
+        if (merchantStatus) {
+            merchantQuery.status = merchantStatus;
+        }
+        if (includeInactive !== 'true') {
+            merchantQuery.status = merchantQuery.status || 'active';
+        }
+
+        // Get all merchants
+        const merchants = await User.find(merchantQuery).lean();
+
+        if (!merchants || merchants.length === 0) {
+            return res.json({
+                success: true,
+                merchants: [],
+                summary: {
+                    total_merchants: 0,
+                    active_merchants: 0,
+                    inactive_merchants: 0
+                }
+            });
+        }
+
+        // Get merchant IDs for aggregation
+        const merchantIds = merchants.map(m => m._id);
+
+        // ========== TRANSACTION AGGREGATIONS ==========
+        // Overall transaction stats
+        const transactionStats = await Transaction.aggregate([
+            { $match: { merchantId: { $in: merchantIds } } },
+            {
+                $group: {
+                    _id: '$merchantId',
+                    // Counts by status
+                    total_transactions: { $sum: 1 },
+                    paid_count: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, 1, 0] } },
+                    failed_count: { $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] } },
+                    pending_count: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+                    created_count: { $sum: { $cond: [{ $eq: ['$status', 'created'] }, 1, 0] } },
+                    cancelled_count: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
+                    refunded_count: { $sum: { $cond: [{ $eq: ['$status', 'refunded'] }, 1, 0] } },
+                    partial_refund_count: { $sum: { $cond: [{ $eq: ['$status', 'partial_refund'] }, 1, 0] } },
+                    
+                    // Settlement counts
+                    settled_count: { $sum: { $cond: [{ $eq: ['$settlementStatus', 'settled'] }, 1, 0] } },
+                    unsettled_count: { $sum: { $cond: [{ $eq: ['$settlementStatus', 'unsettled'] }, 1, 0] } },
+                    on_hold_count: { $sum: { $cond: [{ $eq: ['$settlementStatus', 'on_hold'] }, 1, 0] } },
+                    
+                    // Amounts
+                    total_revenue: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } },
+                    total_refunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
+                    total_commission: { $sum: { $ifNull: ['$commission', 0] } },
+                    settled_revenue: { 
+                        $sum: { 
+                            $cond: [
+                                { $and: [
+                                    { $eq: ['$status', 'paid'] },
+                                    { $eq: ['$settlementStatus', 'settled'] }
+                                ]}, 
+                                '$amount', 
+                                0
+                            ] 
+                        } 
+                    },
+                    unsettled_revenue: { 
+                        $sum: { 
+                            $cond: [
+                                { $and: [
+                                    { $eq: ['$status', 'paid'] },
+                                    { $eq: ['$settlementStatus', 'unsettled'] }
+                                ]}, 
+                                '$amount', 
+                                0
+                            ] 
+                        } 
+                    },
+                    settled_commission: { 
+                        $sum: { 
+                            $cond: [
+                                { $and: [
+                                    { $eq: ['$status', 'paid'] },
+                                    { $eq: ['$settlementStatus', 'settled'] }
+                                ]}, 
+                                { $ifNull: ['$commission', 0] }, 
+                                0
+                            ] 
+                        } 
+                    },
+                    unsettled_commission: { 
+                        $sum: { 
+                            $cond: [
+                                { $and: [
+                                    { $eq: ['$status', 'paid'] },
+                                    { $eq: ['$settlementStatus', 'unsettled'] }
+                                ]}, 
+                                { $ifNull: ['$commission', 0] }, 
+                                0
+                            ] 
+                        } 
+                    },
+                    settled_refunded: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ['$settlementStatus', 'settled'] },
+                                { $ifNull: ['$refundAmount', 0] },
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        // Payment gateway breakdown
+        const gatewayStats = await Transaction.aggregate([
+            { $match: { merchantId: { $in: merchantIds }, status: 'paid' } },
+            {
+                $group: {
+                    _id: { merchantId: '$merchantId', gateway: '$paymentGateway' },
+                    count: { $sum: 1 },
+                    amount: { $sum: '$amount' },
+                    commission: { $sum: { $ifNull: ['$commission', 0] } }
+                }
+            },
+            {
+                $group: {
+                    _id: '$_id.merchantId',
+                    gateways: {
+                        $push: {
+                            gateway: '$_id.gateway',
+                            count: '$count',
+                            amount: '$amount',
+                            commission: '$commission'
+                        }
+                    }
+                }
+            }
+        ]);
+
+        // Payment method breakdown
+        const methodStats = await Transaction.aggregate([
+            { $match: { merchantId: { $in: merchantIds }, status: 'paid' } },
+            {
+                $group: {
+                    _id: { merchantId: '$merchantId', method: '$paymentMethod' },
+                    count: { $sum: 1 },
+                    amount: { $sum: '$amount' }
+                }
+            },
+            {
+                $group: {
+                    _id: '$_id.merchantId',
+                    methods: {
+                        $push: {
+                            method: '$_id.method',
+                            count: '$count',
+                            amount: '$amount'
+                        }
+                    }
+                }
+            }
+        ]);
+
+        // Today's stats (IST)
+        const today = new Date();
+        const istOffset = 5.5 * 60 * 60 * 1000;
+        const todayStart = new Date(new Date(today.getTime() + istOffset).setHours(0, 0, 0, 0) - istOffset);
+        const todayEnd = new Date(new Date(today.getTime() + istOffset).setHours(23, 59, 59, 999) - istOffset);
+
+        const todayStats = await Transaction.aggregate([
+            {
+                $match: {
+                    merchantId: { $in: merchantIds },
+                    status: 'paid',
+                    $or: [
+                        { createdAt: { $gte: todayStart, $lte: todayEnd } },
+                        { updatedAt: { $gte: todayStart, $lte: todayEnd } }
+                    ]
+                }
+            },
+            {
+                $group: {
+                    _id: '$merchantId',
+                    today_count: { $sum: 1 },
+                    today_revenue: { $sum: '$amount' },
+                    today_commission: { $sum: { $ifNull: ['$commission', 0] } }
+                }
+            }
+        ]);
+
+        // This week stats
+        const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const weekStats = await Transaction.aggregate([
+            {
+                $match: {
+                    merchantId: { $in: merchantIds },
+                    status: 'paid',
+                    createdAt: { $gte: oneWeekAgo }
+                }
+            },
+            {
+                $group: {
+                    _id: '$merchantId',
+                    week_count: { $sum: 1 },
+                    week_revenue: { $sum: '$amount' },
+                    week_commission: { $sum: { $ifNull: ['$commission', 0] } }
+                }
+            }
+        ]);
+
+        // This month stats
+        const oneMonthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const monthStats = await Transaction.aggregate([
+            {
+                $match: {
+                    merchantId: { $in: merchantIds },
+                    status: 'paid',
+                    createdAt: { $gte: oneMonthAgo }
+                }
+            },
+            {
+                $group: {
+                    _id: '$merchantId',
+                    month_count: { $sum: 1 },
+                    month_revenue: { $sum: '$amount' },
+                    month_commission: { $sum: { $ifNull: ['$commission', 0] } }
+                }
+            }
+        ]);
+
+        // ========== PAYOUT AGGREGATIONS ==========
+        const payoutStats = await Payout.aggregate([
+            { $match: { merchantId: { $in: merchantIds } } },
+            {
+                $group: {
+                    _id: '$merchantId',
+                    total_payouts: { $sum: 1 },
+                    requested_count: { $sum: { $cond: [{ $eq: ['$status', 'requested'] }, 1, 0] } },
+                    pending_count: { $sum: { $cond: [{ $in: ['$status', ['pending', 'processing']] }, 1, 0] } },
+                    completed_count: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+                    rejected_count: { $sum: { $cond: [{ $eq: ['$status', 'rejected'] }, 1, 0] } },
+                    failed_count: { $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] } },
+                    cancelled_count: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
+                    
+                    total_payout_amount_requested: { $sum: '$amount' },
+                    total_payout_commission: { $sum: { $ifNull: ['$commission', 0] } },
+                    total_payout_completed: {
+                        $sum: {
+                            $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$netAmount', 0] }, 0]
+                        }
+                    },
+                    total_payout_pending: {
+                        $sum: {
+                            $cond: [
+                                { $in: ['$status', ['requested', 'pending', 'processing']] },
+                                { $ifNull: ['$netAmount', 0] },
+                                0
+                            ]
+                        }
+                    },
+                    total_payout_rejected: {
+                        $sum: {
+                            $cond: [{ $eq: ['$status', 'rejected'] }, { $ifNull: ['$netAmount', 0] }, 0]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        // Payout commission breakdown by type
+        const payoutCommissionBreakdown = await Payout.aggregate([
+            { $match: { merchantId: { $in: merchantIds } } },
+            {
+                $group: {
+                    _id: { merchantId: '$merchantId', commissionType: '$commissionType' },
+                    count: { $sum: 1 },
+                    total_commission: { $sum: { $ifNull: ['$commission', 0] } },
+                    total_amount: { $sum: '$amount' }
+                }
+            },
+            {
+                $group: {
+                    _id: '$_id.merchantId',
+                    commission_types: {
+                        $push: {
+                            type: '$_id.commissionType',
+                            count: '$count',
+                            total_commission: '$total_commission',
+                            total_amount: '$total_amount'
+                        }
+                    }
+                }
+            }
+        ]);
+
+        // ========== CREATE MERCHANT DATA MAPS ==========
+        const transactionMap = {};
+        transactionStats.forEach(stat => {
+            transactionMap[stat._id.toString()] = stat;
+        });
+
+        const gatewayMap = {};
+        gatewayStats.forEach(stat => {
+            gatewayMap[stat._id.toString()] = stat.gateways;
+        });
+
+        const methodMap = {};
+        methodStats.forEach(stat => {
+            methodMap[stat._id.toString()] = stat.methods;
+        });
+
+        const todayMap = {};
+        todayStats.forEach(stat => {
+            todayMap[stat._id.toString()] = stat;
+        });
+
+        const weekMap = {};
+        weekStats.forEach(stat => {
+            weekMap[stat._id.toString()] = stat;
+        });
+
+        const monthMap = {};
+        monthStats.forEach(stat => {
+            monthMap[stat._id.toString()] = stat;
+        });
+
+        const payoutMap = {};
+        payoutStats.forEach(stat => {
+            payoutMap[stat._id.toString()] = stat;
+        });
+
+        const payoutCommissionMap = {};
+        payoutCommissionBreakdown.forEach(stat => {
+            payoutCommissionMap[stat._id.toString()] = stat.commission_types;
+        });
+
+        // ========== BUILD MERCHANT DOCUMENTS ==========
+        const merchantsData = merchants.map(merchant => {
+            const merchantIdStr = merchant._id.toString();
+            const txnStat = transactionMap[merchantIdStr] || {};
+            const payoutStat = payoutMap[merchantIdStr] || {};
+            const todayStat = todayMap[merchantIdStr] || {};
+            const weekStat = weekMap[merchantIdStr] || {};
+            const monthStat = monthMap[merchantIdStr] || {};
+
+            // Calculate balance information
+            const settledRevenue = parseFloat((txnStat.settled_revenue || 0).toFixed(2));
+            const settledCommission = parseFloat((txnStat.settled_commission || 0).toFixed(2));
+            const settledRefunded = parseFloat((txnStat.settled_refunded || 0).toFixed(2));
+            
+            const settledNetRevenue = settledRevenue - settledRefunded - settledCommission;
+            
+            const totalPaidOut = parseFloat((payoutStat.total_payout_completed || 0).toFixed(2));
+            const totalPendingPayout = parseFloat((payoutStat.total_payout_pending || 0).toFixed(2));
+            
+            const availableBalance = Math.max(0, parseFloat((settledNetRevenue - totalPaidOut - totalPendingPayout).toFixed(2)));
+
+            // Calculate success rate
+            const totalTxn = txnStat.total_transactions || 0;
+            const paidTxn = txnStat.paid_count || 0;
+            const successRate = totalTxn > 0 ? parseFloat(((paidTxn / totalTxn) * 100).toFixed(2)) : 0;
+
+            // Average transaction value
+            const avgTransactionValue = paidTxn > 0 
+                ? parseFloat(((txnStat.total_revenue || 0) / paidTxn).toFixed(2))
+                : 0;
+
+            // Build merchant document
+            return {
+                merchant_id: merchant._id.toString(),
+                merchant_info: {
+                    name: merchant.name,
+                    email: merchant.email,
+                    business_name: merchant.businessName || merchant.name,
+                    business_details: merchant.businessDetails || {},
+                    status: merchant.status || 'active',
+                    role: merchant.role,
+                    api_key_created_at: merchant.apiKeyCreatedAt || null,
+                    webhook_enabled: merchant.webhookEnabled || false,
+                    webhook_url: merchant.webhookUrl || null,
+                    commission_rate: merchant.commissionRate || 2.5,
+                    minimum_payout_amount: merchant.minimumPayoutAmount || 100,
+                    free_payouts_remaining: merchant.freePayoutsUnder500 || 0,
+                    created_at: merchant.createdAt,
+                    updated_at: merchant.updatedAt,
+                    last_login_at: merchant.lastLoginAt || null
+                },
+
+                transaction_summary: {
+                    total_transactions: txnStat.total_transactions || 0,
+                    by_status: {
+                        paid: txnStat.paid_count || 0,
+                        failed: txnStat.failed_count || 0,
+                        pending: txnStat.pending_count || 0,
+                        created: txnStat.created_count || 0,
+                        cancelled: txnStat.cancelled_count || 0,
+                        refunded: txnStat.refunded_count || 0,
+                        partial_refund: txnStat.partial_refund_count || 0
+                    },
+                    by_settlement: {
+                        settled: txnStat.settled_count || 0,
+                        unsettled: txnStat.unsettled_count || 0,
+                        on_hold: txnStat.on_hold_count || 0
+                    },
+                    success_rate: successRate,
+                    average_transaction_value: avgTransactionValue
+                },
+
+                revenue_summary: {
+                    total_revenue: parseFloat((txnStat.total_revenue || 0).toFixed(2)),
+                    total_refunded: parseFloat((txnStat.total_refunded || 0).toFixed(2)),
+                    net_revenue: parseFloat(((txnStat.total_revenue || 0) - (txnStat.total_refunded || 0)).toFixed(2)),
+                    
+                    settled_revenue: settledRevenue,
+                    unsettled_revenue: parseFloat((txnStat.unsettled_revenue || 0).toFixed(2)),
+                    
+                    total_commission_paid: parseFloat((txnStat.total_commission || 0).toFixed(2)),
+                    settled_commission: settledCommission,
+                    unsettled_commission: parseFloat((txnStat.unsettled_commission || 0).toFixed(2)),
+                    
+                    settled_net_revenue: settledNetRevenue,
+                    unsettled_net_revenue: parseFloat(((txnStat.unsettled_revenue || 0) - (txnStat.unsettled_commission || 0)).toFixed(2))
+                },
+
+                payout_summary: {
+                    total_payouts: payoutStat.total_payouts || 0,
+                    by_status: {
+                        requested: payoutStat.requested_count || 0,
+                        pending: payoutStat.pending_count || 0,
+                        completed: payoutStat.completed_count || 0,
+                        rejected: payoutStat.rejected_count || 0,
+                        failed: payoutStat.failed_count || 0,
+                        cancelled: payoutStat.cancelled_count || 0
+                    },
+                    total_amount_requested: parseFloat((payoutStat.total_payout_amount_requested || 0).toFixed(2)),
+                    total_commission_charged: parseFloat((payoutStat.total_payout_commission || 0).toFixed(2)),
+                    total_completed: totalPaidOut,
+                    total_pending: totalPendingPayout,
+                    total_rejected: parseFloat((payoutStat.total_payout_rejected || 0).toFixed(2)),
+                    commission_breakdown: payoutCommissionMap[merchantIdStr] || []
+                },
+
+                balance_information: {
+                    settled_revenue: settledRevenue,
+                    settled_refunded: settledRefunded,
+                    settled_commission: settledCommission,
+                    settled_net_revenue: settledNetRevenue,
+                    total_paid_out: totalPaidOut,
+                    pending_payouts: totalPendingPayout,
+                    available_balance: availableBalance,
+                    can_request_payout: availableBalance > 0,
+                    minimum_payout_amount: merchant.minimumPayoutAmount || 100
+                },
+
+                time_based_stats: {
+                    today: {
+                        transactions: todayStat.today_count || 0,
+                        revenue: parseFloat((todayStat.today_revenue || 0).toFixed(2)),
+                        commission: parseFloat((todayStat.today_commission || 0).toFixed(2)),
+                        net_revenue: parseFloat(((todayStat.today_revenue || 0) - (todayStat.today_commission || 0)).toFixed(2))
+                    },
+                    this_week: {
+                        transactions: weekStat.week_count || 0,
+                        revenue: parseFloat((weekStat.week_revenue || 0).toFixed(2)),
+                        commission: parseFloat((weekStat.week_commission || 0).toFixed(2)),
+                        net_revenue: parseFloat(((weekStat.week_revenue || 0) - (weekStat.week_commission || 0)).toFixed(2))
+                    },
+                    this_month: {
+                        transactions: monthStat.month_count || 0,
+                        revenue: parseFloat((monthStat.month_revenue || 0).toFixed(2)),
+                        commission: parseFloat((monthStat.month_commission || 0).toFixed(2)),
+                        net_revenue: parseFloat(((monthStat.month_revenue || 0) - (monthStat.month_commission || 0)).toFixed(2))
+                    }
+                },
+
+                payment_gateway_breakdown: gatewayMap[merchantIdStr] || [],
+                payment_method_breakdown: methodMap[merchantIdStr] || [],
+
+                platform_earnings: {
+                    total_payin_commission: parseFloat((txnStat.total_commission || 0).toFixed(2)),
+                    total_payout_commission: parseFloat((payoutStat.total_payout_commission || 0).toFixed(2)),
+                    total_platform_commission: parseFloat(((txnStat.total_commission || 0) + (payoutStat.total_payout_commission || 0)).toFixed(2))
+                }
+            };
+        });
+
+        // Calculate platform-wide summary
+        const platformSummary = {
+            total_merchants: merchants.length,
+            active_merchants: merchants.filter(m => m.status === 'active').length,
+            inactive_merchants: merchants.filter(m => m.status === 'inactive').length,
+            total_revenue: merchantsData.reduce((sum, m) => sum + m.revenue_summary.total_revenue, 0).toFixed(2),
+            total_commission: merchantsData.reduce((sum, m) => sum + m.platform_earnings.total_platform_commission, 0).toFixed(2),
+            total_payouts_completed: merchantsData.reduce((sum, m) => sum + m.payout_summary.total_completed, 0).toFixed(2)
+        };
+
+        res.json({
+            success: true,
+            merchants: merchantsData,
+            summary: platformSummary,
+            timestamp: new Date().toISOString(),
+            count: merchantsData.length
+        });
+
+        console.log(`✅ Returned comprehensive data for ${merchantsData.length} merchants to SuperAdmin`);
+
+    } catch (error) {
+        console.error('❌ Get All Merchants Data Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch merchants comprehensive data',
+            detail: error.message
         });
     }
 };

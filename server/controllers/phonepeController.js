@@ -1,9 +1,12 @@
 import { StandardCheckoutClient, Env, MetaInfo, StandardCheckoutPayRequest } from 'pg-sdk-node';
 import { randomUUID } from 'crypto';
  
-const clientId = "SU2510211701005174659756";
-const clientSecret = "f9f47f30-a2bf-48cf-b980-0d7627f2739a";
-const clientVersion = 1;    //insert your client version here
+
+
+
+const clientId = process.env.PHONEPE_CLIENT_ID;
+const clientSecret = process.env.PHONEPE_SECRET;
+const clientVersion = process.env.PHONEPE_CLIENT_VERSION;     //insert your client version here
 const env =  Env.PRODUCTION;       //change to Env.PRODUCTION when you go live
  
 const client = StandardCheckoutClient.getInstance(clientId, clientSecret, clientVersion, env);
