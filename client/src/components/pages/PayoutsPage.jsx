@@ -405,10 +405,10 @@ const handleInputChange = (field, value) => {
   };
 
   return (
-    <div className="page-container with-sidebar">
+    <div className="page-container with-sidebar payouts-page">
       <Sidebar />
       <main className="page-main">
-        <div className="page-header">
+        <div className="page-header scroll-header">
           <div>
             <h1><RiMoneyDollarCircleLine /> Payouts Management</h1>
             <p>Request and track your payout withdrawals</p>

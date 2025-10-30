@@ -215,10 +215,10 @@ const AdminDashboard = () => {
    const availableBalance = dashboardStats.balance?.balance.available_balance || 0;
  
   return (
-    <div className="page-container with-sidebar">
+    <div className="page-container with-sidebar admin-dashboard-page">
       <Sidebar />
       <main className="page-main">
-        <div className="page-header">
+        <div className="page-header scroll-header">
           <div className="header-title-section">
             <div>
               <h1>🏠 Admin Dashboard</h1>

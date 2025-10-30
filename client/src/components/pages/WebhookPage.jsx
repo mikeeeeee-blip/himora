@@ -214,10 +214,10 @@ const WebhookPage = () => {
   };
 
   return (
-    <div className="page-container with-sidebar">
+    <div className="page-container with-sidebar webhook-page">
       <Sidebar />
       <main className="page-main">
-        <div className="page-header">
+        <div className="page-header scroll-header">
           <h1>Webhook Configuration</h1>
           <p>Configure your webhooks to receive real-time notifications</p>
           <div className="webhook-info">

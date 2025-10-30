@@ -395,7 +395,7 @@ const fetchTransactions = async () => {
 
 
   return (
-    <div className="page-container with-sidebar">
+    <div className="page-container with-sidebar transactions-page">
       <Sidebar />
       <main className="page-main">
         <div className="page-header scroll-header">

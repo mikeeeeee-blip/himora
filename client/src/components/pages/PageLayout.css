@@ -405,8 +405,17 @@
   line-height: 1.6;
 }
 
-/* Ensure headers that should scroll do not stick */
-.scroll-header {
+/* Ensure headers that should scroll do not stick (scoped to Transactions page) */
+.transactions-page .scroll-header {
+  position: static !important;
+  top: auto !important;
+}
+
+/* Scoped non-sticky headers for other pages reporting overlap */
+.payouts-page .scroll-header,
+.admin-dashboard-page .scroll-header,
+.balance-page .scroll-header,
+.webhook-page .scroll-header {
   position: static !important;
   top: auto !important;
 }

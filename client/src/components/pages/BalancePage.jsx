@@ -49,10 +49,10 @@ const BalancePage = () => {
   };
 
   return (
-    <div className="page-container with-sidebar">
+    <div className="page-container with-sidebar balance-page">
       <Sidebar />
       <main className="page-main">
-        <div className="page-header">
+        <div className="page-header scroll-header">
           <div>
             <h1><FiDollarSign /> Balance & Revenue</h1>
             <p>Complete financial overview with T+1/2 settlement tracking</p>
