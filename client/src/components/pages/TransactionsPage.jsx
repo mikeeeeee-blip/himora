@@ -425,7 +425,7 @@ const fetchTransactions = async () => {
                 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
               >
                 <FiDownload />
-                {downloading ? 'Downloading...' : 'Download Excel Report'}
+                {downloading ? 'Downloading...' : 'Download Filtered Excel Report'}
               </button>
             ) : null}
             <ExportCSV
