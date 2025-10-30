@@ -415,7 +415,10 @@
 .payouts-page .scroll-header,
 .admin-dashboard-page .scroll-header,
 .balance-page .scroll-header,
-.webhook-page .scroll-header {
+.webhook-page .scroll-header,
+.superadmin-dashboard-page .scroll-header,
+.superadmin-signup-page .scroll-header,
+.superadmin-payouts-page .scroll-header {
   position: static !important;
   top: auto !important;
 }

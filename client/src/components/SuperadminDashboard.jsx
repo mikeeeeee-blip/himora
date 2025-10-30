@@ -109,10 +109,10 @@ const handleManualSettlement = async () => {
   }
 
   return (
-    <div className="page-container with-sidebar">
+    <div className="page-container with-sidebar superadmin-dashboard-page">
       <Sidebar />
       <main className="page-main">
-        <div className="page-header">
+        <div className="page-header scroll-header">
           <div>
             <h1>SuperAdmin Dashboard</h1>
             <p>Complete overview of platform operations and statistics</p>

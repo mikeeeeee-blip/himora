@@ -221,10 +221,10 @@ const PayoutsManagement = () => {
   };
 
   return (
-    <div className="page-container with-sidebar">
+    <div className="page-container with-sidebar superadmin-payouts-page">
       <Sidebar />
       <main className="page-main">
-        <div className="page-header">
+        <div className="page-header scroll-header">
           <div>
             <h1><RiMoneyDollarCircleLine /> Payout Management</h1>
             <p>Approve, reject, and process merchant payout requests</p>

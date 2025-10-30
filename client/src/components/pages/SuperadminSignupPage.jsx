@@ -92,10 +92,10 @@ const SuperadminSignupPage = () => {
   };
 
   return (
-    <div className="page-container with-sidebar">
+    <div className="page-container with-sidebar superadmin-signup-page">
       <Sidebar />
       <main className="page-main">
-        <div className="page-header">
+        <div className="page-header scroll-header">
           <h1>User Registration</h1>
           <p>Create merchant/admin accounts with complete business details</p>
         </div>
