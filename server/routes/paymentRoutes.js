@@ -27,7 +27,8 @@ const {
     configurePayoutWebhook,
     updatePayoutWebhook,
     getPayoutWebhookConfig,
-    testPayoutWebhook
+    testPayoutWebhook,
+    deletePayoutWebhook
 } = require('../controllers/merchantWebhookController.js');
 const {
     getMyPayouts,
@@ -59,6 +60,7 @@ router.post('/merchant/webhook/payout/configure', auth, configurePayoutWebhook);
 router.put('/merchant/webhook/payout', auth, updatePayoutWebhook);
 router.get('/merchant/webhook/payout/config', auth, getPayoutWebhookConfig);
 router.post('/merchant/webhook/payout/test', auth, testPayoutWebhook);
+router.delete('/merchant/webhook/payout', auth, deletePayoutWebhook);
 
 
 

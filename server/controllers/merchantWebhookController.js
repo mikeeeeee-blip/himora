@@ -194,6 +194,43 @@ exports.deleteMerchantWebhook = async (req, res) => {
     }
 };
 
+// ============ DELETE PAYOUT WEBHOOK ============
+exports.deletePayoutWebhook = async (req, res) => {
+    try {
+        const merchantId = req.user.id;
+
+        const merchant = await User.findById(merchantId);
+
+        if (!merchant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Merchant not found'
+            });
+        }
+
+        merchant.payoutWebhookUrl = null;
+        merchant.payoutWebhookSecret = null;
+        merchant.payoutWebhookEnabled = false;
+        merchant.payoutWebhookEvents = [];
+
+        await merchant.save();
+
+        console.log('✅ Payout webhook deleted for merchant:', merchant.name);
+
+        res.json({
+            success: true,
+            message: 'Payout webhook configuration deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('❌ Delete Payout Webhook Error:', error.message);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete payout webhook configuration'
+        });
+    }
+};
+
 // ========= SEND WEBHOOK TO MERCHANT (INTERNAL USE) =========
 /**
  * Send a webhook to merchant with retries and exponential backoff.

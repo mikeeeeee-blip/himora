@@ -203,18 +203,71 @@ const WebhookPage = () => {
   };
 
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete the webhook configuration?')) {
+    const hasPaymentWebhook = webhookConfig !== null;
+    const hasPayoutWebhook = payoutWebhookConfig !== null;
+    
+    if (!hasPaymentWebhook && !hasPayoutWebhook) {
+      setToast({ message: 'No webhooks configured to delete', type: 'error' });
+      return;
+    }
+
+    const confirmMessage = hasPaymentWebhook && hasPayoutWebhook
+      ? 'Are you sure you want to delete both payment and payout webhook configurations?'
+      : hasPaymentWebhook
+      ? 'Are you sure you want to delete the payment webhook configuration?'
+      : 'Are you sure you want to delete the payout webhook configuration?';
+
+    if (window.confirm(confirmMessage)) {
+      setLoading(true);
+      setPayoutLoading(true);
+      setError('');
+      setSuccess('');
+      
       try {
-        await webhookService.deleteWebhook();
-        setSuccess('Webhook configuration deleted successfully!');
-        setToast({ message: 'Webhook configuration deleted successfully!', type: 'success' });
-        setWebhookConfig(null);
-        setWebhookData({ url: '', events: [] });
+        // Delete payment webhook if it exists
+        if (hasPaymentWebhook) {
+          try {
+            await webhookService.deleteWebhook();
+            setWebhookConfig(null);
+            setWebhookData({ url: '', events: [] });
+          } catch (error) {
+            console.error('Error deleting payment webhook:', error);
+            throw new Error(`Failed to delete payment webhook: ${error.message}`);
+          }
+        }
+
+        // Delete payout webhook if it exists
+        if (hasPayoutWebhook) {
+          try {
+            await webhookService.deletePayoutWebhook();
+            setPayoutWebhookConfig(null);
+            setPayoutWebhookData({ url: '', events: [] });
+          } catch (error) {
+            console.error('Error deleting payout webhook:', error);
+            throw new Error(`Failed to delete payout webhook: ${error.message}`);
+          }
+        }
+
+        const successMessage = hasPaymentWebhook && hasPayoutWebhook
+          ? 'Both webhook configurations deleted successfully!'
+          : hasPaymentWebhook
+          ? 'Payment webhook configuration deleted successfully!'
+          : 'Payout webhook configuration deleted successfully!';
+
+        setSuccess(successMessage);
+        setToast({ message: successMessage, type: 'success' });
+        
         // Refresh to ensure UI is updated
-        await fetchWebhookConfig();
+        await Promise.all([
+          fetchWebhookConfig(),
+          fetchPayoutWebhookConfig()
+        ]);
       } catch (error) {
-        setError('Failed to delete webhook configuration');
-        setToast({ message: 'Failed to delete webhook configuration', type: 'error' });
+        setError(error.message);
+        setToast({ message: error.message, type: 'error' });
+      } finally {
+        setLoading(false);
+        setPayoutLoading(false);
       }
     }
   };

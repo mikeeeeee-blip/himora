@@ -50,6 +50,7 @@ export const API_ENDPOINTS = {
   PAYOUT_WEBHOOK_UPDATE: `${BASE_URL}/payments/merchant/webhook/payout`,
   PAYOUT_WEBHOOK_CONFIG: `${BASE_URL}/payments/merchant/webhook/payout/config`,
   PAYOUT_WEBHOOK_TEST: `${BASE_URL}/payments/merchant/webhook/payout/test`,
+  PAYOUT_WEBHOOK_DELETE: `${BASE_URL}/payments/merchant/webhook/payout`,
   
   // ============ SUPERADMIN - DASHBOARD ============
   DASHBOARD_STATS: `${BASE_URL}/superadmin/dashboard/stats`,

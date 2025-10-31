@@ -179,6 +179,19 @@ class WebhookService {
     }
   }
 
+  // Delete payout webhook
+  async deletePayoutWebhook() {
+    try {
+      const token = await this.getAuthToken();
+      const response = await axios.delete(API_ENDPOINTS.PAYOUT_WEBHOOK_DELETE, {
+        headers: { 'x-auth-token': token },
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(this.getApiErrorMessage(error, 'Failed to delete payout webhook configuration'));
+    }
+  }
+
   getAvailablePayoutEvents() {
     return [
       { id: 'payout.requested', label: 'Payout Requested', description: 'Merchant requested a payout' },
