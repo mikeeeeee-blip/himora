@@ -83,13 +83,21 @@ exports.getMerchantWebhookConfig = async (req, res) => {
             });
         }
 
+        // If webhook is not configured, return 404
+        if (!merchant.webhookUrl || !merchant.webhookEnabled) {
+            return res.status(404).json({
+                success: false,
+                error: 'Webhook not configured'
+            });
+        }
+
         res.json({
             success: true,
             webhook_url: merchant.webhookUrl,
             webhook_secret: merchant.webhookSecret,
             webhook_enabled: merchant.webhookEnabled,
-            webhook_events: merchant.webhookEvents,
-            webhook_retries: merchant.webhookRetries,
+            webhook_events: merchant.webhookEvents || [],
+            webhook_retries: merchant.webhookRetries || 3,
             success_url: merchant.successUrl,
             failure_url: merchant.failureUrl
         });
@@ -438,13 +446,21 @@ exports.getPayoutWebhookConfig = async (req, res) => {
     );
     if (!merchant) return res.status(404).json({ success: false, error: 'Merchant not found' });
 
+    // If payout webhook is not configured, return 404
+    if (!merchant.payoutWebhookUrl || !merchant.payoutWebhookEnabled) {
+      return res.status(404).json({
+        success: false,
+        error: 'Payout webhook not configured'
+      });
+    }
+
     res.json({
       success: true,
       webhook_url: merchant.payoutWebhookUrl,
       webhook_secret: merchant.payoutWebhookSecret,
       webhook_enabled: merchant.payoutWebhookEnabled,
-      webhook_events: merchant.payoutWebhookEvents,
-      webhook_retries: merchant.payoutWebhookRetries
+      webhook_events: merchant.payoutWebhookEvents || [],
+      webhook_retries: merchant.payoutWebhookRetries || 3
     });
   } catch (error) {
     console.error('❌ Get Payout Webhook Config Error:', error.message);

@@ -4,6 +4,7 @@ const cors = require('cors');
 const connectDB = require('./config/db');
 const { settlementJob, manualSettlement } = require('./jobs/settlementJob'); // ✅ Import backfill
 const Transaction = require('./models/Transaction');
+const Payout = require('./models/Payout');
 
 dotenv.config();
 connectDB();
@@ -31,6 +32,41 @@ app.get('/api/superadmin/manual-settlement', async (req, res) => {
         await manualSettlement();
         res.json({ success: true, message: 'Manual settlement completed' });
     } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ================= TEMP DEBUG ROUTE: Reject a payout by payoutId =================
+// Usage: POST /api/debug/reject-payout/PAYOUT_ID
+// Body (optional): { reason: "some text" }
+app.post('/api/debug/reject-payout/:payoutId', async (req, res) => {
+    try {
+        const payoutId = req.params.payoutId || req.body.payoutId;
+        const reason = (req.body && req.body.reason) || 'Rejected via temporary debug route';
+
+        if (!payoutId) {
+            return res.status(400).json({ success: false, error: 'payoutId is required' });
+        }
+
+        const payout = await Payout.findOne({ payoutId });
+        if (!payout) {
+            return res.status(404).json({ success: false, error: 'Payout not found' });
+        }
+
+        payout.status = 'rejected';
+        payout.rejectedAt = new Date();
+        payout.rejectionReason = reason;
+        payout.rejectedByName = 'TEMP_DEBUG_ROUTE';
+        await payout.save();
+
+        return res.json({ success: true, message: 'Payout rejected successfully', payout: {
+            payoutId: payout.payoutId,
+            status: payout.status,
+            rejectedAt: payout.rejectedAt,
+            rejectionReason: payout.rejectionReason
+        }});
+    } catch (error) {
+        console.error('Temp reject payout error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

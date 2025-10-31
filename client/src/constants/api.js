@@ -45,6 +45,12 @@ export const API_ENDPOINTS = {
   WEBHOOK_TEST: `${BASE_URL}/payments/merchant/webhook/test`,
   WEBHOOK_DELETE: `${BASE_URL}/payments/merchant/webhook`,
   
+  // ============ PAYOUT WEBHOOK CONFIGURATION ============
+  PAYOUT_WEBHOOK_CONFIGURE: `${BASE_URL}/payments/merchant/webhook/payout/configure`,
+  PAYOUT_WEBHOOK_UPDATE: `${BASE_URL}/payments/merchant/webhook/payout`,
+  PAYOUT_WEBHOOK_CONFIG: `${BASE_URL}/payments/merchant/webhook/payout/config`,
+  PAYOUT_WEBHOOK_TEST: `${BASE_URL}/payments/merchant/webhook/payout/test`,
+  
   // ============ SUPERADMIN - DASHBOARD ============
   DASHBOARD_STATS: `${BASE_URL}/superadmin/dashboard/stats`,
   // ============ SUPERADMIN - MERCHANTS ============

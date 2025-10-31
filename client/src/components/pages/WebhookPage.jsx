@@ -36,17 +36,23 @@ const WebhookPage = () => {
     setLoading(true);
     try {
       const config = await webhookService.getWebhookConfig();
-      setWebhookConfig(config);
-      if (config) {
+      // Handle both direct config and wrapped response
+      const webhookData = config?.success === false ? null : (config?.webhook_url ? config : (config || null));
+      setWebhookConfig(webhookData);
+      if (webhookData) {
         setWebhookData({
-          url: config.webhook_url || '',
-          events: config.webhook_events || []
+          url: webhookData.webhook_url || webhookData.url || '',
+          events: webhookData.webhook_events || webhookData.events || []
         });
+      } else {
+        setWebhookData({ url: '', events: [] });
       }
     } catch (error) {
       console.error('Error fetching webhook config:', error);
       setError('Failed to fetch webhook configuration');
       setToast({ message: 'Failed to fetch webhook configuration', type: 'error' });
+      setWebhookConfig(null);
+      setWebhookData({ url: '', events: [] });
     } finally {
       setLoading(false);
     }
@@ -56,17 +62,23 @@ const WebhookPage = () => {
     setPayoutLoading(true);
     try {
       const config = await webhookService.getPayoutWebhookConfig();
-      setPayoutWebhookConfig(config);
-      if (config) {
+      // Handle both direct config and wrapped response
+      const payoutData = config?.success === false ? null : (config?.webhook_url ? config : (config || null));
+      setPayoutWebhookConfig(payoutData);
+      if (payoutData) {
         setPayoutWebhookData({
-          url: config.webhook_url || '',
-          events: config.webhook_events || []
+          url: payoutData.webhook_url || payoutData.url || '',
+          events: payoutData.webhook_events || payoutData.events || []
         });
+      } else {
+        setPayoutWebhookData({ url: '', events: [] });
       }
     } catch (error) {
       console.error('Error fetching payout webhook config:', error);
       setError('Failed to fetch payout webhook configuration');
       setToast({ message: 'Failed to fetch payout webhook configuration', type: 'error' });
+      setPayoutWebhookConfig(null);
+      setPayoutWebhookData({ url: '', events: [] });
     } finally {
       setPayoutLoading(false);
     }
@@ -127,7 +139,16 @@ const WebhookPage = () => {
       setSuccess('Webhook configured successfully!');
       setToast({ message: 'Webhook configured successfully!', type: 'success' });
       
-      // Refresh the webhook config
+      // Update webhook config from response if available
+      if (result && result.webhook_url) {
+        setWebhookConfig(result);
+        setWebhookData({
+          url: result.webhook_url || '',
+          events: result.webhook_events || []
+        });
+      }
+      
+      // Refresh the webhook config to get latest state
       await fetchWebhookConfig();
       setShowConfigForm(false);
     } catch (error) {
@@ -161,6 +182,16 @@ const WebhookPage = () => {
       setSuccess('Payout webhook configured successfully!');
       setToast({ message: 'Payout webhook configured successfully!', type: 'success' });
 
+      // Update payout webhook config from response if available
+      if (result && result.webhook_url) {
+        setPayoutWebhookConfig(result);
+        setPayoutWebhookData({
+          url: result.webhook_url || '',
+          events: result.webhook_events || []
+        });
+      }
+      
+      // Refresh the payout webhook config to get latest state
       await fetchPayoutWebhookConfig();
       setShowPayoutConfigForm(false);
     } catch (error) {
@@ -179,6 +210,8 @@ const WebhookPage = () => {
         setToast({ message: 'Webhook configuration deleted successfully!', type: 'success' });
         setWebhookConfig(null);
         setWebhookData({ url: '', events: [] });
+        // Refresh to ensure UI is updated
+        await fetchWebhookConfig();
       } catch (error) {
         setError('Failed to delete webhook configuration');
         setToast({ message: 'Failed to delete webhook configuration', type: 'error' });
@@ -187,24 +220,40 @@ const WebhookPage = () => {
   };
 
   const handleTest = async () => {
+    setLoading(true);
     try {
-      await webhookService.testWebhook();
-      setSuccess('Test webhook sent successfully!');
-      setToast({ message: 'Test webhook sent successfully!', type: 'success' });
+      const result = await webhookService.testWebhook();
+      if (result && result.success) {
+        setSuccess('Test webhook sent successfully!');
+        setToast({ message: 'Test webhook sent successfully!', type: 'success' });
+      } else {
+        setError(result?.error || 'Test webhook failed');
+        setToast({ message: result?.error || 'Test webhook failed', type: 'error' });
+      }
     } catch (error) {
-      setError('Failed to send test webhook');
-      setToast({ message: 'Failed to send test webhook', type: 'error' });
+      setError(error.message || 'Failed to send test webhook');
+      setToast({ message: error.message || 'Failed to send test webhook', type: 'error' });
+    } finally {
+      setLoading(false);
     }
   };
 
   const handlePayoutTest = async () => {
+    setPayoutLoading(true);
     try {
-      await webhookService.testPayoutWebhook();
-      setSuccess('Test payout webhook sent successfully!');
-      setToast({ message: 'Test payout webhook sent successfully!', type: 'success' });
+      const result = await webhookService.testPayoutWebhook();
+      if (result && result.success) {
+        setSuccess('Test payout webhook sent successfully!');
+        setToast({ message: 'Test payout webhook sent successfully!', type: 'success' });
+      } else {
+        setError(result?.error || 'Test payout webhook failed');
+        setToast({ message: result?.error || 'Test payout webhook failed', type: 'error' });
+      }
     } catch (error) {
-      setError('Failed to send test payout webhook');
-      setToast({ message: 'Failed to send test payout webhook', type: 'error' });
+      setError(error.message || 'Failed to send test payout webhook');
+      setToast({ message: error.message || 'Failed to send test payout webhook', type: 'error' });
+    } finally {
+      setPayoutLoading(false);
     }
   };
 
@@ -406,80 +455,91 @@ const WebhookPage = () => {
             </div>
           )}
           
-          {loading ? (
+          {(loading || payoutLoading) ? (
             <div className="loading-state">
               <div className="loading-spinner"></div>
               <p>Loading webhook configuration...</p>
             </div>
-          ) : webhookConfig ? (
+          ) : (webhookConfig || payoutWebhookConfig) ? (
             <div className="webhook-config-display">
-              <div className="webhook-card">
-                <div className="webhook-header">
-                  <div className="webhook-title">
-                    <FiLink className="webhook-icon" />
-                    <h4>Webhook Configuration</h4>
-                    <span className={`status-badge ${webhookConfig.webhook_enabled ? 'active' : 'inactive'}`}>
-                      {webhookConfig.webhook_enabled ? 'Enabled' : 'Disabled'}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="webhook-body">
-                  <div className="webhook-detail">
-                    <label>Webhook URL:</label>
-                    <div className="url-container">
-                      <span className="url-text">{webhookConfig.webhook_url}</span>
-                      <button 
-                        onClick={() => copyToClipboard(webhookConfig.webhook_url)}
-                        className="copy-btn small"
-                      >
-                        <FiCopy />
-                      </button>
+              {/* Payment Webhook Configuration */}
+              {webhookConfig ? (
+                <div className="webhook-card">
+                  <div className="webhook-header">
+                    <div className="webhook-title">
+                      <FiLink className="webhook-icon" />
+                      <h4>Payment Webhook Configuration</h4>
+                      <span className={`status-badge ${webhookConfig.webhook_enabled ? 'active' : 'inactive'}`}>
+                        {webhookConfig.webhook_enabled ? 'Enabled' : 'Disabled'}
+                      </span>
                     </div>
                   </div>
                   
-                  <div className="webhook-detail">
-                    <label>Webhook Secret:</label>
-                    <div className="secret-container">
-                      <span className="secret-text">
-                        {webhookConfig.webhook_secret ? 
-                          `${webhookConfig.webhook_secret.substring(0, 8)}...` : 
-                          'Not available'
-                        }
-                      </span>
-                      {webhookConfig.webhook_secret && (
+                  <div className="webhook-body">
+                    <div className="webhook-detail">
+                      <label>Webhook URL:</label>
+                      <div className="url-container">
+                        <span className="url-text">{webhookConfig.webhook_url}</span>
                         <button 
-                          onClick={() => copyToClipboard(webhookConfig.webhook_secret)}
+                          onClick={() => copyToClipboard(webhookConfig.webhook_url)}
                           className="copy-btn small"
                         >
                           <FiCopy />
                         </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="webhook-detail">
-                    <label>Subscribed Events:</label>
-                    <div className="events-list">
-                      {webhookConfig.webhook_events?.map(eventId => {
-                        const event = webhookEvents.find(e => e.id === eventId);
-                        return (
-                          <span key={eventId} className="event-tag">
-                            {event ? event.label : eventId}
-                          </span>
-                        );
-                      })}
+                    
+                    <div className="webhook-detail">
+                      <label>Webhook Secret:</label>
+                      <div className="secret-container">
+                        <span className="secret-text">
+                          {webhookConfig.webhook_secret ? 
+                            `${webhookConfig.webhook_secret.substring(0, 8)}...` : 
+                            'Not available'
+                          }
+                        </span>
+                        {webhookConfig.webhook_secret && (
+                          <button 
+                            onClick={() => copyToClipboard(webhookConfig.webhook_secret)}
+                            className="copy-btn small"
+                          >
+                            <FiCopy />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="webhook-detail">
-                    <label>Retry Attempts:</label>
-                    <span className="webhook-value">{webhookConfig.webhook_retries || 3}</span>
+                    <div className="webhook-detail">
+                      <label>Subscribed Events:</label>
+                      <div className="events-list">
+                        {webhookConfig.webhook_events?.map(eventId => {
+                          const event = webhookEvents.find(e => e.id === eventId);
+                          return (
+                            <span key={eventId} className="event-tag">
+                              {event ? event.label : eventId}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="webhook-detail">
+                      <label>Retry Attempts:</label>
+                      <span className="webhook-value">{webhookConfig.webhook_retries || 3}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              {payoutWebhookConfig && (
-                <div className="webhook-card" style={{ marginTop: 16 }}>
+              ) : (
+                <div className="empty-state">
+                  <div className="empty-icon"><FiLink /></div>
+                  <h3>No Payment Webhook Configured</h3>
+                  <p>Configure your payment webhook to start receiving payment notifications.</p>
+                </div>
+              )}
+
+              {/* Payout Webhook Configuration */}
+              {payoutWebhookConfig ? (
+                <div className="webhook-card" style={{ marginTop: webhookConfig ? 16 : 0 }}>
                   <div className="webhook-header">
                     <div className="webhook-title">
                       <FiLink className="webhook-icon" />
@@ -543,6 +603,12 @@ const WebhookPage = () => {
                       <span className="webhook-value">{payoutWebhookConfig.webhook_retries || 3}</span>
                     </div>
                   </div>
+                </div>
+              ) : (
+                <div className="empty-state" style={{ marginTop: webhookConfig ? 16 : 0 }}>
+                  <div className="empty-icon"><FiLink /></div>
+                  <h3>No Payout Webhook Configured</h3>
+                  <p>Configure your payout webhook to start receiving payout notifications.</p>
                 </div>
               )}
             </div>

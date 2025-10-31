@@ -65,7 +65,8 @@ class WebhookService {
         },
       });
 
-      return response.data;
+      // Return the data directly (backend returns webhook_url, webhook_secret, etc.)
+      return response.data?.success !== false ? response.data : null;
     } catch (error) {
       console.error('Webhook config fetch error:', error);
       // If no webhook is configured, return null instead of throwing error
@@ -157,7 +158,8 @@ class WebhookService {
       const response = await axios.get(API_ENDPOINTS.PAYOUT_WEBHOOK_CONFIG, {
         headers: { 'x-auth-token': token },
       });
-      return response.data;
+      // Return the data directly (backend returns webhook_url, webhook_secret, etc.)
+      return response.data?.success !== false ? response.data : null;
     } catch (error) {
       if (error.response?.status === 404) return null;
       throw new Error(this.getApiErrorMessage(error, 'Failed to fetch payout webhook configuration'));
