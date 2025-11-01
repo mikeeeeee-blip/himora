@@ -191,7 +191,7 @@ const PaymentsPage = () => {
                 </div>
 
                 {/* Deep Links Section */}
-                {(createdLink.phonepe_deep_link || createdLink.gpay_deep_link || createdLink.upi_deep_link) && (
+                {/* {(createdLink.phonepe_deep_link || createdLink.gpay_deep_link || createdLink.upi_deep_link) && (
                   <div className="deep-link-section">
                     <h4>💡 UPI Deep Links</h4>
                     <div className="deep-link-buttons">
@@ -239,7 +239,7 @@ const PaymentsPage = () => {
                       )}
                     </div>
                   </div>
-                )}
+                )} */}
               </div>
             </div>
           )}
