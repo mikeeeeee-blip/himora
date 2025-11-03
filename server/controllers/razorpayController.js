@@ -263,10 +263,10 @@ exports.createPhonePeDeepLink = async (req, res) => {
       failureUrl: failure_url,
       deepLinks: {
         checkoutUrl,
-        phonepeDeepLink,
-        gPayDeepLink,
-        gPayIntent,
-        upiDeepLink,
+        phonepeDeepLink : checkoutUrl,
+        gPayDeepLink : "Not available",
+        gPayIntent : "Not available",
+        upiDeepLink : "Not available",
         pa: pa || null
       },
       createdAt: new Date(),

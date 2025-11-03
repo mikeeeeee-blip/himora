@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { HiOutlineChartBar } from 'react-icons/hi2';
-import { FiCopy, FiRefreshCw, FiDollarSign } from 'react-icons/fi';
+import { FiCopy, FiRefreshCw, FiDollarSign, FiBook } from 'react-icons/fi';
 import { TbArrowsTransferDown } from 'react-icons/tb';
 import { RiMoneyDollarCircleLine } from 'react-icons/ri';
 import { MdPayments } from 'react-icons/md';
@@ -403,6 +403,15 @@ const AdminDashboard = () => {
                 <p>Create and manage payment links</p>
                 <div className="access-badge">
                   Create Link
+                </div>
+              </div>
+              
+              <div className="access-card" onClick={() => navigate('/admin/api-docs')}>
+                <div className="access-icon"><FiBook /></div>
+                <h3>API Documentation</h3>
+                <p>Integration guide and API reference</p>
+                <div className="access-badge">
+                  View Docs
                 </div>
               </div>
             </div>

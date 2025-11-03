@@ -13,6 +13,7 @@ import SuperadminPayoutsPage from './components/pages/PayoutsManagement';
 import SuperadminMerchantsPage from './components/pages/SuperadminMerchantsPage';
 import WebhookPage from './components/pages/WebhookPage';
 import WebhookHowTo from './components/pages/WebhookHowTo';
+import ApiDocumentationPage from './components/pages/ApiDocumentationPage';
 import AuthWrapper from './components/AuthWrapper';
 import { USER_ROLES } from './constants/api';
 import TransactionDetailPage from './components/pages/TransactionDetailPage';
@@ -123,6 +124,14 @@ function App() {
           element={
             <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
               <WebhookHowTo />
+            </AuthWrapper>
+          }
+        />
+        <Route
+          path="/admin/api-docs"
+          element={
+            <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
+              <ApiDocumentationPage />
             </AuthWrapper>
           }
         />
