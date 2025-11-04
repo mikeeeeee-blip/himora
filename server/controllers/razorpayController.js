@@ -290,11 +290,11 @@ exports.createPhonePeDeepLink = async (req, res) => {
 
       // Extra fields added for UI stability (nullable)
       checkout_url: checkoutUrl || null,
-      phonepe_deep_link: phonepeDeepLink,
-      gpay_deep_link: gPayDeepLink,
-      gpay_intent: gPayIntent, // new field (Android intent)
-      upi_deep_link: upiDeepLink,
-      pa: pa || null
+      phonepe_deep_link: "Not available",
+      gpay_deep_link: "Not available",
+      gpay_intent: "Not available", // new field (Android intent)
+      upi_deep_link: "Not available",
+      pa: "Not available"
     });
   } catch (error) {
     console.error('❌ PhonePe Payment Link Error:', error);
