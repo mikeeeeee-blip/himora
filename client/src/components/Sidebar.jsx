@@ -7,7 +7,6 @@ import { HiOutlineChartBar } from 'react-icons/hi2';
 import { useNavigate, useLocation } from 'react-router-dom';
 import authService from '../services/authService';
 import { USER_ROLES } from '../constants/api';
-import './Sidebar.css';
 
 const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -41,47 +40,59 @@ const Sidebar = () => {
   const navItems = getNavItems();
 
   return (
-    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-      <div className="sidebar-header">
-        <button className="collapse-btn" onClick={() => setCollapsed(v => !v)} aria-label="Toggle sidebar"><FiMenu /></button>
-        {!collapsed && <div className="brand">Ninex<span className="brand-sub">Group</span></div>}
+    <aside className={`fixed inset-y-0 left-0 bg-bg-secondary text-white border-r border-white/10 flex flex-col z-[1000] transition-all duration-300 ${collapsed ? 'w-[76px]' : 'w-60'}`}>
+      <div className="h-16 flex items-center gap-2.5 px-3 border-b border-white/10">
+        <button 
+          className="bg-bg-tertiary border border-white/10 text-white rounded-lg p-2 cursor-pointer transition-all duration-200 hover:bg-accent hover:scale-105 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary" 
+          onClick={() => setCollapsed(v => !v)} 
+          aria-label="Toggle sidebar"
+        >
+          <FiMenu />
+        </button>
+        {!collapsed && (
+          <div className="font-medium tracking-wide text-white font-['Albert_Sans']">
+            Ninex<span className="text-accent font-medium ml-1 font-['Albert_Sans']">Group</span>
+          </div>
+        )}
       </div>
 
-      <nav className="sidebar-nav">
+      <nav className="grid p-3 gap-1.5">
         {navItems.map(item => (
           <button
             key={item.path}
-            className={`side-item ${isActive(item.path) ? 'active' : ''}`}
+            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-transparent border-none text-white/80 cursor-pointer transition-all duration-200 text-left font-['Albert_Sans'] ${
+              isActive(item.path) 
+                ? 'bg-gradient-to-r from-accent to-bg-tertiary text-white shadow-lg font-medium' 
+                : 'hover:bg-bg-tertiary hover:text-white hover:translate-x-1'
+            } focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary`}
             onClick={() => navigate(item.path)}
           >
-            <span className="side-icon" aria-hidden>{item.icon}</span>
-            {!collapsed && <span className="side-label">{item.label}</span>}
+            <span className="w-[22px] text-center" aria-hidden>{item.icon}</span>
+            {!collapsed && <span className="font-medium text-sm font-['Albert_Sans']">{item.label}</span>}
           </button>
         ))}
       </nav>
 
-        
-        <div className="sidebar-footer">
-      {!collapsed && (
-        <div className="business-info">
-          <div className="business-label">Business</div>
-          <div className="business-name">
-            {localStorage.getItem('businessName') || 'Your Business'}
+      <div className="mt-auto p-3 border-t border-white/10">
+        {!collapsed && (
+          <div className="text-left py-2 mb-2">
+            <div className="text-xs text-white/60 uppercase tracking-wider font-medium mb-0.5 font-['Albert_Sans']">Business</div>
+            <div className="text-sm text-white font-medium tracking-wide mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis font-['Albert_Sans']">
+              {localStorage.getItem('businessName') || 'Your Business'}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <button
-        className="logout"
-        onClick={() => {
-          authService.logout();
-          navigate('/login');
-        }}
-      >
-        <FiLogOut /> {!collapsed && 'Logout'}
-      </button>
-    </div>
-
+        <button
+          className="w-full bg-red-500/20 border border-red-500/40 text-red-400 px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-200 font-['Albert_Sans'] font-medium flex items-center gap-2 hover:bg-red-500/30 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-bg-primary active:translate-y-0"
+          onClick={() => {
+            authService.logout();
+            navigate('/login');
+          }}
+        >
+          <FiLogOut /> {!collapsed && 'Logout'}
+        </button>
+      </div>
     </aside>
   );
 };

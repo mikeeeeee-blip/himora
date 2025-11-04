@@ -1,41 +1,95 @@
-import React, { useState, useEffect } from 'react';
-import { HiOutlineChartBar } from 'react-icons/hi2';
-import { FiCopy, FiRefreshCw, FiDollarSign, FiBook } from 'react-icons/fi';
-import { TbArrowsTransferDown } from 'react-icons/tb';
-import { RiMoneyDollarCircleLine } from 'react-icons/ri';
-import { MdPayments } from 'react-icons/md';
-import { useNavigate } from 'react-router-dom';
-import authService from '../services/authService';
-import apiKeyService from '../services/apiKeyService';
-import paymentService from '../services/paymentService';
-import Sidebar from './Sidebar';
-import './Dashboard.css';
+import React, { useState, useEffect } from "react";
+import { HiOutlineChartBar } from "react-icons/hi2";
+import {
+  FiCopy,
+  FiRefreshCw,
+  FiDollarSign,
+  FiBook,
+  FiArrowUp,
+  FiArrowDown,
+  FiPlus,
+  FiZap,
+  FiCreditCard,
+  FiExternalLink,
+  FiX,
+} from "react-icons/fi";
+import { TbArrowsTransferDown } from "react-icons/tb";
+import { RiMoneyDollarCircleLine, RiWalletLine } from "react-icons/ri";
+import { MdPayments } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
+import authService from "../services/authService";
+import apiKeyService from "../services/apiKeyService";
+import paymentService from "../services/paymentService";
+import Navbar from "./Navbar";
+import MetricCard from "./dashboard/MetricCard";
+import QuickAnalytics from "./dashboard/QuickAnalytics";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [hasApiKey, setHasApiKey] = useState(false);
-  
+
   // Dashboard stats
   const [dashboardStats, setDashboardStats] = useState({
     balance: null,
     transactions: null,
     payouts: null,
-    loading: true
+    loading: true,
   });
 
+  const [dateRange, setDateRange] = useState("monthly");
+  const [merchantName, setMerchantName] = useState("");
+  const [todayPayinFilter, setTodayPayinFilter] = useState("all"); // 'all', 'payin', 'payout', 'settlement'
+  const [chartData, setChartData] = useState({
+    payin: [],
+    payout: [],
+    settlement: [],
+    loading: true,
+  });
+  const [todayTransactions, setTodayTransactions] = useState({
+    payin: [],
+    payout: [],
+    settlement: [],
+    loading: true,
+  });
+
+  // Payment link modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [createLinkLoading, setCreateLinkLoading] = useState(false);
+  const [createLinkError, setCreateLinkError] = useState("");
+  const [createdPaymentLink, setCreatedPaymentLink] = useState(null);
+  const [paymentData, setPaymentData] = useState({
+    amount: "",
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    description: "",
+  });
+
+  // Fetch data on component mount and when date range changes
   useEffect(() => {
     checkExistingApiKey();
     fetchDashboardStats();
+    fetchChartData(); // Fetches chart data for Quick Analytics (payin, payout, settlement)
+    fetchTodayTransactions(); // Fetches today's transactions for Today Transactions table
+  }, [dateRange]);
+
+  // Refresh today's transactions periodically (every 30 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchTodayTransactions();
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   const fetchDashboardStats = async () => {
     try {
-      setDashboardStats(prev => ({ ...prev, loading: true }));
+      setDashboardStats((prev) => ({ ...prev, loading: true }));
 
       // ✅ Fetch balance (requires JWT token only)
       let balanceData = null;
@@ -44,38 +98,42 @@ const AdminDashboard = () => {
 
       try {
         balanceData = await paymentService.getBalance();
-        console.log('✅ Balance fetched:', balanceData);
+        console.log("✅ Balance fetched:", balanceData);
+        // Extract merchant name from balance data
+        if (balanceData?.merchant?.merchantName) {
+          setMerchantName(balanceData.merchant.merchantName);
+        }
       } catch (err) {
-        console.error('❌ Balance fetch error:', err.message);
+        console.error("❌ Balance fetch error:", err.message);
       }
 
       // ✅ Fetch transactions (requires API key - may fail if no API key)
       try {
         transactionsData = await paymentService.getTransactions();
-        console.log('✅ Transactions fetched:', transactionsData);
+        console.log("✅ Transactions fetched:", transactionsData);
       } catch (err) {
-        console.error('❌ Transactions fetch error:', err.message);
+        console.error("❌ Transactions fetch error:", err.message);
         // Set empty data if API key not found
         transactionsData = {
           transactions: [],
           summary: {
             total_transactions: 0,
-            successful_transactions: 0
-          }
+            successful_transactions: 0,
+          },
         };
       }
-      
+
       // ✅ Fetch payouts (requires JWT token only)
       try {
         payoutsData = await paymentService.getPayouts();
-        console.log('✅ Payouts fetched:', payoutsData);
+        console.log("✅ Payouts fetched:", payoutsData);
       } catch (err) {
-        console.error('❌ Payouts fetch error:', err.message);
+        console.error("❌ Payouts fetch error:", err.message);
         payoutsData = {
           payouts: [],
           summary: {
-            total_payout_requests: 0
-          }
+            total_payout_requests: 0,
+          },
         };
       }
 
@@ -83,41 +141,582 @@ const AdminDashboard = () => {
         balance: balanceData,
         transactions: transactionsData,
         payouts: payoutsData,
-        loading: false
+        loading: false,
       });
     } catch (error) {
-      console.error('❌ Dashboard stats error:', error);
-      setDashboardStats(prev => ({ ...prev, loading: false }));
+      console.error("❌ Dashboard stats error:", error);
+      setDashboardStats((prev) => ({ ...prev, loading: false }));
     }
+  };
+
+  const fetchChartData = async () => {
+    try {
+      setChartData((prev) => ({ ...prev, loading: true }));
+
+      // Calculate date range based on selected period
+      const now = new Date();
+      let startDate = new Date();
+
+      if (dateRange === "daily") {
+        startDate.setDate(now.getDate() - 7); // Last 7 days
+      } else if (dateRange === "weekly") {
+        startDate.setDate(now.getDate() - 30); // Last 30 days
+      } else {
+        startDate.setDate(now.getDate() - 90); // Last 90 days
+      }
+
+      const startDateStr = startDate.toISOString().split("T")[0];
+      const endDateStr = now.toISOString().split("T")[0];
+
+      console.log("📊 Fetching chart data:", {
+        dateRange,
+        startDate: startDateStr,
+        endDate: endDateStr,
+      });
+
+      // Fetch payin transactions using API_ENDPOINTS.SEARCH_TRANSACTIONS from api.js
+      // Endpoint: /api/payments/merchant/transactions/search
+      let payinData = [];
+      try {
+        const payinResult = await paymentService.searchTransactions({
+          startDate: startDateStr,
+          endDate: endDateStr,
+          page: 1,
+          limit: 1000, // Get more data for better chart visualization
+          sortBy: "createdAt",
+          sortOrder: "asc", // Ascending for chronological chart display
+        });
+        payinData = payinResult.transactions || [];
+        // Validate that we have real transaction data
+        const validPayins = payinData.filter(
+          (txn) =>
+            txn &&
+            (txn.createdAt || txn.created_at) &&
+            typeof (txn.amount || 0) === "number"
+        );
+        console.log(
+          "✅ Payin data fetched:",
+          validPayins.length,
+          "valid transactions out of",
+          payinData.length,
+          "total"
+        );
+        payinData = validPayins;
+      } catch (err) {
+        console.error("❌ Payin fetch error:", err.message);
+        payinData = [];
+      }
+
+      // Fetch settlement transactions using API_ENDPOINTS.SEARCH_TRANSACTIONS from api.js
+      // Endpoint: /api/payments/merchant/transactions/search (with status=paid, then filtered for settled)
+      let settlementData = [];
+      try {
+        const settlementResult = await paymentService.searchTransactions({
+          startDate: startDateStr,
+          endDate: endDateStr,
+          status: "paid",
+          page: 1,
+          limit: 1000,
+          sortBy: "createdAt",
+          sortOrder: "asc",
+        });
+        // Filter for settled transactions - must have settlement status or settlement date
+        settlementData = (settlementResult.transactions || []).filter((txn) => {
+          if (!txn) return false;
+          const hasSettlementStatus =
+            txn.settlementStatus === "settled" ||
+            txn.settlement_status === "settled";
+          const hasSettlementDate = txn.settlementDate || txn.settlement_date;
+          // Also validate that amount is a valid number
+          const hasValidAmount =
+            typeof (txn.netAmount || txn.net_amount || txn.amount || 0) ===
+            "number";
+          return (hasSettlementStatus || hasSettlementDate) && hasValidAmount;
+        });
+        console.log(
+          "✅ Settlement data fetched:",
+          settlementData.length,
+          "valid settled transactions out of",
+          (settlementResult.transactions || []).length,
+          "paid transactions"
+        );
+      } catch (err) {
+        console.error("❌ Settlement fetch error:", err.message);
+        settlementData = [];
+      }
+
+      // Fetch payouts using API_ENDPOINTS.SEARCH_PAYOUTS from api.js
+      // Endpoint: /api/payments/merchant/payouts/search
+      let payoutData = [];
+      try {
+        const payoutResult = await paymentService.searchPayouts({
+          startDate: startDateStr,
+          endDate: endDateStr,
+          page: 1,
+          limit: 1000,
+          sortBy: "createdAt",
+          sortOrder: "asc",
+        });
+        payoutData = payoutResult.payouts || [];
+        // Validate that we have real payout data
+        const validPayouts = payoutData.filter(
+          (payout) =>
+            payout &&
+            (payout.requestedAt || payout.createdAt || payout.created_at) &&
+            typeof (payout.netAmount || payout.amount || 0) === "number"
+        );
+        console.log(
+          "✅ Payout data fetched:",
+          validPayouts.length,
+          "valid payouts out of",
+          payoutData.length,
+          "total"
+        );
+        payoutData = validPayouts;
+      } catch (err) {
+        console.error("❌ Payout fetch error:", err.message);
+        payoutData = [];
+      }
+
+      // Process data for charts
+      const processedPayin = processChartData(payinData, "payin");
+      const processedPayout = processChartData(payoutData, "payout");
+      const processedSettlement = processChartData(
+        settlementData,
+        "settlement"
+      );
+
+      // Log sample data for verification
+      console.log("📈 Processed chart data:", {
+        payin: {
+          length: processedPayin.length,
+          sample: processedPayin
+            .slice(0, 3)
+            .map((d) => ({ date: d.date, amount: d.amount, count: d.count })),
+          maxAmount:
+            processedPayin.length > 0
+              ? Math.max(...processedPayin.map((d) => d.amount))
+              : 0,
+        },
+        payout: {
+          length: processedPayout.length,
+          sample: processedPayout
+            .slice(0, 3)
+            .map((d) => ({ date: d.date, amount: d.amount, count: d.count })),
+          maxAmount:
+            processedPayout.length > 0
+              ? Math.max(...processedPayout.map((d) => d.amount))
+              : 0,
+        },
+        settlement: {
+          length: processedSettlement.length,
+          sample: processedSettlement
+            .slice(0, 3)
+            .map((d) => ({ date: d.date, amount: d.amount, count: d.count })),
+          maxAmount:
+            processedSettlement.length > 0
+              ? Math.max(...processedSettlement.map((d) => d.amount))
+              : 0,
+        },
+      });
+
+      setChartData({
+        payin: processedPayin,
+        payout: processedPayout,
+        settlement: processedSettlement,
+        loading: false,
+      });
+    } catch (error) {
+      console.error("❌ Chart data fetch error:", error);
+      setChartData((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
+  // Fetch today's transactions for the Today Transactions section
+  const fetchTodayTransactions = async () => {
+    try {
+      setTodayTransactions((prev) => ({ ...prev, loading: true }));
+
+      // Get today's date range (00:00:00 to 23:59:59)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split("T")[0];
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
+      console.log("📅 Fetching today's transactions:", {
+        today: todayStr,
+        tomorrow: tomorrowStr,
+      });
+
+      // Fetch today's payin transactions using API_ENDPOINTS.SEARCH_TRANSACTIONS from api.js
+      // Endpoint: /api/payments/merchant/transactions/search
+      let payinData = [];
+      try {
+        const payinResult = await paymentService.searchTransactions({
+          startDate: todayStr,
+          endDate: tomorrowStr,
+          limit: 100,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        });
+        const rawPayins = payinResult.transactions || [];
+        // Validate payin data - must have createdAt and amount
+        payinData = rawPayins.filter(
+          (txn) =>
+            txn &&
+            (txn.createdAt || txn.created_at) &&
+            typeof (txn.amount || 0) === "number" &&
+            parseFloat(txn.amount || 0) > 0
+        );
+        console.log(
+          "✅ Today payin fetched:",
+          payinData.length,
+          "valid transactions out of",
+          rawPayins.length,
+          "total"
+        );
+      } catch (err) {
+        console.error("❌ Today payin fetch error:", err.message);
+        payinData = [];
+      }
+
+      // Fetch today's payouts using API_ENDPOINTS.SEARCH_PAYOUTS from api.js
+      // Endpoint: /api/payments/merchant/payouts/search
+      let payoutData = [];
+      try {
+        const payoutResult = await paymentService.searchPayouts({
+          startDate: todayStr,
+          endDate: tomorrowStr,
+          limit: 100,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        });
+        const rawPayouts = payoutResult.payouts || [];
+        // Validate payout data - must have requestedAt/createdAt and netAmount/amount
+        payoutData = rawPayouts.filter(
+          (payout) =>
+            payout &&
+            (payout.requestedAt ||
+              payout.createdAt ||
+              payout.created_at) &&
+            (typeof (payout.netAmount || payout.amount || 0) === "number") &&
+            parseFloat(payout.netAmount || payout.amount || 0) > 0
+        );
+        console.log(
+          "✅ Today payout fetched:",
+          payoutData.length,
+          "valid payouts out of",
+          rawPayouts.length,
+          "total"
+        );
+      } catch (err) {
+        console.error("❌ Today payout fetch error:", err.message);
+        payoutData = [];
+      }
+
+      // Get settled transactions from today using API_ENDPOINTS.SEARCH_TRANSACTIONS from api.js
+      // Endpoint: /api/payments/merchant/transactions/search (with status=paid, then filtered for settled)
+      // Must be paid AND settled
+      let settlementData = [];
+      try {
+        const settlementResult = await paymentService.searchTransactions({
+          startDate: todayStr,
+          endDate: tomorrowStr,
+          status: "paid",
+          limit: 100,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        });
+        const rawSettlements = settlementResult.transactions || [];
+        // Filter for settled transactions - must have settlement status or settlement date
+        settlementData = rawSettlements.filter((txn) => {
+          if (!txn) return false;
+          const hasSettlementStatus =
+            txn.settlementStatus === "settled" ||
+            txn.settlement_status === "settled";
+          const hasSettlementDate =
+            txn.settlementDate || txn.settlement_date;
+          const hasValidAmount =
+            typeof (txn.netAmount ||
+              txn.net_amount ||
+              txn.amount ||
+              0) === "number" &&
+            parseFloat(txn.netAmount || txn.net_amount || txn.amount || 0) > 0;
+          return (hasSettlementStatus || hasSettlementDate) && hasValidAmount;
+        });
+        console.log(
+          "✅ Today settlement fetched:",
+          settlementData.length,
+          "valid settled transactions out of",
+          rawSettlements.length,
+          "paid transactions"
+        );
+      } catch (err) {
+        console.error("❌ Today settlement fetch error:", err.message);
+        settlementData = [];
+      }
+
+      // Map data with type and ensure all required fields
+      const processedPayins = payinData.map((txn) => ({
+        ...txn,
+        type: "payin",
+        transactionId:
+          txn.transactionId ||
+          txn.transaction_id ||
+          txn.id ||
+          `payin-${Date.now()}-${Math.random()}`,
+        amount: parseFloat(txn.amount || 0),
+        customerName:
+          txn.customerName ||
+          txn.customer_name ||
+          txn.customer?.name ||
+          "Unknown",
+        status: txn.status || "pending",
+      }));
+
+      const processedPayouts = payoutData.map((payout) => ({
+        ...payout,
+        type: "payout",
+        payoutId:
+          payout.payoutId ||
+          payout.payout_id ||
+          payout.id ||
+          `payout-${Date.now()}-${Math.random()}`,
+        netAmount: parseFloat(payout.netAmount || payout.amount || 0),
+        amount: parseFloat(payout.amount || 0),
+        description:
+          payout.description ||
+          payout.beneficiaryDetails?.accountHolderName ||
+          "Payout",
+        status: payout.status || "pending",
+      }));
+
+      const processedSettlements = settlementData.map((txn) => ({
+        ...txn,
+        type: "settlement",
+        transactionId:
+          txn.transactionId ||
+          txn.transaction_id ||
+          txn.id ||
+          `settlement-${Date.now()}-${Math.random()}`,
+        netAmount: parseFloat(
+          txn.netAmount || txn.net_amount || txn.amount || 0
+        ),
+        amount: parseFloat(txn.amount || 0),
+        customerName:
+          txn.customerName ||
+          txn.customer_name ||
+          txn.customer?.name ||
+          "Unknown",
+        status: txn.status || "paid",
+      }));
+
+      const totalToday = {
+        payin: processedPayins.length,
+        payout: processedPayouts.length,
+        settlement: processedSettlements.length,
+      };
+
+      console.log("📊 Today's transactions summary:", {
+        payin: totalToday.payin,
+        payout: totalToday.payout,
+        settlement: totalToday.settlement,
+        total: totalToday.payin + totalToday.payout + totalToday.settlement,
+      });
+
+      setTodayTransactions({
+        payin: processedPayins,
+        payout: processedPayouts,
+        settlement: processedSettlements,
+        loading: false,
+      });
+    } catch (error) {
+      console.error("❌ Today transactions fetch error:", error);
+      setTodayTransactions((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
+  const processChartData = (data, type) => {
+    if (!data || data.length === 0) {
+      console.log(`⚠️ No ${type} data to process`);
+      return [];
+    }
+
+    // Group data by date - using same format as PayinsPage and TransactionsPage
+    const grouped = {};
+    let totalAmount = 0;
+    let processedCount = 0;
+    let skippedCount = 0;
+
+    data.forEach((item) => {
+      let dateKey;
+      let amount;
+
+      if (type === "payin") {
+        // Use createdAt for payin transactions (same as PayinsPage)
+        const date = item.createdAt || item.created_at;
+        if (!date) {
+          skippedCount++;
+          return;
+        }
+        // Format date as ISO string for consistency
+        dateKey = new Date(date).toISOString().split("T")[0];
+        // Use amount field for payin (gross amount)
+        const rawAmount = parseFloat(item.amount || 0);
+        if (isNaN(rawAmount) || rawAmount <= 0) {
+          skippedCount++;
+          return;
+        }
+        amount = rawAmount;
+      } else if (type === "payout") {
+        // Use requestedAt or createdAt for payouts
+        const date = item.requestedAt || item.createdAt || item.created_at;
+        if (!date) {
+          skippedCount++;
+          return;
+        }
+        dateKey = new Date(date).toISOString().split("T")[0];
+        // Use netAmount for payouts (amount after commission)
+        const rawAmount = parseFloat(item.netAmount || item.amount || 0);
+        if (isNaN(rawAmount) || rawAmount <= 0) {
+          skippedCount++;
+          return;
+        }
+        amount = rawAmount;
+      } else {
+        // settlement - prioritize settlement date, fallback to paid date
+        const date =
+          item.settlementDate ||
+          item.settlement_date ||
+          item.paidAt ||
+          item.paid_at ||
+          item.createdAt ||
+          item.created_at;
+        if (!date) {
+          skippedCount++;
+          return;
+        }
+        dateKey = new Date(date).toISOString().split("T")[0];
+        // Use netAmount for settlements (amount after commission)
+        const rawAmount = parseFloat(
+          item.netAmount || item.net_amount || item.amount || 0
+        );
+        if (isNaN(rawAmount) || rawAmount <= 0) {
+          skippedCount++;
+          return;
+        }
+        amount = rawAmount;
+      }
+
+      if (!dateKey || isNaN(amount) || amount <= 0) {
+        skippedCount++;
+        return;
+      }
+
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = { date: dateKey, amount: 0, count: 0 };
+      }
+      grouped[dateKey].amount += amount;
+      grouped[dateKey].count += 1;
+      totalAmount += amount;
+      processedCount += 1;
+    });
+
+    // Log processing summary with real data verification
+    console.log(`📊 ${type} processing summary:`, {
+      totalItems: data.length,
+      processedItems: processedCount,
+      skippedItems: skippedCount,
+      totalAmount: totalAmount.toFixed(2),
+      averageAmount:
+        processedCount > 0 ? (totalAmount / processedCount).toFixed(2) : 0,
+      uniqueDates: Object.keys(grouped).length,
+      sampleGrouped: Object.entries(grouped)
+        .slice(0, 5)
+        .map(([date, data]) => ({
+          date,
+          amount: data.amount.toFixed(2),
+          count: data.count,
+        })),
+    });
+
+    // Convert to array and sort by date (ascending for chronological display)
+    const sorted = Object.values(grouped).sort(
+      (a, b) => new Date(a.date) - new Date(b.date)
+    );
+
+    // Only fill in missing dates if we have actual data and range is reasonable
+    if (sorted.length === 0) {
+      console.warn(`⚠️ No valid ${type} data points after processing`);
+      return [];
+    }
+
+    // Fill in missing dates with zero values for better visualization (only for reasonable ranges)
+    const filled = [];
+    const start = new Date(sorted[0].date);
+    const end = new Date(sorted[sorted.length - 1].date);
+    const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+
+    // Only fill gaps if range is reasonable (max 90 days)
+    if (daysDiff > 0 && daysDiff <= 90) {
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split("T")[0];
+        const existing = sorted.find((item) => item.date === dateStr);
+        filled.push(existing || { date: dateStr, amount: 0, count: 0 });
+      }
+    } else {
+      // If range is too large, just return sorted data without filling
+      return sorted;
+    }
+
+    const result = filled.length > 0 ? filled : sorted;
+    console.log(
+      `✅ Processed ${type} chart data:`,
+      result.length,
+      "data points",
+      `(Total amount: ₹${totalAmount.toFixed(2)})`
+    );
+    return result;
   };
 
   const checkExistingApiKey = async () => {
     setFetching(true);
-    setError('');
-    
+    setError("");
+
     try {
       const result = await apiKeyService.getApiKey();
-      console.log('API key result:', result);
-      
-      const apiKeyValue = result?.apiKey || result?.key || result?.data?.apiKey || result?.data?.key || result;
-      
-      if (apiKeyValue && typeof apiKeyValue === 'string' && apiKeyValue.length > 0) {
+      console.log("API key result:", result);
+
+      const apiKeyValue =
+        result?.apiKey ||
+        result?.key ||
+        result?.data?.apiKey ||
+        result?.data?.key ||
+        result;
+
+      if (
+        apiKeyValue &&
+        typeof apiKeyValue === "string" &&
+        apiKeyValue.length > 0
+      ) {
         setApiKey(apiKeyValue);
         setHasApiKey(true);
-        setSuccess('Existing API key loaded successfully!');
+        setSuccess("Existing API key loaded successfully!");
       } else {
-        setError('No API key found. You may need to create one first.');
+        setError("No API key found. You may need to create one first.");
         setHasApiKey(false);
       }
     } catch (error) {
-      if (error.message.includes('Unauthorized')) {
-        setError('Session expired. Please log in again.');
+      if (error.message.includes("Unauthorized")) {
+        setError("Session expired. Please log in again.");
         setTimeout(() => {
           authService.logout();
-          navigate('/login');
+          navigate("/login");
         }, 2000);
-      } else if (error.message.includes('Forbidden')) {
-        setError('You do not have permission to access API keys.');
+      } else if (error.message.includes("Forbidden")) {
+        setError("You do not have permission to access API keys.");
         setHasApiKey(false);
       } else {
         setError(error.message);
@@ -130,33 +729,47 @@ const AdminDashboard = () => {
 
   const handleCreateApiKey = async () => {
     setLoading(true);
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     try {
       const result = await apiKeyService.createApiKey();
-      const apiKeyValue = result?.apiKey || result?.key || result?.data?.apiKey || result?.data?.key || result;
-      
-      if (apiKeyValue && typeof apiKeyValue === 'string' && apiKeyValue.length > 0) {
+      const apiKeyValue =
+        result?.apiKey ||
+        result?.key ||
+        result?.data?.apiKey ||
+        result?.data?.key ||
+        result;
+
+      if (
+        apiKeyValue &&
+        typeof apiKeyValue === "string" &&
+        apiKeyValue.length > 0
+      ) {
         setApiKey(apiKeyValue);
         setHasApiKey(true);
-        setSuccess('API key created successfully!');
+        setSuccess("API key created successfully!");
         // ✅ Refresh dashboard stats after creating API key
         fetchDashboardStats();
       } else {
-        setApiKey('API Key created successfully');
+        setApiKey("API Key created successfully");
         setHasApiKey(true);
-        setSuccess('API key created successfully!');
+        setSuccess("API key created successfully!");
       }
     } catch (error) {
-      if (error.message.includes('already exists') || error.message.includes('already created')) {
-        setError('You have already created an API key. Use the "Get API Key" button to retrieve it.');
+      if (
+        error.message.includes("already exists") ||
+        error.message.includes("already created")
+      ) {
+        setError(
+          'You have already created an API key. Use the "Get API Key" button to retrieve it.'
+        );
         setHasApiKey(true);
-      } else if (error.message.includes('Unauthorized')) {
-        setError('Session expired. Please log in again.');
+      } else if (error.message.includes("Unauthorized")) {
+        setError("Session expired. Please log in again.");
         setTimeout(() => {
           authService.logout();
-          navigate('/login');
+          navigate("/login");
         }, 2000);
       } else {
         setError(error.message);
@@ -169,255 +782,1200 @@ const AdminDashboard = () => {
   const copyToClipboard = () => {
     if (apiKey) {
       navigator.clipboard.writeText(apiKey);
-      setSuccess('API key copied to clipboard!');
-      setTimeout(() => setSuccess(''), 3000);
+      setSuccess("API key copied to clipboard!");
+      setTimeout(() => setSuccess(""), 3000);
+    }
+  };
+
+  // Payment link handlers
+  const handleOpenPaymentModal = () => {
+    setShowPaymentModal(true);
+    setCreateLinkError("");
+    setCreatedPaymentLink(null);
+    setPaymentData({
+      amount: "",
+      customerName: "",
+      customerEmail: "",
+      customerPhone: "",
+      description: "",
+    });
+  };
+
+  const handleClosePaymentModal = () => {
+    setShowPaymentModal(false);
+    setCreateLinkError("");
+    setCreatedPaymentLink(null);
+    setPaymentData({
+      amount: "",
+      customerName: "",
+      customerEmail: "",
+      customerPhone: "",
+      description: "",
+    });
+  };
+
+  const handlePaymentDataChange = (field, value) => {
+    setPaymentData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleCreatePaymentLink = async (e) => {
+    e.preventDefault();
+    setCreateLinkLoading(true);
+    setCreateLinkError("");
+    setCreatedPaymentLink(null);
+
+    // Validate phone number
+    if (paymentData.customerPhone && paymentData.customerPhone.length !== 10) {
+      setCreateLinkError("Phone number must be exactly 10 digits");
+      setCreateLinkLoading(false);
+      return;
+    }
+
+    try {
+      const result = await paymentService.createPaymentLink({
+        amount: parseFloat(paymentData.amount),
+        customerName: paymentData.customerName,
+        customerEmail: paymentData.customerEmail,
+        customerPhone: paymentData.customerPhone,
+        description: paymentData.description,
+      });
+
+      setCreatedPaymentLink(result);
+      setPaymentData({
+        amount: "",
+        customerName: "",
+        customerEmail: "",
+        customerPhone: "",
+        description: "",
+      });
+    } catch (error) {
+      setCreateLinkError(error.message);
+    } finally {
+      setCreateLinkLoading(false);
+    }
+  };
+
+  const copyPaymentLinkToClipboard = (text) => {
+    if (text) {
+      navigator.clipboard.writeText(text);
+      setSuccess("Payment link copied to clipboard!");
+      setTimeout(() => setSuccess(""), 3000);
+    }
+  };
+
+  const openPaymentLink = (url) => {
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
     }
   };
 
   const formatCurrency = (amount) => {
-    return `₹${parseFloat(amount || 0).toLocaleString('en-IN', { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 2 
+    return `₹${parseFloat(amount || 0).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     })}`;
   };
 
   const getTodayTransactions = () => {
-    if (!dashboardStats.transactions?.transactions) return { count: 0, amount: 0 };
-    
+    if (!dashboardStats.transactions?.transactions)
+      return { count: 0, amount: 0 };
+
     const today = new Date().toDateString();
-    const todayTxns = dashboardStats.transactions.transactions.filter(txn => 
-      new Date(txn.created_at).toDateString() === today && txn.status === 'paid'
+    const todayTxns = dashboardStats.transactions.transactions.filter(
+      (txn) =>
+        new Date(txn.created_at).toDateString() === today &&
+        txn.status === "paid"
     );
-    
+
     return {
       count: todayTxns.length,
-      amount: todayTxns.reduce((sum, txn) => sum + (txn.amount || 0), 0)
+      amount: todayTxns.reduce((sum, txn) => sum + (txn.amount || 0), 0),
     };
   };
 
   const getTodayPayouts = () => {
     if (!dashboardStats.payouts?.payouts) return { count: 0, amount: 0 };
-    
+
     const today = new Date().toDateString();
-    const todayPayouts = dashboardStats.payouts.payouts.filter(payout => 
-      new Date(payout.requestedAt).toDateString() === today
+    const todayPayouts = dashboardStats.payouts.payouts.filter(
+      (payout) => new Date(payout.requestedAt).toDateString() === today
     );
-    
+
     return {
       count: todayPayouts.length,
-      amount: todayPayouts.reduce((sum, payout) => sum + (payout.netAmount || 0), 0)
+      amount: todayPayouts.reduce(
+        (sum, payout) => sum + (payout.netAmount || 0),
+        0
+      ),
     };
   };
 
-  const todayPayin = getTodayTransactions();
-  const todayPayout = getTodayPayouts();
-  const totalTransactions = dashboardStats.transactions?.summary?.total_transactions || 0;
-   const availableBalance = dashboardStats.balance?.balance.available_balance || 0;
- 
+  // Filter transactions based on selected filter - using real API data
+  const getFilteredTransactions = () => {
+    if (todayTransactions.loading) return [];
+
+    let allTransactions = [];
+
+    // Combine all today's transactions
+    allTransactions = [
+      ...todayTransactions.payin,
+      ...todayTransactions.payout,
+      ...todayTransactions.settlement,
+    ];
+
+    // Apply filter
+    if (todayPayinFilter === "all") {
+      return allTransactions;
+    } else {
+      return allTransactions.filter((txn) => txn.type === todayPayinFilter);
+    }
+  };
+
+  const filteredTransactions = getFilteredTransactions();
+
+  // Calculate today's payin and payout from fetched data
+  const todayPayin = {
+    count: todayTransactions.payin.length,
+    amount: todayTransactions.payin.reduce(
+      (sum, txn) => sum + parseFloat(txn.amount || 0),
+      0
+    ),
+  };
+  const todayPayout = {
+    count: todayTransactions.payout.length,
+    amount: todayTransactions.payout.reduce(
+      (sum, payout) => sum + parseFloat(payout.netAmount || payout.amount || 0),
+      0
+    ),
+  };
+  const totalTransactions =
+    dashboardStats.transactions?.summary?.total_transactions || 0;
+  const balance = dashboardStats.balance?.balance;
+  const balanceData = dashboardStats.balance;
+
+  // Calculate metrics from balance API data (using /payments/merchant/balance endpoint structure)
+  const totalRevenue =
+    balance?.total_revenue || balance?.settled_revenue || "0.00";
+  const totalPayoutCount =
+    balanceData?.transaction_summary?.total_payouts_completed ||
+    dashboardStats.payouts?.summary?.total_payout_requests ||
+    0;
+  const todayPayinAmount = balance?.totalTodayRevenue || 0;
+  const availableBalance = balance?.available_balance || "0.00";
+  const unsettledBalance =
+    balance?.unsettled_net_revenue || balance?.unsettled_revenue || "0.00";
+  const payoutCount =
+    balanceData?.transaction_summary?.pending_payout_requests ||
+    dashboardStats.payouts?.payouts?.length ||
+    0;
+  const totalPayinCommission = balance?.totalPayinCommission || 0;
+
+  // Calculate trends (mock data for now - can be enhanced with historical data)
+  const calculateTrend = (current, previous = 0) => {
+    if (!previous || previous === 0) return "0% VS PREV. 28 DAYS";
+    const change = ((current - previous) / previous) * 100;
+    const sign = change >= 0 ? "+" : "";
+    return `${sign}${change.toFixed(1)}% VS PREV. 28 DAYS`;
+  };
+
+  // Prepare metric cards data
+  const metricCards = [
+    {
+      icon: <FiDollarSign className="text-xl" />,
+      title: "Total revenue",
+      value: formatCurrency(totalRevenue),
+      trend: calculateTrend(
+        parseFloat(totalRevenue || 0),
+        parseFloat(totalRevenue || 0) * 0.89
+      ),
+      trendColor:
+        parseFloat(totalRevenue || 0) > 0 ? "text-green-400" : "text-white/60",
+      showChart: false,
+    },
+    {
+      icon: <TbArrowsTransferDown className="text-xl" />,
+      title: "Total payout",
+      value: `${totalPayoutCount} Item${totalPayoutCount !== 1 ? "s" : ""}`,
+      trend: "0% VS PREV. 28 DAYS",
+      trendColor: "text-white/60",
+    },
+    {
+      icon: <FiArrowUp className="text-xl" />,
+      title: "Today payin",
+      value:
+        todayPayinAmount > 0
+          ? `${(
+              (todayPayinAmount / parseFloat(totalRevenue || 1)) *
+              100
+            ).toFixed(2)}%`
+          : "0.00%",
+      trend:
+        todayPayinAmount > 0
+          ? calculateTrend(todayPayinAmount, todayPayinAmount * 0.983)
+          : "0% VS PREV. 28 DAYS",
+      trendColor: todayPayinAmount > 0 ? "text-green-400" : "text-white/60",
+      showChart: true,
+      showProgressBar: true,
+      progressValue:
+        todayPayinAmount > 0
+          ? Math.min(
+              (todayPayinAmount / parseFloat(totalRevenue || 1)) * 100,
+              100
+            )
+          : 0,
+      progressLabel: "Low",
+    },
+    {
+      icon: <FiArrowDown className="text-xl" />,
+      title: "Payout",
+      value: payoutCount.toString(),
+      trend: null,
+      subtitle: "Realtime update",
+      isSpecialCard: true,
+      backgroundImage: "/cardright4.png",
+      actionButton: (
+        <button
+          onClick={() => navigate("/admin/payouts")}
+          disabled={!balanceData?.payout_eligibility?.can_request_payout}
+          className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-600 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-full font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg disabled:transform-none flex items-center justify-center gap-2 whitespace-nowrap"
+        >
+          <FiZap className="text-base" />
+          Request payout
+        </button>
+      ),
+    },
+    {
+      icon: <RiWalletLine className="text-xl" />,
+      title: "Available Wallet Balance",
+      value: formatCurrency(availableBalance),
+      trend: calculateTrend(
+        parseFloat(availableBalance || 0),
+        parseFloat(availableBalance || 0) * 0.89
+      ),
+      trendColor:
+        parseFloat(availableBalance || 0) > 0
+          ? "text-green-400"
+          : "text-white/60",
+    },
+    {
+      icon: <TbArrowsTransferDown className="text-xl" />,
+      title: "Unsettled Balance",
+      value: formatCurrency(unsettledBalance),
+      trend: "0% VS PREV. 28 DAYS",
+      trendColor: "text-white/60",
+    },
+    {
+      icon: <FiBook className="text-xl" />,
+      title: "Today payin Commission",
+      value:
+        totalPayinCommission > 0
+          ? `${(
+              (totalPayinCommission / parseFloat(totalRevenue || 1)) *
+              100
+            ).toFixed(2)}%`
+          : "0.00%",
+      trend:
+        totalPayinCommission > 0
+          ? calculateTrend(totalPayinCommission, totalPayinCommission * 0.983)
+          : "0% VS PREV. 28 DAYS",
+      trendColor: totalPayinCommission > 0 ? "text-green-400" : "text-white/60",
+      showChart: true,
+      showProgressBar: true,
+      progressValue:
+        totalPayinCommission > 0
+          ? Math.min(
+              (totalPayinCommission / parseFloat(totalRevenue || 1)) * 100,
+              100
+            )
+          : 0,
+      progressLabel: "Low",
+    },
+    {
+      icon: <FiBook className="text-xl" />,
+      title: "Today Payout commission",
+      value:
+        parseFloat(balance?.commission_deducted || 0) > 0
+          ? `${(
+              (parseFloat(balance?.commission_deducted || 0) /
+                parseFloat(totalRevenue || 1)) *
+              100
+            ).toFixed(2)}%`
+          : "0.00%",
+      trend:
+        parseFloat(balance?.commission_deducted || 0) > 0
+          ? calculateTrend(
+              parseFloat(balance?.commission_deducted || 0),
+              parseFloat(balance?.commission_deducted || 0) * 0.983
+            )
+          : "0% VS PREV. 28 DAYS",
+      trendColor:
+        parseFloat(balance?.commission_deducted || 0) > 0
+          ? "text-green-400"
+          : "text-white/60",
+      showChart: true,
+      showProgressBar: true,
+      progressValue:
+        parseFloat(balance?.commission_deducted || 0) > 0
+          ? Math.min(
+              (parseFloat(balance?.commission_deducted || 0) /
+                parseFloat(totalRevenue || 1)) *
+                100,
+              100
+            )
+          : 0,
+      progressLabel: "Low",
+    },
+  ];
+
+  // Quick Analytics data - using REAL fetched data only
+  // Get last payin from chart data (most recent transaction)
+  const getLastPayinAmount = () => {
+    if (chartData.payin && chartData.payin.length > 0) {
+      // Find the most recent non-zero payin
+      const recentPayins = chartData.payin
+        .filter((d) => d.amount > 0)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+      if (recentPayins.length > 0) {
+        return recentPayins[0].amount;
+      }
+    }
+    // Fallback to most recent transaction from today's data
+    if (todayTransactions.payin && todayTransactions.payin.length > 0) {
+      const sorted = [...todayTransactions.payin].sort(
+        (a, b) =>
+          new Date(b.createdAt || b.created_at || 0) -
+          new Date(a.createdAt || a.created_at || 0)
+      );
+      return parseFloat(sorted[0]?.amount || 0);
+    }
+    return 0;
+  };
+
+  const summaryCards = [
+    {
+      label: "Today payin",
+      value: formatCurrency(todayPayin.amount || 0),
+    },
+    {
+      label: "Last payin",
+      value: formatCurrency(getLastPayinAmount()),
+    },
+    {
+      label: "Today payout",
+      value: `${todayPayout.count || 0} items`,
+    },
+  ];
+
+  const actionItems = [
+    {
+      label: "View Payin Transactions",
+      onClick: () => navigate("/admin/payins"),
+    },
+    {
+      label: "View Payout Transactions",
+      onClick: () => navigate("/admin/payouts"),
+    },
+    {
+      label: "View Settlement Transactions",
+      onClick: () => navigate("/admin/transactions?tab=settlement"),
+    },
+  ];
+
+  const getCurrentDateRange = () => {
+    const now = new Date();
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    return `Displaying the data from ${
+      monthNames[now.getMonth()]
+    } ${now.getFullYear()}`;
+  };
+
   return (
-    <div className="page-container with-sidebar admin-dashboard-page">
-      <Sidebar />
-      <main className="page-main">
-        <div className="page-header scroll-header">
-          <div className="header-title-section">
-            <div>
-              <h1>🏠 Admin Dashboard</h1>
-              <p>Welcome to your admin dashboard. Manage API keys and access all payment features.</p>
-            </div>
-            <button 
-              onClick={fetchDashboardStats} 
-              disabled={dashboardStats.loading}
-              className="refresh-btn"
-            >
-              <FiRefreshCw className={dashboardStats.loading ? 'spinning' : ''} />
-              {dashboardStats.loading ? 'Loading...' : 'Refresh Stats'}
-            </button>
-          </div>
-          
-          {/* Overview Widgets */}
-          <div className="overview-widgets">
-            <div className="overview-card primary">
-              <div className="card-icon">
-                <FiDollarSign />
-              </div>
-              <div className="card-content">
-                <div className="metric-label">Today's Payin</div>
-                <div className="metric-value">
-                  {dashboardStats.loading ? '...' : formatCurrency(dashboardStats.balance?.balance.totalTodayRevenue)}
-                </div>
-                <div className="metric-sub">{todayPayin.count} Transactions</div>
-              </div>
-            </div>
-            
-            <div className="overview-card secondary">
-              <div className="card-icon">
-                <TbArrowsTransferDown />
-              </div>
-              <div className="card-content">
-                <div className="metric-label">Today's Payout</div>
-                <div className="metric-value">
-                  {dashboardStats.loading ? '...' : formatCurrency(todayPayout.amount)}
-                </div>
-                <div className="metric-sub">{todayPayout.count} Requests</div>
-              </div>
-            </div>
-            
-            <div className="overview-card tertiary">
-              <div className="card-icon">
-                <HiOutlineChartBar />
-              </div>
-              <div className="card-content">
-                <div className="metric-label">Total Transactions</div>
-                <div className="metric-value">
-                  {dashboardStats.loading ? '...' : totalTransactions}
-                </div>
-                <div className="metric-sub">
-                  {dashboardStats.transactions?.summary?.successful_transactions || 0} Successful
-                </div>
-              </div>
-            </div>
-            
-            <div className="overview-card quaternary">
-              <div className="card-icon">
-                <RiMoneyDollarCircleLine />
-              </div>
-              <div className="card-content">
-                <div className="metric-label">Available Balance</div>
-                <div className="metric-value">
-                  {/*  */}
-                  {dashboardStats.balance?.balance.available_balance}
-                </div>
-                <div className="metric-sub">Ready to withdraw</div>
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-[#001D22]">
+      <Navbar />
+
+      {/* Split Layout: Top Half (Graphic) + Bottom Half (Data) */}
+      <div className="relative">
+        {/* Fixed X Graphic - Background Layer */}
+        <div
+          className="fixed inset-0 flex items-center justify-center pointer-events-none z-0"
+          style={{ top: "4rem" }}
+        >
+          <img
+            src="/X.png"
+            alt="X graphic"
+            className="object-contain hidden sm:block"
+            style={{
+              filter: "drop-shadow(0 0 40px rgba(94, 234, 212, 0.5))",
+              width: "120%",
+              height: "85%",
+              maxWidth: "none",
+              maxHeight: "none",
+            }}
+          />
+          <img
+            src="/X.png"
+            alt="X graphic"
+            className="object-contain sm:hidden"
+            style={{
+              filter: "drop-shadow(0 0 20px rgba(94, 234, 212, 0.5))",
+              width: "100%",
+              height: "70%",
+              maxWidth: "none",
+              maxHeight: "none",
+            }}
+          />
         </div>
-        
-        <div className="page-content">
-          {/* API Key Management Section */}
-          <div className="api-key-section">
-            <h2>API Key Management</h2>
-            <p>Create and manage your API keys for accessing the backend services.</p>
-            
-            {fetching && (
-              <div className="loading-message">
-                Checking for existing API key...
+
+        {/* Scrollable Content Section - Overlays on top */}
+        <section className="relative z-10 min-h-screen bg-transparent">
+          {/* Spacer to show 70% of image initially - Reduced to move card up */}
+          <div className="h-[calc(50vh-4rem)] sm:h-[calc(55vh-4rem)]"></div>
+
+          {/* Cards Section - Scrolls over image */}
+          <div className="bg-transparent pt-2 pb-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-[1400px] mx-auto">
+              {/* Rounded Container with #122D32 background */}
+              <div className="bg-[#122D32] rounded-xl p-4 sm:p-6">
+                {/* Greeting and Controls */}
+                <div className="mb-4">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
+                    {/* Left Section - Greeting */}
+                    <div>
+                      <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-2 font-['Albert_Sans']">
+                        Hello{" "}
+                        {merchantName ||
+                          localStorage.getItem("businessName") ||
+                          "User"}
+                        !
+                      </h1>
+                      <p className="text-white/70 text-xs sm:text-sm font-['Albert_Sans']">
+                        {getCurrentDateRange()}
+                      </p>
+                    </div>
+
+                    {/* Right Section - Date Range & Action */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full lg:w-auto">
+                      {/* Date Range Selector */}
+                      <div className="flex items-center gap-2 bg-bg-tertiary border border-white/10 rounded-full p-1 flex-1 sm:flex-initial justify-center sm:justify-start">
+                        {["Daily", "Weekly", "Monthly"].map((range) => (
+                          <button
+                            key={range}
+                            onClick={() => setDateRange(range.toLowerCase())}
+                            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium font-['Albert_Sans'] transition-all duration-200 flex-1 sm:flex-initial ${
+                              dateRange === range.toLowerCase()
+                                ? "bg-accent text-white shadow-sm"
+                                : "text-white/60 hover:text-white hover:bg-white/5"
+                            }`}
+                          >
+                            {range}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Create Payment Link Button */}
+                      <button
+                        onClick={handleOpenPaymentModal}
+                        className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-4 sm:px-5 py-2 rounded-full text-sm sm:text-base font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 focus:ring-offset-bg-primary w-full sm:w-auto whitespace-nowrap"
+                      >
+                        <FiPlus className="text-base sm:text-lg" />
+                        <span className="hidden sm:inline">
+                          Create payment link
+                        </span>
+                        <span className="sm:hidden">Create link</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metric Cards Grid - 2 rows of 4 cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 lg:gap-6">
+                  {metricCards.map((card, index) => (
+                    <MetricCard key={index} {...card} />
+                  ))}
+                </div>
               </div>
-            )}
-            
-            <div className="api-key-form">
-              {!hasApiKey ? (
-                <button 
-                  onClick={handleCreateApiKey} 
-                  disabled={loading || fetching}
-                  className="create-api-key-btn"
-                >
-                  {loading ? 'Creating...' : 'Create New API Key'}
-                </button>
-              ) : (
-                <div className="api-key-actions">
-                  <button 
-                    onClick={checkExistingApiKey} 
-                    disabled={fetching}
-                    className="get-api-key-btn"
+            </div>
+          </div>
+
+          {/* Scrollable Content Below - Appears when scrolling */}
+          <div className="bg-transparent px-4 sm:px-6 lg:px-8 pb-8">
+            <div className="max-w-[1400px] mx-auto">
+              {/* Bottom Section - Quick Analytics and Table */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 mb-8">
+                {/* Quick Analytics - Left */}
+                <QuickAnalytics
+                  summaryCards={summaryCards}
+                  actionItems={actionItems}
+                  chartData={chartData}
+                  dateRange={dateRange}
+                />
+
+                {/* Today Payin Table - Right */}
+                <div className="bg-bg-secondary border border-white/10 rounded-xl p-4 sm:p-6">
+                  <div className="flex flex-col gap-3 mb-4 sm:mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <h2 className="text-lg sm:text-xl font-medium text-white font-['Albert_Sans']">
+                        Today Transactions{" "}
+                        {todayTransactions.loading
+                          ? "..."
+                          : filteredTransactions.length || 0}
+                      </h2>
+                      <div className="relative flex-1 sm:flex-initial max-w-xs">
+                        <input
+                          type="text"
+                          placeholder="Search..."
+                          className="bg-bg-tertiary border border-white/10 rounded-lg px-3 sm:px-4 py-2 text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-accent w-full font-['Albert_Sans']"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Filter Buttons */}
+                    <div className="flex items-center gap-2 bg-bg-tertiary border border-white/10 rounded-lg p-1">
+                      {[
+                        { value: "all", label: "All" },
+                        { value: "payin", label: "In" },
+                        { value: "payout", label: "Out" },
+                        { value: "settlement", label: "Settlement" },
+                      ].map((filter) => (
+                        <button
+                          key={filter.value}
+                          onClick={() => setTodayPayinFilter(filter.value)}
+                          className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium font-['Albert_Sans'] transition-all duration-200 flex-1 sm:flex-initial ${
+                            todayPayinFilter === filter.value
+                              ? "bg-accent text-white shadow-sm"
+                              : "text-white/60 hover:text-white hover:bg-white/5"
+                          }`}
+                        >
+                          {filter.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Table - Scrollable */}
+                  <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                    <table className="w-full">
+                      <thead className="sticky top-0 bg-bg-secondary z-10">
+                        <tr className="border-b border-white/10">
+                          <th className="text-left py-2 sm:py-3 px-2 sm:px-4 text-xs font-medium text-white/60 uppercase tracking-wider font-['Albert_Sans']">
+                            <input
+                              type="checkbox"
+                              className="rounded border-white/20"
+                            />
+                          </th>
+                          <th className="text-left py-2 sm:py-3 px-2 sm:px-4 text-xs font-medium text-white/60 uppercase tracking-wider font-['Albert_Sans']">
+                            Name
+                          </th>
+                          <th className="text-left py-2 sm:py-3 px-2 sm:px-4 text-xs font-medium text-white/60 uppercase tracking-wider font-['Albert_Sans'] hidden sm:table-cell">
+                            Amount
+                          </th>
+                          <th className="text-left py-2 sm:py-3 px-2 sm:px-4 text-xs font-medium text-white/60 uppercase tracking-wider font-['Albert_Sans'] hidden md:table-cell">
+                            Type
+                          </th>
+                          <th className="text-left py-2 sm:py-3 px-2 sm:px-4 text-xs font-medium text-white/60 uppercase tracking-wider font-['Albert_Sans'] hidden lg:table-cell">
+                            Status
+                          </th>
+                          <th className="text-left py-2 sm:py-3 px-2 sm:px-4 text-xs font-medium text-white/60 uppercase tracking-wider font-['Albert_Sans']">
+                            Label
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {todayTransactions.loading ? (
+                          <tr>
+                            <td
+                              colSpan="6"
+                              className="py-8 text-center text-white/60 text-xs sm:text-sm font-['Albert_Sans']"
+                            >
+                              Loading transactions...
+                            </td>
+                          </tr>
+                        ) : filteredTransactions.length > 0 ? (
+                          filteredTransactions
+                            .slice(0, 10)
+                            .map((txn, index) => (
+                              <tr
+                                key={
+                                  txn.transactionId ||
+                                  txn.payoutId ||
+                                  txn.transaction_id ||
+                                  txn.id ||
+                                  index
+                                }
+                                className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
+                                onClick={() => {
+                                  if (
+                                    txn.type === "payin" ||
+                                    txn.type === "settlement"
+                                  ) {
+                                    navigate(
+                                      `/admin/transactions/${
+                                        txn.transactionId ||
+                                        txn.transaction_id ||
+                                        txn.id
+                                      }`
+                                    );
+                                  }
+                                }}
+                              >
+                                <td className="py-2 sm:py-3 px-2 sm:px-4">
+                                  <input
+                                    type="checkbox"
+                                    className="rounded border-white/20"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </td>
+                                <td className="py-2 sm:py-3 px-2 sm:px-4 text-white text-xs sm:text-sm font-['Albert_Sans']">
+                                  {/* Display name based on transaction type */}
+                                  {txn.type === "payout"
+                                    ? txn.description ||
+                                      txn.beneficiaryDetails?.accountHolderName ||
+                                      `Payout ${txn.payoutId || index + 1}`
+                                    : txn.customerName ||
+                                      txn.customer_name ||
+                                      txn.customer?.name ||
+                                      txn.description ||
+                                      `Transaction ${index + 1}`}
+                                  <span className="ml-2 text-xs text-white/40">
+                                    ({txn.type || "payin"})
+                                  </span>
+                                </td>
+                                <td className="py-2 sm:py-3 px-2 sm:px-4 text-white text-xs sm:text-sm font-['Albert_Sans'] hidden sm:table-cell">
+                                  {/* Show netAmount for payout/settlement, amount for payin */}
+                                  {formatCurrency(
+                                    txn.type === "payout" || txn.type === "settlement"
+                                      ? txn.netAmount || txn.net_amount || txn.amount || 0
+                                      : txn.amount || 0
+                                  )}
+                                </td>
+                                <td className="py-2 sm:py-3 px-2 sm:px-4 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden md:table-cell">
+                                  {txn.type || "payin"}
+                                </td>
+                                <td className="py-2 sm:py-3 px-2 sm:px-4 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
+                                  {txn.status || "-"}
+                                </td>
+                                <td className="py-2 sm:py-3 px-2 sm:px-4">
+                                  <div className="flex items-center gap-1 sm:gap-2">
+                                    <span
+                                      className={`text-xs font-['Albert_Sans'] ${
+                                        txn.type === "payin"
+                                          ? "text-green-400"
+                                          : txn.type === "payout"
+                                          ? "text-amber-400"
+                                          : "text-blue-400"
+                                      }`}
+                                    >
+                                      {txn.type === "payin"
+                                        ? "In"
+                                        : txn.type === "payout"
+                                        ? "Out"
+                                        : "Settled"}
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                        ) : (
+                          <tr>
+                            <td
+                              colSpan="6"
+                              className="py-8 text-center text-white/60 text-xs sm:text-sm font-['Albert_Sans']"
+                            >
+                              No transactions found for selected filter
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* API Key Management Section - Collapsible */}
+              <details className="mt-6 sm:mt-8 bg-[#122D32] border border-white/10 rounded-xl overflow-hidden shadow-lg">
+                <summary className="p-4 sm:p-6 cursor-pointer text-white font-medium text-base sm:text-lg font-['Albert_Sans'] hover:bg-white/5 transition-colors flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
+                    <FiBook className="text-accent text-lg" />
+                  </div>
+                  <span>API Key Management</span>
+                  <svg
+                    className="w-5 h-5 ml-auto transition-transform duration-200"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    {fetching ? 'Loading...' : 'Get API Key'}
-                  </button>
-                  <p className="api-key-info">
-                    ✅ You have already created an API key. Use the button above to retrieve it.
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </summary>
+                <div className="p-4 sm:p-6 pt-0 border-t border-white/10">
+                  {/* Description */}
+                  <div className="mb-6">
+                    <p className="text-white/70 text-sm sm:text-base font-['Albert_Sans'] leading-relaxed">
+                      Create and manage your API keys for accessing the backend
+                      services. Your API key is required to authenticate
+                      requests to the API endpoints.
+                    </p>
+                  </div>
+
+                  {/* Loading State */}
+                  {fetching && (
+                    <div className="mb-5 flex items-center justify-center gap-2 text-accent bg-accent/10 border border-accent/30 rounded-lg p-3 sm:p-4 text-sm font-medium font-['Albert_Sans']">
+                      <FiRefreshCw className="animate-spin" />
+                      <span>Checking for existing API key...</span>
+                    </div>
+                  )}
+
+                  {/* Action Buttons Section */}
+                  {!apiKey && (
+                    <div className="mb-6">
+                      {!hasApiKey ? (
+                        <div className="flex flex-col items-center gap-4">
+                          <button
+                            onClick={handleCreateApiKey}
+                            disabled={loading || fetching}
+                            className="w-full sm:w-auto bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-6 sm:px-8 py-3 sm:py-3.5 rounded-lg text-sm sm:text-base font-medium font-['Albert_Sans'] cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+                          >
+                            {loading ? (
+                              <>
+                                <FiRefreshCw className="animate-spin" />
+                                <span>Creating...</span>
+                              </>
+                            ) : (
+                              <>
+                                <FiPlus />
+                                <span>Create New API Key</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
+                            <button
+                              onClick={checkExistingApiKey}
+                              disabled={fetching}
+                              className="w-full sm:w-auto bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-6 sm:px-8 py-3 sm:py-3.5 rounded-lg text-sm sm:text-base font-medium font-['Albert_Sans'] cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                              {fetching ? (
+                                <>
+                                  <FiRefreshCw className="animate-spin" />
+                                  <span>Loading...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <FiCopy />
+                                  <span>Get API Key</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div className="flex items-start gap-3 bg-green-500/10 border border-green-500/30 rounded-lg p-3 sm:p-4">
+                            <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <svg
+                                className="w-3 h-3 text-green-400"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </div>
+                            <p className="text-green-400 text-sm sm:text-base font-medium font-['Albert_Sans'] flex-1">
+                              You have already created an API key. Use the
+                              button above to retrieve it.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Error Message */}
+                  {error && (
+                    <div className="mb-5 flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-lg p-3 sm:p-4">
+                      <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <svg
+                          className="w-3 h-3 text-red-400"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                      <p className="text-red-400 text-sm sm:text-base font-medium font-['Albert_Sans'] flex-1">
+                        {error}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Success Message */}
+                  {success && !apiKey && (
+                    <div className="mb-5 flex items-start gap-3 bg-green-500/10 border border-green-500/30 rounded-lg p-3 sm:p-4">
+                      <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <svg
+                          className="w-3 h-3 text-green-400"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                      <p className="text-green-400 text-sm sm:text-base font-medium font-['Albert_Sans'] flex-1">
+                        {success}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* API Key Display */}
+                  {apiKey && (
+                    <div className="bg-bg-tertiary rounded-xl p-5 sm:p-6 border border-white/10 shadow-inner">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                          <FiCopy className="text-accent text-xl" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg sm:text-xl font-semibold text-white font-['Albert_Sans']">
+                            Your API Key
+                          </h3>
+                          <p className="text-white/60 text-xs sm:text-sm font-['Albert_Sans'] mt-0.5">
+                            Copy this key to use in your API requests
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mb-4">
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={apiKey}
+                            readOnly
+                            className="w-full px-4 py-3.5 border-2 border-white/10 rounded-lg text-xs sm:text-sm font-mono bg-bg-secondary text-green-400 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 hover:border-white/20 break-all pr-20"
+                          />
+                          <button
+                            onClick={copyToClipboard}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2 rounded-lg text-xs sm:text-sm font-medium font-['Albert_Sans'] cursor-pointer transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-2"
+                            title="Copy to clipboard"
+                          >
+                            <FiCopy className="text-sm" />
+                            <span className="hidden sm:inline">Copy</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 sm:p-4">
+                        <div className="w-5 h-5 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <svg
+                            className="w-3 h-3 text-yellow-400"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </div>
+                        <p className="text-yellow-400 text-xs sm:text-sm font-medium font-['Albert_Sans'] flex-1 leading-relaxed">
+                          Keep this API key secure and don't share it publicly.
+                          Anyone with access to this key can make requests on
+                          your behalf.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </details>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* Payment Link Creation Modal */}
+      {showPaymentModal && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={handleClosePaymentModal}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-[#122D32] border border-white/10 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-white/10">
+              <h3 className="text-xl sm:text-2xl font-medium text-white font-['Albert_Sans']">
+                Create Payment Link
+              </h3>
+              <button
+                onClick={handleClosePaymentModal}
+                className="text-white/70 hover:text-white transition-colors duration-200 p-2 hover:bg-white/5 rounded-lg"
+                aria-label="Close modal"
+              >
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              {/* Error Message */}
+              {createLinkError && (
+                <div className="mb-5 flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-lg p-3 sm:p-4">
+                  <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg
+                      className="w-3 h-3 text-red-400"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <p className="text-red-400 text-sm sm:text-base font-medium font-['Albert_Sans'] flex-1">
+                    {createLinkError}
                   </p>
                 </div>
               )}
-            </div>
 
-            {error && (
-              <div className="error-message">
-                {error}
-              </div>
-            )}
+              {/* Success - Created Link Display */}
+              {createdPaymentLink && (
+                <div className="mb-5 bg-green-500/10 border border-green-500/30 rounded-lg p-4 sm:p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center">
+                      <svg
+                        className="w-4 h-4 text-green-400"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <h4 className="text-green-400 text-lg font-semibold font-['Albert_Sans']">
+                      Payment Link Created Successfully!
+                    </h4>
+                  </div>
 
-            {success && (
-              <div className="success-message">
-                {success}
-              </div>
-            )}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-white/70 text-sm font-medium font-['Albert_Sans'] mb-2">
+                        Payment Link:
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={createdPaymentLink.paymentLink || ""}
+                          readOnly
+                          className="w-full px-4 py-3 border-2 border-white/10 rounded-lg text-sm font-mono bg-bg-secondary text-green-400 focus:outline-none break-all pr-24"
+                        />
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-2">
+                          <button
+                            onClick={() =>
+                              copyPaymentLinkToClipboard(
+                                createdPaymentLink.paymentLink
+                              )
+                            }
+                            className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-3 py-1.5 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-1.5"
+                            title="Copy link"
+                          >
+                            <FiCopy className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Copy</span>
+                          </button>
+                          <button
+                            onClick={() =>
+                              openPaymentLink(createdPaymentLink.paymentLink)
+                            }
+                            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-1.5"
+                            title="Open link"
+                          >
+                            <FiExternalLink className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Open</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-            {apiKey && (
-              <div className="api-key-display">
-                <h3>Your API Key:</h3>
-                <div className="api-key-container">
-                  <input 
-                    type="text" 
-                    value={apiKey} 
-                    readOnly 
-                    className="api-key-input"
-                  />
-                  <button onClick={copyToClipboard} className="copy-btn">
-                    <FiCopy />
-                    Copy
+              {/* Payment Form */}
+              {!createdPaymentLink && (
+                <form onSubmit={handleCreatePaymentLink} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-white/80 text-sm font-medium font-['Albert_Sans'] mb-2">
+                        Amount (₹) <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={paymentData.amount}
+                        onChange={(e) =>
+                          handlePaymentDataChange("amount", e.target.value)
+                        }
+                        required
+                        placeholder="500"
+                        className="w-full px-4 py-2.5 border-2 border-white/10 rounded-lg bg-bg-secondary text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-white/80 text-sm font-medium font-['Albert_Sans'] mb-2">
+                        Customer Name <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentData.customerName}
+                        onChange={(e) =>
+                          handlePaymentDataChange(
+                            "customerName",
+                            e.target.value
+                          )
+                        }
+                        required
+                        placeholder="Amit Kumar"
+                        className="w-full px-4 py-2.5 border-2 border-white/10 rounded-lg bg-bg-secondary text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-white/80 text-sm font-medium font-['Albert_Sans'] mb-2">
+                        Customer Email <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={paymentData.customerEmail}
+                        onChange={(e) =>
+                          handlePaymentDataChange(
+                            "customerEmail",
+                            e.target.value
+                          )
+                        }
+                        required
+                        placeholder="amit@example.com"
+                        className="w-full px-4 py-2.5 border-2 border-white/10 rounded-lg bg-bg-secondary text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-white/80 text-sm font-medium font-['Albert_Sans'] mb-2">
+                        Customer Phone <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={paymentData.customerPhone}
+                        onChange={(e) =>
+                          handlePaymentDataChange(
+                            "customerPhone",
+                            e.target.value.replace(/\D/g, "").slice(0, 10)
+                          )
+                        }
+                        required
+                        placeholder="9876543210"
+                        maxLength="10"
+                        className="w-full px-4 py-2.5 border-2 border-white/10 rounded-lg bg-bg-secondary text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-white/80 text-sm font-medium font-['Albert_Sans'] mb-2">
+                      Description (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentData.description}
+                      onChange={(e) =>
+                        handlePaymentDataChange("description", e.target.value)
+                      }
+                      placeholder="Product purchase"
+                      className="w-full px-4 py-2.5 border-2 border-white/10 rounded-lg bg-bg-secondary text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
+                    />
+                  </div>
+
+                  {/* Form Actions */}
+                  <div className="flex gap-3 justify-end pt-4 border-t border-white/10">
+                    <button
+                      type="button"
+                      onClick={handleClosePaymentModal}
+                      className="bg-bg-secondary text-white border border-accent px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:bg-bg-tertiary hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={createLinkLoading}
+                      className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {createLinkLoading ? (
+                        <>
+                          <FiRefreshCw className="w-4 h-4 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <FiPlus className="w-4 h-4" />
+                          Create Link
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Close button after link creation */}
+              {createdPaymentLink && (
+                <div className="flex justify-end pt-4 border-t border-white/10">
+                  <button
+                    onClick={handleClosePaymentModal}
+                    className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary"
+                  >
+                    Close
                   </button>
                 </div>
-                <p className="api-key-warning">
-                  ⚠️ Keep this API key secure and don't share it publicly.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Quick Access Cards */}
-          <div className="quick-access">
-            <h2>Quick Access</h2>
-            <p>Navigate to different sections of the payment system.</p>
-            
-            <div className="access-grid">
-              <div className="access-card" onClick={() => navigate('/admin/transactions')}>
-                <div className="access-icon"><HiOutlineChartBar /></div>
-                <h3>Transactions</h3>
-                <p>View and manage all payment transactions</p>
-                <div className="access-badge">
-                  {totalTransactions} Total
-                </div>
-              </div>
-              
-              <div className="access-card" onClick={() => navigate('/admin/payouts')}>
-                <div className="access-icon"><TbArrowsTransferDown /></div>
-                <h3>Payouts</h3>
-                <p>Manage payout requests and history</p>
-                <div className="access-badge">
-                  {dashboardStats.payouts?.summary?.total_payout_requests || 0} Total
-                </div>
-              </div>
-              
-              <div className="access-card" onClick={() => navigate('/admin/payins')}>
-                <div className="access-icon"><RiMoneyDollarCircleLine /></div>
-                <h3>Balance</h3>
-                <p>View account balance and financial overview</p>
-                <div className="access-badge">
-                  {formatCurrency(availableBalance)}
-                </div>
-              </div>
-              
-              <div className="access-card" onClick={() => navigate('/admin/payments')}>
-                <div className="access-icon"><MdPayments /></div>
-                <h3>Payments</h3>
-                <p>Create and manage payment links</p>
-                <div className="access-badge">
-                  Create Link
-                </div>
-              </div>
-              
-              <div className="access-card" onClick={() => navigate('/admin/api-docs')}>
-                <div className="access-icon"><FiBook /></div>
-                <h3>API Documentation</h3>
-                <p>Integration guide and API reference</p>
-                <div className="access-badge">
-                  View Docs
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
-      </main>
+      )}
     </div>
   );
 };

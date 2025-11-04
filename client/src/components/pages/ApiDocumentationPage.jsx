@@ -108,9 +108,9 @@ const ApiDocumentationPage = () => {
   ];
 
   return (
-    <div className="page-container with-sidebar api-docs-page">
-      <Sidebar />
-      <main className="page-main api-docs-main">
+    <div className="min-h-screen bg-[#001D22]">
+      <Navbar />
+      <main className="pt-24 p-8 max-w-[1200px] mx-auto">
         <div className="api-docs-header">
           <div className="header-content">
             <h1><FiBook /> API Documentation</h1>

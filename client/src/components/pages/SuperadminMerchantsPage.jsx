@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import superadminPaymentService from '../../services/superadminPaymentService';
-import Sidebar from '../Sidebar';
+import Navbar from '../Navbar';
 import '../pages/PageLayout.css';
 import './SuperadminMerchantsPage.css';
 

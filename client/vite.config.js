@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
- allowedHosts: ['payments.ninex-group.com'],    
-port: 3000,
+    allowedHosts: ["40fc95086265.ngrok-free.app", "payments.ninex-group.com"],
+    port: 3000,
   },
-})
+});

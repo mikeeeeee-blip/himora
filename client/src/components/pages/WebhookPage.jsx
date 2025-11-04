@@ -1,9 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { FiLink, FiCopy, FiPlus, FiTrash2, FiEdit, FiPlay, FiCheck } from 'react-icons/fi';
-import Sidebar from '../Sidebar';
-import webhookService from '../../services/webhookService';
-import './PageLayout.css';
-import Toast from '../ui/Toast';
+import React, { useState, useEffect } from "react";
+import {
+  FiLink,
+  FiCopy,
+  FiPlus,
+  FiTrash2,
+  FiEdit,
+  FiPlay,
+  FiCheck,
+  FiRefreshCw,
+} from "react-icons/fi";
+import { motion } from "framer-motion";
+import Navbar from "../Navbar";
+import webhookService from "../../services/webhookService";
+import "./PageLayout.css";
+import Toast from "../ui/Toast";
 
 const WebhookPage = () => {
   const [webhookConfig, setWebhookConfig] = useState(null);
@@ -12,16 +22,16 @@ const WebhookPage = () => {
   const [showPayoutConfigForm, setShowPayoutConfigForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [payoutLoading, setPayoutLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [toast, setToast] = useState({ message: '', type: 'success' });
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [toast, setToast] = useState({ message: "", type: "success" });
   const [webhookData, setWebhookData] = useState({
-    url: '',
-    events: []
+    url: "",
+    events: [],
   });
   const [payoutWebhookData, setPayoutWebhookData] = useState({
-    url: '',
-    events: []
+    url: "",
+    events: [],
   });
 
   const webhookEvents = webhookService.getAvailableEvents();
@@ -37,22 +47,30 @@ const WebhookPage = () => {
     try {
       const config = await webhookService.getWebhookConfig();
       // Handle both direct config and wrapped response
-      const webhookData = config?.success === false ? null : (config?.webhook_url ? config : (config || null));
+      const webhookData =
+        config?.success === false
+          ? null
+          : config?.webhook_url
+          ? config
+          : config || null;
       setWebhookConfig(webhookData);
       if (webhookData) {
         setWebhookData({
-          url: webhookData.webhook_url || webhookData.url || '',
-          events: webhookData.webhook_events || webhookData.events || []
+          url: webhookData.webhook_url || webhookData.url || "",
+          events: webhookData.webhook_events || webhookData.events || [],
         });
       } else {
-        setWebhookData({ url: '', events: [] });
+        setWebhookData({ url: "", events: [] });
       }
     } catch (error) {
-      console.error('Error fetching webhook config:', error);
-      setError('Failed to fetch webhook configuration');
-      setToast({ message: 'Failed to fetch webhook configuration', type: 'error' });
+      console.error("Error fetching webhook config:", error);
+      setError("Failed to fetch webhook configuration");
+      setToast({
+        message: "Failed to fetch webhook configuration",
+        type: "error",
+      });
       setWebhookConfig(null);
-      setWebhookData({ url: '', events: [] });
+      setWebhookData({ url: "", events: [] });
     } finally {
       setLoading(false);
     }
@@ -63,97 +81,108 @@ const WebhookPage = () => {
     try {
       const config = await webhookService.getPayoutWebhookConfig();
       // Handle both direct config and wrapped response
-      const payoutData = config?.success === false ? null : (config?.webhook_url ? config : (config || null));
+      const payoutData =
+        config?.success === false
+          ? null
+          : config?.webhook_url
+          ? config
+          : config || null;
       setPayoutWebhookConfig(payoutData);
       if (payoutData) {
         setPayoutWebhookData({
-          url: payoutData.webhook_url || payoutData.url || '',
-          events: payoutData.webhook_events || payoutData.events || []
+          url: payoutData.webhook_url || payoutData.url || "",
+          events: payoutData.webhook_events || payoutData.events || [],
         });
       } else {
-        setPayoutWebhookData({ url: '', events: [] });
+        setPayoutWebhookData({ url: "", events: [] });
       }
     } catch (error) {
-      console.error('Error fetching payout webhook config:', error);
-      setError('Failed to fetch payout webhook configuration');
-      setToast({ message: 'Failed to fetch payout webhook configuration', type: 'error' });
+      console.error("Error fetching payout webhook config:", error);
+      setError("Failed to fetch payout webhook configuration");
+      setToast({
+        message: "Failed to fetch payout webhook configuration",
+        type: "error",
+      });
       setPayoutWebhookConfig(null);
-      setPayoutWebhookData({ url: '', events: [] });
+      setPayoutWebhookData({ url: "", events: [] });
     } finally {
       setPayoutLoading(false);
     }
   };
 
   const handleInputChange = (field, value) => {
-    if (field === 'events') {
-      setWebhookData(prev => ({
+    if (field === "events") {
+      setWebhookData((prev) => ({
         ...prev,
-        events: value
+        events: value,
       }));
     } else {
-      setWebhookData(prev => ({
+      setWebhookData((prev) => ({
         ...prev,
-        [field]: value
+        [field]: value,
       }));
     }
   };
 
   const handleEventToggle = (eventId) => {
-    setWebhookData(prev => ({
+    setWebhookData((prev) => ({
       ...prev,
       events: prev.events.includes(eventId)
-        ? prev.events.filter(e => e !== eventId)
-        : [...prev.events, eventId]
+        ? prev.events.filter((e) => e !== eventId)
+        : [...prev.events, eventId],
     }));
   };
 
   const handlePayoutEventToggle = (eventId) => {
-    setPayoutWebhookData(prev => ({
+    setPayoutWebhookData((prev) => ({
       ...prev,
       events: prev.events.includes(eventId)
-        ? prev.events.filter(e => e !== eventId)
-        : [...prev.events, eventId]
+        ? prev.events.filter((e) => e !== eventId)
+        : [...prev.events, eventId],
     }));
   };
 
   const handleConfigure = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     try {
       // Validate required fields
       if (!webhookData.url || webhookData.events.length === 0) {
-        throw new Error('Please fill in all required fields');
+        throw new Error("Please fill in all required fields");
       }
 
       // Validate URL format
       try {
         new URL(webhookData.url);
       } catch {
-        throw new Error('Please enter a valid URL');
+        throw new Error("Please enter a valid URL");
       }
 
       const result = await webhookService.configureWebhook(webhookData);
-      setSuccess('Webhook configured successfully!');
-      setToast({ message: 'Webhook configured successfully!', type: 'success' });
-      
+      setSuccess("Webhook configured successfully!");
+      setToast({
+        message: "Webhook configured successfully!",
+        type: "success",
+      });
+
       // Update webhook config from response if available
       if (result && result.webhook_url) {
         setWebhookConfig(result);
         setWebhookData({
-          url: result.webhook_url || '',
-          events: result.webhook_events || []
+          url: result.webhook_url || "",
+          events: result.webhook_events || [],
         });
       }
-      
+
       // Refresh the webhook config to get latest state
       await fetchWebhookConfig();
       setShowConfigForm(false);
     } catch (error) {
       setError(error.message);
-      setToast({ message: error.message, type: 'error' });
+      setToast({ message: error.message, type: "error" });
     } finally {
       setLoading(false);
     }
@@ -162,41 +191,46 @@ const WebhookPage = () => {
   const handlePayoutConfigure = async (e) => {
     e.preventDefault();
     setPayoutLoading(true);
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     try {
       // Validate required fields
       if (!payoutWebhookData.url || payoutWebhookData.events.length === 0) {
-        throw new Error('Please fill in all required fields');
+        throw new Error("Please fill in all required fields");
       }
 
       // Validate URL format
       try {
         new URL(payoutWebhookData.url);
       } catch {
-        throw new Error('Please enter a valid URL');
+        throw new Error("Please enter a valid URL");
       }
 
-      const result = await webhookService.configurePayoutWebhook(payoutWebhookData);
-      setSuccess('Payout webhook configured successfully!');
-      setToast({ message: 'Payout webhook configured successfully!', type: 'success' });
+      const result = await webhookService.configurePayoutWebhook(
+        payoutWebhookData
+      );
+      setSuccess("Payout webhook configured successfully!");
+      setToast({
+        message: "Payout webhook configured successfully!",
+        type: "success",
+      });
 
       // Update payout webhook config from response if available
       if (result && result.webhook_url) {
         setPayoutWebhookConfig(result);
         setPayoutWebhookData({
-          url: result.webhook_url || '',
-          events: result.webhook_events || []
+          url: result.webhook_url || "",
+          events: result.webhook_events || [],
         });
       }
-      
+
       // Refresh the payout webhook config to get latest state
       await fetchPayoutWebhookConfig();
       setShowPayoutConfigForm(false);
     } catch (error) {
       setError(error.message);
-      setToast({ message: error.message, type: 'error' });
+      setToast({ message: error.message, type: "error" });
     } finally {
       setPayoutLoading(false);
     }
@@ -205,34 +239,37 @@ const WebhookPage = () => {
   const handleDelete = async () => {
     const hasPaymentWebhook = webhookConfig !== null;
     const hasPayoutWebhook = payoutWebhookConfig !== null;
-    
+
     if (!hasPaymentWebhook && !hasPayoutWebhook) {
-      setToast({ message: 'No webhooks configured to delete', type: 'error' });
+      setToast({ message: "No webhooks configured to delete", type: "error" });
       return;
     }
 
-    const confirmMessage = hasPaymentWebhook && hasPayoutWebhook
-      ? 'Are you sure you want to delete both payment and payout webhook configurations?'
-      : hasPaymentWebhook
-      ? 'Are you sure you want to delete the payment webhook configuration?'
-      : 'Are you sure you want to delete the payout webhook configuration?';
+    const confirmMessage =
+      hasPaymentWebhook && hasPayoutWebhook
+        ? "Are you sure you want to delete both payment and payout webhook configurations?"
+        : hasPaymentWebhook
+        ? "Are you sure you want to delete the payment webhook configuration?"
+        : "Are you sure you want to delete the payout webhook configuration?";
 
     if (window.confirm(confirmMessage)) {
       setLoading(true);
       setPayoutLoading(true);
-      setError('');
-      setSuccess('');
-      
+      setError("");
+      setSuccess("");
+
       try {
         // Delete payment webhook if it exists
         if (hasPaymentWebhook) {
           try {
             await webhookService.deleteWebhook();
             setWebhookConfig(null);
-            setWebhookData({ url: '', events: [] });
+            setWebhookData({ url: "", events: [] });
           } catch (error) {
-            console.error('Error deleting payment webhook:', error);
-            throw new Error(`Failed to delete payment webhook: ${error.message}`);
+            console.error("Error deleting payment webhook:", error);
+            throw new Error(
+              `Failed to delete payment webhook: ${error.message}`
+            );
           }
         }
 
@@ -241,30 +278,30 @@ const WebhookPage = () => {
           try {
             await webhookService.deletePayoutWebhook();
             setPayoutWebhookConfig(null);
-            setPayoutWebhookData({ url: '', events: [] });
+            setPayoutWebhookData({ url: "", events: [] });
           } catch (error) {
-            console.error('Error deleting payout webhook:', error);
-            throw new Error(`Failed to delete payout webhook: ${error.message}`);
+            console.error("Error deleting payout webhook:", error);
+            throw new Error(
+              `Failed to delete payout webhook: ${error.message}`
+            );
           }
         }
 
-        const successMessage = hasPaymentWebhook && hasPayoutWebhook
-          ? 'Both webhook configurations deleted successfully!'
-          : hasPaymentWebhook
-          ? 'Payment webhook configuration deleted successfully!'
-          : 'Payout webhook configuration deleted successfully!';
+        const successMessage =
+          hasPaymentWebhook && hasPayoutWebhook
+            ? "Both webhook configurations deleted successfully!"
+            : hasPaymentWebhook
+            ? "Payment webhook configuration deleted successfully!"
+            : "Payout webhook configuration deleted successfully!";
 
         setSuccess(successMessage);
-        setToast({ message: successMessage, type: 'success' });
-        
+        setToast({ message: successMessage, type: "success" });
+
         // Refresh to ensure UI is updated
-        await Promise.all([
-          fetchWebhookConfig(),
-          fetchPayoutWebhookConfig()
-        ]);
+        await Promise.all([fetchWebhookConfig(), fetchPayoutWebhookConfig()]);
       } catch (error) {
         setError(error.message);
-        setToast({ message: error.message, type: 'error' });
+        setToast({ message: error.message, type: "error" });
       } finally {
         setLoading(false);
         setPayoutLoading(false);
@@ -277,15 +314,24 @@ const WebhookPage = () => {
     try {
       const result = await webhookService.testWebhook();
       if (result && result.success) {
-        setSuccess('Test webhook sent successfully!');
-        setToast({ message: 'Test webhook sent successfully!', type: 'success' });
+        setSuccess("Test webhook sent successfully!");
+        setToast({
+          message: "Test webhook sent successfully!",
+          type: "success",
+        });
       } else {
-        setError(result?.error || 'Test webhook failed');
-        setToast({ message: result?.error || 'Test webhook failed', type: 'error' });
+        setError(result?.error || "Test webhook failed");
+        setToast({
+          message: result?.error || "Test webhook failed",
+          type: "error",
+        });
       }
     } catch (error) {
-      setError(error.message || 'Failed to send test webhook');
-      setToast({ message: error.message || 'Failed to send test webhook', type: 'error' });
+      setError(error.message || "Failed to send test webhook");
+      setToast({
+        message: error.message || "Failed to send test webhook",
+        type: "error",
+      });
     } finally {
       setLoading(false);
     }
@@ -296,15 +342,24 @@ const WebhookPage = () => {
     try {
       const result = await webhookService.testPayoutWebhook();
       if (result && result.success) {
-        setSuccess('Test payout webhook sent successfully!');
-        setToast({ message: 'Test payout webhook sent successfully!', type: 'success' });
+        setSuccess("Test payout webhook sent successfully!");
+        setToast({
+          message: "Test payout webhook sent successfully!",
+          type: "success",
+        });
       } else {
-        setError(result?.error || 'Test payout webhook failed');
-        setToast({ message: result?.error || 'Test payout webhook failed', type: 'error' });
+        setError(result?.error || "Test payout webhook failed");
+        setToast({
+          message: result?.error || "Test payout webhook failed",
+          type: "error",
+        });
       }
     } catch (error) {
-      setError(error.message || 'Failed to send test payout webhook');
-      setToast({ message: error.message || 'Failed to send test payout webhook', type: 'error' });
+      setError(error.message || "Failed to send test payout webhook");
+      setToast({
+        message: error.message || "Failed to send test payout webhook",
+        type: "error",
+      });
     } finally {
       setPayoutLoading(false);
     }
@@ -312,372 +367,772 @@ const WebhookPage = () => {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    setToast({ message: 'Copied to clipboard!', type: 'success' });
+    setToast({ message: "Copied to clipboard!", type: "success" });
+  };
+
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.5,
+        ease: "easeOut",
+      },
+    },
   };
 
   return (
-    <div className="page-container with-sidebar webhook-page">
-      <Sidebar />
-      <main className="page-main">
-        <div className="page-header scroll-header">
-          <h1>Webhook Configuration</h1>
-          <p>Configure your webhooks to receive real-time notifications</p>
-          <div className="webhook-info">
-            
-          </div>
-          <div className="header-actions">
-            <a href="/admin/webhooks/how-to" className="secondary-btn" style={{ marginRight: 12 }}>
-              How to setup
-            </a>
-            {!webhookConfig ? (
-              <button 
-                onClick={() => setShowConfigForm(!showConfigForm)} 
-                className="primary-btn"
-              >
-                <FiPlus className="icon" />
-                {showConfigForm ? 'Cancel' : 'Configure Webhook'}
-              </button>
-            ) : (
-              <div className="webhook-actions">
-                <button 
-                  onClick={handleTest}
-                  className="secondary-btn"
-                >
-                  <FiPlay className="icon" />
-                  Test Webhook
-                </button>
-                <button 
-                  onClick={() => setShowConfigForm(true)}
-                  className="secondary-btn"
-                >
-                  <FiEdit className="icon" />
-                  Edit Configuration
-                </button>
-                <button 
-                  onClick={handleDelete}
-                  className="danger-btn"
-                >
-                  <FiTrash2 className="icon" />
-                  Delete Webhook
-                </button>
-              </div>
-            )}
-            {/* Payout webhook actions */}
-            {!payoutWebhookConfig ? (
-              <button 
-                onClick={() => setShowPayoutConfigForm(!showPayoutConfigForm)} 
-                className="primary-btn"
-                style={{ marginLeft: 12 }}
-              >
-                <FiPlus className="icon" />
-                {showPayoutConfigForm ? 'Cancel' : 'Configure Payout Webhook'}
-              </button>
-            ) : (
-              <div className="webhook-actions" style={{ marginLeft: 12 }}>
-                <button 
-                  onClick={handlePayoutTest}
-                  className="secondary-btn"
-                >
-                  <FiPlay className="icon" />
-                  Test Payout Webhook
-                </button>
-                <button 
-                  onClick={() => setShowPayoutConfigForm(true)}
-                  className="secondary-btn"
-                >
-                  <FiEdit className="icon" />
-                  Edit Payout Webhook
-                </button>
-              </div>
-            )}
-          </div>
+    <div className="min-h-screen bg-[#1F383D]">
+      <Navbar />
+
+      {/* Split Layout: Top Half (Graphic) + Bottom Half (Data) */}
+      <div className="relative">
+        {/* Fixed X Graphic - Background Layer */}
+        <div
+          className="fixed inset-0 flex items-center justify-center pointer-events-none z-0"
+          style={{ top: "4rem" }}
+        >
+          <img
+            src="/X.png"
+            alt="X graphic"
+            className="object-contain hidden sm:block"
+            style={{
+              filter: "drop-shadow(0 0 40px rgba(94, 234, 212, 0.5))",
+              width: "120%",
+              height: "85%",
+              maxWidth: "none",
+              maxHeight: "none",
+            }}
+          />
+          <img
+            src="/X.png"
+            alt="X graphic"
+            className="object-contain sm:hidden"
+            style={{
+              filter: "drop-shadow(0 0 20px rgba(94, 234, 212, 0.5))",
+              width: "100%",
+              height: "70%",
+              maxWidth: "none",
+              maxHeight: "none",
+            }}
+          />
         </div>
-        
-        <div className="page-content">
-          {error && <div className="error-message">{error}</div>}
-          {success && <div className="success-message">{success}</div>}
-          
-          {showConfigForm && (
-            <div className="webhook-form-card">
-              <h3>Configure Webhook</h3>
-              <form onSubmit={handleConfigure} className="webhook-form">
-                <div className="form-group">
-                  <label>Webhook URL *</label>
-                  <input
-                    type="url"
-                    value={webhookData.url}
-                    onChange={(e) => handleInputChange('url', e.target.value)}
-                    required
-                    placeholder="https://yourdomain.com/api/webhooks/payment"
-                  />
-                </div>
 
-                <div className="form-group">
-                  <label>Events to Subscribe *</label>
-                  <div className="events-grid">
-                    {webhookEvents.map(event => (
-                      <div key={event.id} className="event-option">
-                        <label className="checkbox-container">
-                          <input
-                            type="checkbox"
-                            checked={webhookData.events.includes(event.id)}
-                            onChange={() => handleEventToggle(event.id)}
-                          />
-                          <span className="checkmark"></span>
-                          <div className="event-info">
-                            <div className="event-label">{event.label}</div>
-                            <div className="event-description">{event.description}</div>
-                          </div>
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="form-actions">
-                  <button 
-                    type="button" 
-                    onClick={() => {
-                      setShowConfigForm(false);
-                      setWebhookData({ url: '', events: [] });
-                    }} 
-                    className="secondary-btn"
-                  >
-                    Cancel
-                  </button>
-                  <button type="submit" disabled={loading} className="primary-btn">
-                    {loading ? 'Configuring...' : 'Configure Webhook'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-          {showPayoutConfigForm && (
-            <div className="webhook-form-card">
-              <h3>Configure Payout Webhook</h3>
-              <form onSubmit={handlePayoutConfigure} className="webhook-form">
-                <div className="form-group">
-                  <label>Payout Webhook URL *</label>
-                  <input
-                    type="url"
-                    value={payoutWebhookData.url}
-                    onChange={(e) => setPayoutWebhookData(prev => ({ ...prev, url: e.target.value }))}
-                    required
-                    placeholder="https://yourdomain.com/api/webhooks/payout"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Payout Events to Subscribe *</label>
-                  <div className="events-grid">
-                    {payoutEvents.map(event => (
-                      <div key={event.id} className="event-option">
-                        <label className="checkbox-container">
-                          <input
-                            type="checkbox"
-                            checked={payoutWebhookData.events.includes(event.id)}
-                            onChange={() => handlePayoutEventToggle(event.id)}
-                          />
-                          <span className="checkmark"></span>
-                          <div className="event-info">
-                            <div className="event-label">{event.label}</div>
-                            <div className="event-description">{event.description}</div>
-                          </div>
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="form-actions">
-                  <button 
-                    type="button" 
-                    onClick={() => {
-                      setShowPayoutConfigForm(false);
-                      setPayoutWebhookData({ url: '', events: [] });
-                    }} 
-                    className="secondary-btn"
-                  >
-                    Cancel
-                  </button>
-                  <button type="submit" disabled={payoutLoading} className="primary-btn">
-                    {payoutLoading ? 'Configuring...' : 'Configure Payout Webhook'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-          
-          {(loading || payoutLoading) ? (
-            <div className="loading-state">
-              <div className="loading-spinner"></div>
-              <p>Loading webhook configuration...</p>
-            </div>
-          ) : (webhookConfig || payoutWebhookConfig) ? (
-            <div className="webhook-config-display">
-              {/* Payment Webhook Configuration */}
-              {webhookConfig ? (
-                <div className="webhook-card">
-                  <div className="webhook-header">
-                    <div className="webhook-title">
-                      <FiLink className="webhook-icon" />
-                      <h4>Payment Webhook Configuration</h4>
-                      <span className={`status-badge ${webhookConfig.webhook_enabled ? 'active' : 'inactive'}`}>
-                        {webhookConfig.webhook_enabled ? 'Enabled' : 'Disabled'}
-                      </span>
+        {/* Scrollable Content Section - Overlays on top */}
+        <section className="relative z-10 min-h-screen bg-transparent">
+          {/* Content Section - Scrolls over image */}
+          <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-[1400px] mx-auto">
+              <main className="space-y-6 sm:space-y-8">
+                {/* Header */}
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, ease: "easeOut" }}
+                  className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8 mb-6 sm:mb-8"
+                >
+                  <div className="flex flex-col gap-4">
+                    <div>
+                      <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white mb-3 font-['Albert_Sans']">
+                        Webhook Configuration
+                      </h1>
+                      <p className="text-white/70 text-base sm:text-lg font-['Albert_Sans']">
+                        Configure your webhooks to receive real-time
+                        notifications
+                      </p>
                     </div>
-                  </div>
-                  
-                  <div className="webhook-body">
-                    <div className="webhook-detail">
-                      <label>Webhook URL:</label>
-                      <div className="url-container">
-                        <span className="url-text">{webhookConfig.webhook_url}</span>
-                        <button 
-                          onClick={() => copyToClipboard(webhookConfig.webhook_url)}
-                          className="copy-btn small"
+                    <div className="flex flex-wrap items-center gap-3">
+                      <a
+                        href="/admin/webhooks/how-to"
+                        className="bg-bg-secondary text-white border border-accent px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:bg-bg-tertiary hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary"
+                      >
+                        How to setup
+                      </a>
+                      {!webhookConfig ? (
+                        <motion.button
+                          onClick={() => setShowConfigForm(!showConfigForm)}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 focus:ring-offset-bg-primary"
                         >
-                          <FiCopy />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="webhook-detail">
-                      <label>Webhook Secret:</label>
-                      <div className="secret-container">
-                        <span className="secret-text">
-                          {webhookConfig.webhook_secret ? 
-                            `${webhookConfig.webhook_secret.substring(0, 8)}...` : 
-                            'Not available'
-                          }
-                        </span>
-                        {webhookConfig.webhook_secret && (
-                          <button 
-                            onClick={() => copyToClipboard(webhookConfig.webhook_secret)}
-                            className="copy-btn small"
+                          <FiPlus className="text-base" />
+                          {showConfigForm ? "Cancel" : "Configure Webhook"}
+                        </motion.button>
+                      ) : (
+                        <div className="flex flex-wrap gap-3">
+                          <motion.button
+                            onClick={handleTest}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="bg-bg-secondary text-white border border-accent px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:bg-bg-tertiary hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary"
                           >
-                            <FiCopy />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="webhook-detail">
-                      <label>Subscribed Events:</label>
-                      <div className="events-list">
-                        {webhookConfig.webhook_events?.map(eventId => {
-                          const event = webhookEvents.find(e => e.id === eventId);
-                          return (
-                            <span key={eventId} className="event-tag">
-                              {event ? event.label : eventId}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="webhook-detail">
-                      <label>Retry Attempts:</label>
-                      <span className="webhook-value">{webhookConfig.webhook_retries || 3}</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <div className="empty-icon"><FiLink /></div>
-                  <h3>No Payment Webhook Configured</h3>
-                  <p>Configure your payment webhook to start receiving payment notifications.</p>
-                </div>
-              )}
-
-              {/* Payout Webhook Configuration */}
-              {payoutWebhookConfig ? (
-                <div className="webhook-card" style={{ marginTop: webhookConfig ? 16 : 0 }}>
-                  <div className="webhook-header">
-                    <div className="webhook-title">
-                      <FiLink className="webhook-icon" />
-                      <h4>Payout Webhook Configuration</h4>
-                      <span className={`status-badge ${payoutWebhookConfig.webhook_enabled ? 'active' : 'inactive'}`}>
-                        {payoutWebhookConfig.webhook_enabled ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="webhook-body">
-                    <div className="webhook-detail">
-                      <label>Webhook URL:</label>
-                      <div className="url-container">
-                        <span className="url-text">{payoutWebhookConfig.webhook_url}</span>
-                        <button 
-                          onClick={() => copyToClipboard(payoutWebhookConfig.webhook_url)}
-                          className="copy-btn small"
+                            <FiPlay className="text-base" />
+                            Test Webhook
+                          </motion.button>
+                          <motion.button
+                            onClick={() => setShowConfigForm(true)}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="bg-bg-secondary text-white border border-accent px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:bg-bg-tertiary hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary"
+                          >
+                            <FiEdit className="text-base" />
+                            Edit Configuration
+                          </motion.button>
+                          <motion.button
+                            onClick={handleDelete}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="bg-red-500/20 text-red-400 border border-red-500/30 px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:bg-red-500/30 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-bg-primary"
+                          >
+                            <FiTrash2 className="text-base" />
+                            Delete Webhook
+                          </motion.button>
+                        </div>
+                      )}
+                      {/* Payout webhook actions */}
+                      {!payoutWebhookConfig ? (
+                        <motion.button
+                          onClick={() =>
+                            setShowPayoutConfigForm(!showPayoutConfigForm)
+                          }
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 focus:ring-offset-bg-primary"
                         >
-                          <FiCopy />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="webhook-detail">
-                      <label>Webhook Secret:</label>
-                      <div className="secret-container">
-                        <span className="secret-text">
-                          {payoutWebhookConfig.webhook_secret ? 
-                            `${payoutWebhookConfig.webhook_secret.substring(0, 8)}...` : 
-                            'Not available'
-                          }
-                        </span>
-                        {payoutWebhookConfig.webhook_secret && (
-                          <button 
-                            onClick={() => copyToClipboard(payoutWebhookConfig.webhook_secret)}
-                            className="copy-btn small"
+                          <FiPlus className="text-base" />
+                          {showPayoutConfigForm
+                            ? "Cancel"
+                            : "Configure Payout Webhook"}
+                        </motion.button>
+                      ) : (
+                        <div className="flex flex-wrap gap-3">
+                          <motion.button
+                            onClick={handlePayoutTest}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="bg-bg-secondary text-white border border-accent px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:bg-bg-tertiary hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary"
                           >
-                            <FiCopy />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="webhook-detail">
-                      <label>Subscribed Events:</label>
-                      <div className="events-list">
-                        {payoutWebhookConfig.webhook_events?.map(eventId => {
-                          const event = payoutEvents.find(e => e.id === eventId);
-                          return (
-                            <span key={eventId} className="event-tag">
-                              {event ? event.label : eventId}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="webhook-detail">
-                      <label>Retry Attempts:</label>
-                      <span className="webhook-value">{payoutWebhookConfig.webhook_retries || 3}</span>
+                            <FiPlay className="text-base" />
+                            Test Payout Webhook
+                          </motion.button>
+                          <motion.button
+                            onClick={() => setShowPayoutConfigForm(true)}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="bg-bg-secondary text-white border border-accent px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:bg-bg-tertiary hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary"
+                          >
+                            <FiEdit className="text-base" />
+                            Edit Payout Webhook
+                          </motion.button>
+                        </div>
+                      )}
                     </div>
                   </div>
+                </motion.div>
+
+                <div className="space-y-6">
+                  {/* Error Message */}
+                  {error && (
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-lg p-4"
+                    >
+                      <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <svg
+                          className="w-3 h-3 text-red-400"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                      <p className="text-red-400 text-sm sm:text-base font-medium font-['Albert_Sans'] flex-1">
+                        {error}
+                      </p>
+                    </motion.div>
+                  )}
+
+                  {/* Success Message */}
+                  {success && (
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="flex items-start gap-3 bg-green-500/10 border border-green-500/30 rounded-lg p-4"
+                    >
+                      <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <svg
+                          className="w-3 h-3 text-green-400"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                      <p className="text-green-400 text-sm sm:text-base font-medium font-['Albert_Sans'] flex-1">
+                        {success}
+                      </p>
+                    </motion.div>
+                  )}
+
+                  {showConfigForm && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.3 }}
+                      className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6"
+                    >
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                          <FiLink className="text-accent text-xl" />
+                        </div>
+                        <h3 className="text-lg sm:text-xl font-medium text-white font-['Albert_Sans']">
+                          Configure Webhook
+                        </h3>
+                      </div>
+                      <form onSubmit={handleConfigure} className="space-y-6">
+                        <div>
+                          <label className="block text-white/80 text-sm font-medium font-['Albert_Sans'] mb-2">
+                            Webhook URL <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            type="url"
+                            value={webhookData.url}
+                            onChange={(e) =>
+                              handleInputChange("url", e.target.value)
+                            }
+                            required
+                            placeholder="https://yourdomain.com/api/webhooks/payment"
+                            className="w-full px-4 py-2.5 border-2 border-white/10 rounded-lg bg-bg-secondary text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-white/80 text-sm font-medium font-['Albert_Sans'] mb-3">
+                            Events to Subscribe{" "}
+                            <span className="text-red-400">*</span>
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {webhookEvents.map((event) => (
+                              <div
+                                key={event.id}
+                                className="bg-[#263F43] border border-white/10 rounded-lg p-3 hover:border-accent/30 transition-all duration-200"
+                              >
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={webhookData.events.includes(
+                                      event.id
+                                    )}
+                                    onChange={() => handleEventToggle(event.id)}
+                                    className="mt-1 w-4 h-4 rounded border-white/20 bg-bg-secondary text-accent focus:ring-accent focus:ring-2"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="text-white font-medium text-sm font-['Albert_Sans'] mb-1">
+                                      {event.label}
+                                    </div>
+                                    <div className="text-white/60 text-xs font-['Albert_Sans']">
+                                      {event.description}
+                                    </div>
+                                  </div>
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 justify-end pt-4 border-t border-white/10">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowConfigForm(false);
+                              setWebhookData({ url: "", events: [] });
+                            }}
+                            className="bg-bg-secondary text-white border border-accent px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:bg-bg-tertiary hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={loading}
+                            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            {loading ? (
+                              <>
+                                <FiRefreshCw className="w-4 h-4 animate-spin" />
+                                Configuring...
+                              </>
+                            ) : (
+                              "Configure Webhook"
+                            )}
+                          </button>
+                        </div>
+                      </form>
+                    </motion.div>
+                  )}
+                  {showPayoutConfigForm && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.3 }}
+                      className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6"
+                    >
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                          <FiLink className="text-accent text-xl" />
+                        </div>
+                        <h3 className="text-lg sm:text-xl font-medium text-white font-['Albert_Sans']">
+                          Configure Payout Webhook
+                        </h3>
+                      </div>
+                      <form
+                        onSubmit={handlePayoutConfigure}
+                        className="space-y-6"
+                      >
+                        <div>
+                          <label className="block text-white/80 text-sm font-medium font-['Albert_Sans'] mb-2">
+                            Payout Webhook URL{" "}
+                            <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            type="url"
+                            value={payoutWebhookData.url}
+                            onChange={(e) =>
+                              setPayoutWebhookData((prev) => ({
+                                ...prev,
+                                url: e.target.value,
+                              }))
+                            }
+                            required
+                            placeholder="https://yourdomain.com/api/webhooks/payout"
+                            className="w-full px-4 py-2.5 border-2 border-white/10 rounded-lg bg-bg-secondary text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-white/80 text-sm font-medium font-['Albert_Sans'] mb-3">
+                            Payout Events to Subscribe{" "}
+                            <span className="text-red-400">*</span>
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {payoutEvents.map((event) => (
+                              <div
+                                key={event.id}
+                                className="bg-[#263F43] border border-white/10 rounded-lg p-3 hover:border-accent/30 transition-all duration-200"
+                              >
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={payoutWebhookData.events.includes(
+                                      event.id
+                                    )}
+                                    onChange={() =>
+                                      handlePayoutEventToggle(event.id)
+                                    }
+                                    className="mt-1 w-4 h-4 rounded border-white/20 bg-bg-secondary text-accent focus:ring-accent focus:ring-2"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="text-white font-medium text-sm font-['Albert_Sans'] mb-1">
+                                      {event.label}
+                                    </div>
+                                    <div className="text-white/60 text-xs font-['Albert_Sans']">
+                                      {event.description}
+                                    </div>
+                                  </div>
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 justify-end pt-4 border-t border-white/10">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowPayoutConfigForm(false);
+                              setPayoutWebhookData({ url: "", events: [] });
+                            }}
+                            className="bg-bg-secondary text-white border border-accent px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:bg-bg-tertiary hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={payoutLoading}
+                            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            {payoutLoading ? (
+                              <>
+                                <FiRefreshCw className="w-4 h-4 animate-spin" />
+                                Configuring...
+                              </>
+                            ) : (
+                              "Configure Payout Webhook"
+                            )}
+                          </button>
+                        </div>
+                      </form>
+                    </motion.div>
+                  )}
+
+                  {loading || payoutLoading ? (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex flex-col items-center justify-center py-12 sm:py-16 bg-[#122D32] border border-white/10 rounded-xl"
+                    >
+                      <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mb-4"></div>
+                      <p className="text-white/70 text-sm sm:text-base font-['Albert_Sans']">
+                        Loading webhook configuration...
+                      </p>
+                    </motion.div>
+                  ) : webhookConfig || payoutWebhookConfig ? (
+                    <motion.div
+                      variants={containerVariants}
+                      initial="hidden"
+                      animate="visible"
+                      className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+                    >
+                      {/* Payment Webhook Configuration */}
+                      {webhookConfig ? (
+                        <motion.div
+                          variants={itemVariants}
+                          whileHover={{ scale: 1.02 }}
+                          className="bg-[#122D32] border border-white/10 rounded-xl p-6 hover:border-accent/30 transition-all duration-300 group"
+                        >
+                          <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-lg bg-accent/20 flex items-center justify-center group-hover:bg-accent/30 transition-colors">
+                                <FiLink className="text-accent text-xl" />
+                              </div>
+                              <div>
+                                <h4 className="text-lg font-medium text-white font-['Albert_Sans']">
+                                  Payment Webhook
+                                </h4>
+                                <p className="text-white/60 text-xs font-['Albert_Sans']">
+                                  Transaction notifications
+                                </p>
+                              </div>
+                            </div>
+                            <span
+                              className={`px-3 py-1.5 rounded-md text-xs font-medium font-['Albert_Sans'] ${
+                                webhookConfig.webhook_enabled
+                                  ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                                  : "bg-red-500/20 text-red-400 border border-red-500/30"
+                              }`}
+                            >
+                              {webhookConfig.webhook_enabled
+                                ? "Enabled"
+                                : "Disabled"}
+                            </span>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
+                                Webhook URL
+                              </label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={webhookConfig.webhook_url}
+                                  readOnly
+                                  className="flex-1 px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-accent"
+                                />
+                                <button
+                                  onClick={() =>
+                                    copyToClipboard(webhookConfig.webhook_url)
+                                  }
+                                  className="bg-accent/20 hover:bg-accent/30 text-accent px-4 py-2.5 rounded-lg transition-all duration-200 hover:scale-105"
+                                  title="Copy URL"
+                                >
+                                  <FiCopy className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
+                                Webhook Secret
+                              </label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={
+                                    webhookConfig.webhook_secret
+                                      ? `${webhookConfig.webhook_secret.substring(
+                                          0,
+                                          12
+                                        )}...`
+                                      : "Not available"
+                                  }
+                                  readOnly
+                                  className="flex-1 px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-accent"
+                                />
+                                {webhookConfig.webhook_secret && (
+                                  <button
+                                    onClick={() =>
+                                      copyToClipboard(
+                                        webhookConfig.webhook_secret
+                                      )
+                                    }
+                                    className="bg-accent/20 hover:bg-accent/30 text-accent px-4 py-2.5 rounded-lg transition-all duration-200 hover:scale-105"
+                                    title="Copy Secret"
+                                  >
+                                    <FiCopy className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
+                                Subscribed Events
+                              </label>
+                              <div className="flex flex-wrap gap-2">
+                                {webhookConfig.webhook_events?.map(
+                                  (eventId) => {
+                                    const event = webhookEvents.find(
+                                      (e) => e.id === eventId
+                                    );
+                                    return (
+                                      <span
+                                        key={eventId}
+                                        className="px-3 py-1.5 bg-accent/10 text-accent border border-accent/30 rounded-md text-xs font-medium font-['Albert_Sans']"
+                                      >
+                                        {event ? event.label : eventId}
+                                      </span>
+                                    );
+                                  }
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                              <span className="text-white/60 text-xs font-medium font-['Albert_Sans'] uppercase tracking-wider">
+                                Retry Attempts
+                              </span>
+                              <span className="text-white text-sm font-semibold font-['Albert_Sans']">
+                                {webhookConfig.webhook_retries || 3}
+                              </span>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          variants={itemVariants}
+                          className="bg-[#122D32] border border-white/10 rounded-xl p-8 flex flex-col items-center justify-center min-h-[300px]"
+                        >
+                          <div className="w-16 h-16 rounded-full bg-bg-tertiary flex items-center justify-center mb-4">
+                            <FiLink className="text-accent text-2xl" />
+                          </div>
+                          <h3 className="text-lg font-medium text-white mb-2 font-['Albert_Sans']">
+                            No Payment Webhook Configured
+                          </h3>
+                          <p className="text-white/60 text-sm text-center font-['Albert_Sans']">
+                            Configure your payment webhook to start receiving
+                            payment notifications.
+                          </p>
+                        </motion.div>
+                      )}
+
+                      {/* Payout Webhook Configuration */}
+                      {payoutWebhookConfig ? (
+                        <motion.div
+                          variants={itemVariants}
+                          whileHover={{ scale: 1.02 }}
+                          className="bg-[#122D32] border border-white/10 rounded-xl p-6 hover:border-accent/30 transition-all duration-300 group"
+                        >
+                          <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-lg bg-accent/20 flex items-center justify-center group-hover:bg-accent/30 transition-colors">
+                                <FiLink className="text-accent text-xl" />
+                              </div>
+                              <div>
+                                <h4 className="text-lg font-medium text-white font-['Albert_Sans']">
+                                  Payout Webhook
+                                </h4>
+                                <p className="text-white/60 text-xs font-['Albert_Sans']">
+                                  Payout notifications
+                                </p>
+                              </div>
+                            </div>
+                            <span
+                              className={`px-3 py-1.5 rounded-md text-xs font-medium font-['Albert_Sans'] ${
+                                payoutWebhookConfig.webhook_enabled
+                                  ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                                  : "bg-red-500/20 text-red-400 border border-red-500/30"
+                              }`}
+                            >
+                              {payoutWebhookConfig.webhook_enabled
+                                ? "Enabled"
+                                : "Disabled"}
+                            </span>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
+                                Webhook URL
+                              </label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={payoutWebhookConfig.webhook_url}
+                                  readOnly
+                                  className="flex-1 px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-accent"
+                                />
+                                <button
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      payoutWebhookConfig.webhook_url
+                                    )
+                                  }
+                                  className="bg-accent/20 hover:bg-accent/30 text-accent px-4 py-2.5 rounded-lg transition-all duration-200 hover:scale-105"
+                                  title="Copy URL"
+                                >
+                                  <FiCopy className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
+                                Webhook Secret
+                              </label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={
+                                    payoutWebhookConfig.webhook_secret
+                                      ? `${payoutWebhookConfig.webhook_secret.substring(
+                                          0,
+                                          12
+                                        )}...`
+                                      : "Not available"
+                                  }
+                                  readOnly
+                                  className="flex-1 px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-accent"
+                                />
+                                {payoutWebhookConfig.webhook_secret && (
+                                  <button
+                                    onClick={() =>
+                                      copyToClipboard(
+                                        payoutWebhookConfig.webhook_secret
+                                      )
+                                    }
+                                    className="bg-accent/20 hover:bg-accent/30 text-accent px-4 py-2.5 rounded-lg transition-all duration-200 hover:scale-105"
+                                    title="Copy Secret"
+                                  >
+                                    <FiCopy className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
+                                Subscribed Events
+                              </label>
+                              <div className="flex flex-wrap gap-2">
+                                {payoutWebhookConfig.webhook_events?.map(
+                                  (eventId) => {
+                                    const event = payoutEvents.find(
+                                      (e) => e.id === eventId
+                                    );
+                                    return (
+                                      <span
+                                        key={eventId}
+                                        className="px-3 py-1.5 bg-accent/10 text-accent border border-accent/30 rounded-md text-xs font-medium font-['Albert_Sans']"
+                                      >
+                                        {event ? event.label : eventId}
+                                      </span>
+                                    );
+                                  }
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                              <span className="text-white/60 text-xs font-medium font-['Albert_Sans'] uppercase tracking-wider">
+                                Retry Attempts
+                              </span>
+                              <span className="text-white text-sm font-semibold font-['Albert_Sans']">
+                                {payoutWebhookConfig.webhook_retries || 3}
+                              </span>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          variants={itemVariants}
+                          className="bg-[#122D32] border border-white/10 rounded-xl p-8 flex flex-col items-center justify-center min-h-[300px]"
+                        >
+                          <div className="w-16 h-16 rounded-full bg-bg-tertiary flex items-center justify-center mb-4">
+                            <FiLink className="text-accent text-2xl" />
+                          </div>
+                          <h3 className="text-lg font-medium text-white mb-2 font-['Albert_Sans']">
+                            No Payout Webhook Configured
+                          </h3>
+                          <p className="text-white/60 text-sm text-center font-['Albert_Sans']">
+                            Configure your payout webhook to start receiving
+                            payout notifications.
+                          </p>
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-[#122D32] border border-white/10 rounded-xl p-12 flex flex-col items-center justify-center min-h-[400px]"
+                    >
+                      <div className="w-20 h-20 rounded-full bg-bg-tertiary flex items-center justify-center mb-6">
+                        <FiLink className="text-accent text-3xl" />
+                      </div>
+                      <h3 className="text-xl font-medium text-white mb-3 font-['Albert_Sans']">
+                        No Webhook Configured
+                      </h3>
+                      <p className="text-white/60 text-base text-center max-w-md font-['Albert_Sans']">
+                        Configure your webhook to start receiving payment
+                        notifications.
+                      </p>
+                    </motion.div>
+                  )}
                 </div>
-              ) : (
-                <div className="empty-state" style={{ marginTop: webhookConfig ? 16 : 0 }}>
-                  <div className="empty-icon"><FiLink /></div>
-                  <h3>No Payout Webhook Configured</h3>
-                  <p>Configure your payout webhook to start receiving payout notifications.</p>
-                </div>
-              )}
+              </main>
             </div>
-          ) : (
-            <div className="empty-state">
-              <div className="empty-icon"><FiLink /></div>
-              <h3>No Webhook Configured</h3>
-              <p>Configure your webhook to start receiving payment notifications.</p>
-            </div>
-          )}
-        </div>
-      </main>
-      <Toast 
-        message={toast.message} 
-        type={toast.type} 
-        onClose={() => setToast({ message: '', type: 'success' })}
+          </div>
+        </section>
+      </div>
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ message: "", type: "success" })}
       />
     </div>
   );

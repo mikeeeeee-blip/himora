@@ -21,7 +21,7 @@ import { HiOutlineChartBar } from 'react-icons/hi2';
 import { RiShieldCheckLine } from 'react-icons/ri';
 import { useNavigate } from 'react-router-dom';
 import superadminPaymentService from '../../services/superadminPaymentService';
-import Sidebar from '../Sidebar';
+import Navbar from '../Navbar';
 import ExportCSV from '../ExportCSV';
 import Toast from '../ui/Toast';
 import './PageLayout.css';

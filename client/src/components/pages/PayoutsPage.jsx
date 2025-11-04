@@ -1,4 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import {
+  ComposedChart,
+  Area,
+  Line,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 import {
   FiRefreshCw,
   FiPlus,
@@ -9,11 +22,12 @@ import {
   FiInfo,
   FiPercent,
   FiDollarSign,
-  FiDownload
+  FiDownload,
+  FiTrendingUp,
 } from 'react-icons/fi';
 import { RiMoneyDollarCircleLine } from 'react-icons/ri';
 import paymentService from '../../services/paymentService';
-import Sidebar from '../Sidebar';
+import Navbar from '../Navbar';
 import ExportCSV from '../ExportCSV';
 import Toast from '../ui/Toast';
 import jsPDF from 'jspdf';
@@ -184,10 +198,25 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
     doc.save(`PayoutInvoice_${payout.payoutId}.pdf`);
   };
 
+  const [pagination, setPagination] = useState({});
+  const [chartData, setChartData] = useState([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [filters, setFilters] = useState({
+    page: 1,
+    limit: 20,
+    status: '',
+    start_date: '',
+    end_date: '',
+    search: '',
+    sort_by: 'createdAt',
+    sort_order: 'desc',
+  });
+
   useEffect(() => {
     fetchPayouts();
     loadEligibility();
-  }, []);
+    fetchChartData();
+  }, [filters.page, filters.start_date, filters.end_date]);
 
   const loadEligibility = async () => {
     try {
@@ -205,21 +234,138 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
     }
   };
 
+  // Fetch chart data for analytics
+  const fetchChartData = async () => {
+    setChartLoading(true);
+    try {
+      const endDate =
+        filters.end_date || new Date().toISOString().split('T')[0];
+      const startDate =
+        filters.start_date ||
+        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split('T')[0];
+
+      const result = await paymentService.searchPayouts({
+        startDate,
+        endDate,
+        limit: 1000,
+        sortBy: 'createdAt',
+        sortOrder: 'asc',
+      });
+      const data = result.payouts || [];
+
+      // Group by date
+      const grouped = {};
+      data.forEach((item) => {
+        const date = new Date(
+          item.requestedAt || item.createdAt
+        ).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
+        if (!grouped[date]) {
+          grouped[date] = {
+            date,
+            amount: 0,
+            count: 0,
+            success: 0,
+            failed: 0,
+          };
+        }
+        grouped[date].amount += item.amount || 0;
+        grouped[date].count += 1;
+        if (item.status === 'completed') {
+          grouped[date].success += 1;
+        } else if (item.status === 'failed' || item.status === 'cancelled') {
+          grouped[date].failed += 1;
+        }
+      });
+
+      setChartData(Object.values(grouped));
+    } catch (error) {
+      console.error('Chart data fetch error:', error);
+    } finally {
+      setChartLoading(false);
+    }
+  };
+
   const fetchPayouts = async () => {
     setLoading(true);
     setError('');
 
     try {
-      const data = await paymentService.getPayouts();
+      const data = await paymentService.searchPayouts({
+        page: filters.page,
+        limit: filters.limit,
+        status: filters.status,
+        startDate: filters.start_date,
+        endDate: filters.end_date,
+        search: filters.search,
+        sortBy: filters.sort_by,
+        sortOrder: filters.sort_order,
+      });
       console.log('Payouts data:', data);
       setPayouts(data.payouts || []);
       setPayoutsSummary(data.summary || null);
+      setPagination(data.pagination || {});
     } catch (error) {
       setError(error.message);
       setToast({ message: error.message, type: 'error' });
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFilterChange = (key, value) => {
+    setFilters((prev) => ({
+      ...prev,
+      [key]: value,
+      page: 1,
+    }));
+  };
+
+  const handlePageChange = (newPage) => {
+    setFilters((prev) => ({ ...prev, page: newPage }));
+  };
+
+  const formatCurrencyChart = (value) => {
+    if (value >= 100000) {
+      return `₹${(value / 100000).toFixed(1)}L`;
+    } else if (value >= 1000) {
+      return `₹${(value / 1000).toFixed(1)}K`;
+    }
+    return `₹${value}`;
+  };
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-[#122D32] border border-white/20 rounded-lg p-3 shadow-lg">
+          <p className="text-white font-semibold mb-2 font-['Albert_Sans']">
+            {new Date(label).toLocaleDateString('en-IN', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })}
+          </p>
+          {payload.map((entry, index) => (
+            <p
+              key={index}
+              className="text-white/80 text-sm font-['Albert_Sans']"
+              style={{ color: entry.color }}
+            >
+              {entry.name}:{' '}
+              {entry.name === 'Amount'
+                ? formatCurrency(entry.value)
+                : entry.value}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
   };
 
   // ✅ Fixed: Only format if payouts exist
@@ -390,497 +536,818 @@ const handleInputChange = (field, value) => {
   const getStatusIcon = (status) => {
     switch (status?.toLowerCase()) {
       case 'completed':
-        return <FiCheck className="status-icon" />;
+        return <FiCheck className="w-3 h-3 text-white" />;
       case 'failed':
       case 'cancelled':
       case 'rejected':
-        return <FiX className="status-icon" />;
+        return <FiX className="w-3 h-3 text-white" />;
       case 'requested':
       case 'pending':
       case 'processing':
-        return <FiClock className="status-icon" />;
+        return <FiClock className="w-3 h-3 text-white" />;
       default:
-        return <FiAlertCircle className="status-icon" />;
+        return <FiAlertCircle className="w-3 h-3 text-white" />;
     }
   };
 
   return (
-    <div className="page-container with-sidebar payouts-page">
-      <Sidebar />
-      <main className="page-main">
-        <div className="page-header scroll-header">
+    <div className="min-h-screen bg-[#1F383D]">
+      <Navbar />
+
+      {/* Split Layout: Top Half (Graphic) + Bottom Half (Data) */}
+      <div className="relative">
+        {/* Fixed X Graphic - Background Layer */}
+        <div
+          className="fixed inset-0 flex items-center justify-center pointer-events-none z-0"
+          style={{ top: '4rem' }}
+        >
+          <img
+            src="/X.png"
+            alt="X graphic"
+            className="object-contain hidden sm:block"
+            style={{
+              filter: 'drop-shadow(0 0 40px rgba(94, 234, 212, 0.5))',
+              width: '120%',
+              height: '85%',
+              maxWidth: 'none',
+              maxHeight: 'none',
+            }}
+          />
+          <img
+            src="/X.png"
+            alt="X graphic"
+            className="object-contain sm:hidden"
+            style={{
+              filter: 'drop-shadow(0 0 20px rgba(94, 234, 212, 0.5))',
+              width: '100%',
+              height: '70%',
+              maxWidth: 'none',
+              maxHeight: 'none',
+            }}
+          />
+        </div>
+
+        {/* Scrollable Content Section - Overlays on top */}
+        <section className="relative z-10 min-h-screen bg-transparent">
+          <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-[1400px] mx-auto">
+              <main className="space-y-6 sm:space-y-8">
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, ease: 'easeOut' }}
+                  className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8 mb-6 sm:mb-8"
+                >
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 sm:gap-5">
           <div>
-            <h1><RiMoneyDollarCircleLine /> Payouts Management</h1>
-            <p>Request and track your payout withdrawals</p>
+                      <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white mb-3 font-['Albert_Sans'] flex items-center gap-3">
+                        <RiMoneyDollarCircleLine className="text-accent" />
+                        Payouts Management
+                      </h1>
+                      <p className="text-white/70 text-base sm:text-lg font-['Albert_Sans']">
+                        Request and track your payout withdrawals
+                      </p>
           </div>
-          <div className="header-actions">
+
+                    <div className="flex gap-3 flex-wrap">
             <button
               onClick={() => {
                 fetchPayouts();
                 loadEligibility();
               }}
               disabled={loading}
-              className="refresh-btn"
+                        className="bg-accent hover:bg-bg-tertiary text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              <FiRefreshCw className={loading ? 'spinning' : ''} />
+                        <FiRefreshCw className={loading ? 'animate-spin' : ''} />
               {loading ? 'Loading...' : 'Refresh'}
             </button>
 
-            {/* ✅ Export Button - Only show if payouts exist */}
             {payouts.length > 0 && (
               <ExportCSV
                 data={formatForExport()}
                 filename={`payouts_${new Date().toISOString().split('T')[0]}.csv`}
-                className="export-btn"
+                          className="bg-bg-secondary text-white border border-accent px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:bg-bg-tertiary hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary"
               />
             )}
 
             <button
               onClick={() => setShowRequestForm(!showRequestForm)}
-              className="primary-btn"
+                        className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!eligibility.can_request_payout}
             >
-              {showRequestForm ? <><FiX /> Cancel</> : <><FiPlus /> Request Payout</>}
+                        {showRequestForm ? (
+                          <>
+                            <FiX /> Cancel
+                          </>
+                        ) : (
+                          <>
+                            <FiPlus /> Request Payout
+                          </>
+                        )}
             </button>
           </div>
         </div>
+                </motion.div>
 
-        <div className="page-content">
+                {/* Analytics Chart */}
+                {chartData.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                    className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6"
+                  >
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                        <FiTrendingUp className="text-accent text-xl" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg sm:text-xl font-medium text-white font-['Albert_Sans']">
+                          Payout Analytics
+                        </h3>
+                        <p className="text-white/60 text-xs sm:text-sm font-['Albert_Sans']">
+                          Payout trends over time
+                        </p>
+                      </div>
+                    </div>
+                    {chartLoading ? (
+                      <div className="flex items-center justify-center h-64">
+                        <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <ComposedChart data={chartData}>
+                          <defs>
+                            <linearGradient
+                              id="payoutAmountGradient"
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset="5%"
+                                stopColor="#475C5F"
+                                stopOpacity={0.3}
+                              />
+                              <stop
+                                offset="95%"
+                                stopColor="#475C5F"
+                                stopOpacity={0}
+                              />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#ffffff10"
+                          />
+                          <XAxis
+                            dataKey="date"
+                            tick={{ fill: '#ffffff60', fontSize: 12 }}
+                            tickFormatter={(value) =>
+                              new Date(value).toLocaleDateString('en-IN', {
+                                month: 'short',
+                                day: 'numeric',
+                              })
+                            }
+                            stroke="#ffffff20"
+                          />
+                          <YAxis
+                            yAxisId="amount"
+                            tick={{ fill: '#ffffff60', fontSize: 12 }}
+                            tickFormatter={formatCurrencyChart}
+                            stroke="#ffffff20"
+                          />
+                          <YAxis
+                            yAxisId="count"
+                            orientation="right"
+                            tick={{ fill: '#ffffff60', fontSize: 12 }}
+                            stroke="#ffffff20"
+                          />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend
+                            wrapperStyle={{ paddingTop: '20px' }}
+                            iconType="circle"
+                            formatter={(value) => (
+                              <span className="text-white/80 text-xs font-['Albert_Sans']">
+                                {value}
+                              </span>
+                            )}
+                          />
+                          <Area
+                            yAxisId="amount"
+                            type="monotone"
+                            dataKey="amount"
+                            fill="url(#payoutAmountGradient)"
+                            stroke="#475C5F"
+                            strokeWidth={2}
+                            name="Amount"
+                          />
+                          <Line
+                            yAxisId="count"
+                            type="monotone"
+                            dataKey="count"
+                            stroke="#5EEAD4"
+                            strokeWidth={2}
+                            dot={{ fill: '#5EEAD4', r: 3 }}
+                            name="Count"
+                          />
+                          <Bar
+                            yAxisId="count"
+                            dataKey="success"
+                            fill="#10b981"
+                            name="Success"
+                          />
+                          <Bar
+                            yAxisId="count"
+                            dataKey="failed"
+                            fill="#ef4444"
+                            name="Failed"
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* Filter bar */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.2 }}
+                  className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6"
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <input
+                      className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans'] text-sm"
+                      value={filters.search}
+                      onChange={(e) =>
+                        handleFilterChange('search', e.target.value)
+                      }
+                      placeholder="Search payouts..."
+                    />
+                    <input
+                      type="date"
+                      className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans'] text-sm"
+                      value={filters.start_date}
+                      onChange={(e) =>
+                        handleFilterChange('start_date', e.target.value)
+                      }
+                    />
+                    <input
+                      type="date"
+                      className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans'] text-sm"
+                      value={filters.end_date}
+                      onChange={(e) =>
+                        handleFilterChange('end_date', e.target.value)
+                      }
+                    />
+                    <button
+                      className="w-full sm:w-auto bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={fetchPayouts}
+                      disabled={loading}
+                    >
+                      {loading ? 'Loading...' : 'Apply Filters'}
+                    </button>
+                  </div>
+                </motion.div>
+
           {error && (
-            <div className="error-message">
+                  <div className="bg-red-500/20 border border-red-500/50 text-red-400 px-4 py-3 rounded-lg font-['Albert_Sans'] flex items-center gap-2">
               <FiAlertCircle /> {error}
             </div>
           )}
 
           {/* Balance Summary Cards */}
           {balance && (
-            <div className="balance-cards">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.3 }}
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
+                  >
               {/* Available Wallet Balance */}
-              <div className="balance-card primary">
-                <div className="balance-icon">
-                  <FiDollarSign />
+                    <div className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6 flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-lg bg-accent/20 flex items-center justify-center flex-shrink-0">
+                        <FiDollarSign className="text-accent text-xl" />
                 </div>
-                <div className="balance-content">
-                  <div className="balance-label">Available Wallet Balance</div>
-                  <div className="balance-amount">
+                      <div className="flex-1">
+                        <div className="text-white/60 text-sm font-medium font-['Albert_Sans'] mb-1">
+                          Available Wallet Balance
+                        </div>
+                        <div className="text-white text-2xl font-semibold font-['Albert_Sans'] mb-1">
                     {formatCurrency(balance.balance?.available_balance || 0)} 
                   </div>
-                  <div className="balance-description">
+                        <div className="text-green-400 text-xs font-['Albert_Sans']">
                     ✓ Ready to withdraw
                   </div>
                 </div>
               </div>
 
               {/* Unsettled Balance */}
-              <div className="balance-card warning">
-                <div className="balance-icon">
-                  <FiClock />
+                    <div className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6 flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-lg bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
+                        <FiClock className="text-yellow-400 text-xl" />
                 </div>
-                <div className="balance-content">
-                  <div className="balance-label">Unsettled Balance</div>
-                  <div className="balance-amount">
+                      <div className="flex-1">
+                        <div className="text-white/60 text-sm font-medium font-['Albert_Sans'] mb-1">
+                          Unsettled Balance
+                        </div>
+                        <div className="text-white text-2xl font-semibold font-['Albert_Sans'] mb-1">
                     {formatCurrency(balance.balance?.unsettled_revenue || 0)}
                   </div>
-                  <div className="balance-description">
+                        <div className="text-yellow-400 text-xs font-['Albert_Sans']">
                     ⏳ Waiting for settlement
                   </div>
                 </div>
               </div>
 
               {/* Pending Payouts */}
-              <div className="balance-card tertiary">
-                <div className="balance-icon">
-                  <FiClock />
+                    <div className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6 flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                        <FiClock className="text-blue-400 text-xl" />
                 </div>
-                <div className="balance-content">
-                  <div className="balance-label">Pending Payouts</div>
-                  <div className="balance-amount">
+                      <div className="flex-1">
+                        <div className="text-white/60 text-sm font-medium font-['Albert_Sans'] mb-1">
+                          Pending Payouts
+                        </div>
+                        <div className="text-white text-2xl font-semibold font-['Albert_Sans'] mb-1">
                     {formatCurrency(balance.balance?.pending_payouts || 0)}
                   </div>
-                  <div className="balance-description">
+                        <div className="text-blue-400 text-xs font-['Albert_Sans']">
                     Awaiting processing
                   </div>
                 </div>
               </div>
 
               {/* Total Paid Out */}
-              <div className="balance-card quaternary">
-                <div className="balance-icon">
-                  <FiCheck />
+                    <div className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6 flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-lg bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                        <FiCheck className="text-green-400 text-xl" />
                 </div>
-                <div className="balance-content">
-                  <div className="balance-label">Total Paid Out</div>
-                  <div className="balance-amount">
+                      <div className="flex-1">
+                        <div className="text-white/60 text-sm font-medium font-['Albert_Sans'] mb-1">
+                          Total Paid Out
+                        </div>
+                        <div className="text-white text-2xl font-semibold font-['Albert_Sans'] mb-1">
                     {formatCurrency(balance.balance?.total_paid_out || 0)}
                   </div>
-                  <div className="balance-description">
+                        <div className="text-green-400 text-xs font-['Albert_Sans']">
                     Successfully paid out
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+                  </motion.div>
+                )}
 
-          {/* Settlement Info Banner */}
-          {balance?.settlement_info && (
-            <div className="settlement-info-card">
-              <div className="settlement-header">
-                <FiInfo />
-                <h4>Settlement Information - T+1/2 Policy</h4>
-              </div>
-              <div className="settlement-details">
-                <div className="settlement-stat">
-                  <div className="stat-label">Settled Transactions</div>
-                  <div className="stat-value success">{balance.settlement_info.settled_transactions || 0}</div>
-                </div>
-                <div className="settlement-stat">
-                  <div className="stat-label">Unsettled Transactions</div>
-                  <div className="stat-value warning">{balance.settlement_info.unsettled_transactions || 0}</div>
-                </div>
-                <div className="settlement-stat">
-                  <div className="stat-label">Next Settlement</div>
-                  <div className="stat-value">{balance.settlement_info.next_settlement || 'N/A'}</div>
-                </div>
-              </div>
-              <div className="settlement-policy">
-                <p><strong>Settlement Policy:</strong> T+1/2 settlement  </p>
-                <p><strong>Weekend Policy:</strong> {balance.settlement_info.weekend_policy}</p>
-              </div>
-
-              <div className="settlement-policy">
-                <p><strong>Settlement Policy:</strong> T0 settlement  </p>
-                <p><strong>Description:</strong> {balance.settlement_info.weekend_policy2}</p>
-              </div>
-
-              <div className="settlement-examples">
-                Once you request a payout, the amount will typically start reflecting in your bank the same day.
-                However, due to bank processing delays or if the amount exceeds ₹2 lakh, it may take 24–48 hours to appear in your account, as per bank policies.
-                Please ensure you provide the correct bank account details for smooth processing.
-
-
-                If any available funds are not withdrawn via payout, they will automatically be settled to the provided bank account.
-              </div>
-
-            </div>
-          )}
-
-          {/* Payout Summary Cards */}
-          {payoutsSummary && (
-            <div className="payout-summary-section">
-              <h3><FiPercent /> Payout Statistics</h3>
-              <div className="summary-cards-grid">
-                <div className="summary-stat-card">
-                  <div className="stat-icon"><RiMoneyDollarCircleLine /></div>
-                  <div className="stat-content">
-                    <div className="stat-value">{payoutsSummary.total_payout_requests || 0}</div>
-                    <div className="stat-label">Total Requests</div>
+                {/* Commission Info */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.4 }}
+                  className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6"
+                >
+                  <div className="flex items-start gap-3">
+                    <FiInfo className="text-accent text-xl flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-white font-semibold mb-2 font-['Albert_Sans']">
+                        Payout Charges:
+                      </h4>
+                      <p className="text-white/80 text-sm font-['Albert_Sans']">
+                        {balance?.merchant?.freePayoutsRemaining > 0 && (
+                          <span className="text-green-400">
+                            Under ₹500: FREE ({balance.merchant.freePayoutsRemaining} left) |{' '}
+                          </span>
+                        )}
+                        ₹500-₹1000: Flat ₹30.40 | Above ₹1000: 1.77%
+                      </p>
                   </div>
                 </div>
-
-                <div className="summary-stat-card success">
-                  <div className="stat-icon"><FiCheck /></div>
-                  <div className="stat-content">
-                    <div className="stat-value">{payoutsSummary.completed_payouts || 0}</div>
-                    <div className="stat-label">Completed</div>
-                    <div className="stat-amount">{formatCurrency(payoutsSummary.total_completed)}</div>
-                  </div>
-                </div>
-
-                <div className="summary-stat-card warning">
-                  <div className="stat-icon"><FiClock /></div>
-                  <div className="stat-content">
-                    <div className="stat-value">{payoutsSummary.pending_payouts || 0}</div>
-                    <div className="stat-label">Pending</div>
-                    <div className="stat-amount">{formatCurrency(payoutsSummary.total_pending)}</div>
-                  </div>
-                </div>
-
-                <div className="summary-stat-card info">
-                  <div className="stat-icon"><FiPercent /></div>
-                  <div className="stat-content">
-                    <div className="stat-value">{formatCurrency(payoutsSummary.total_commission_paid)}</div>
-                    <div className="stat-label">Commission Paid</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Commission Info */}
-          <div className="info-message">
-            <FiInfo /> <strong>Payout Charges:</strong>
-            {balance?.merchant?.freePayoutsRemaining > 0 && ` Under ₹500: FREE (${balance.merchant.freePayoutsRemaining} left) | `}
-            ₹500-₹1000: Flat ₹30.40 | Above ₹1000: 1.77%
-          </div>
-
+                </motion.div>
 
           {/* Eligibility Notice */}
           {!eligibility.can_request_payout && (
-            <div className="warning-message">
-              <FiAlertCircle /> <strong>Cannot Request Payout:</strong> {balance?.payout_eligibility?.reason || 'No settled balance available.'}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.5 }}
+                    className="bg-yellow-500/20 border border-yellow-500/50 text-yellow-400 px-4 py-3 rounded-lg font-['Albert_Sans'] flex items-start gap-2"
+                  >
+                    <FiAlertCircle className="text-xl flex-shrink-0 mt-0.5" />
+                    <div>
+                      <strong>Cannot Request Payout:</strong>{' '}
+                      {balance?.payout_eligibility?.reason ||
+                        'No settled balance available.'}
               {balance?.settlement_info?.unsettled_transactions > 0 && (
-                <span> Your unsettled funds will be available after {balance.settlement_info.next_settlement}.</span>
+                        <span>
+                          {' '}
+                          Your unsettled funds will be available after{' '}
+                          {balance.settlement_info.next_settlement}.
+                        </span>
               )}
             </div>
+                  </motion.div>
           )}
 
           {/* Request Form */}
           {showRequestForm && (
-            <div className="request-form-card">
-              <h3><FiPlus /> Request New Payout</h3>
-              <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                    className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8"
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <FiPlus className="text-accent text-xl" />
+                      <h3 className="text-xl font-semibold text-white font-['Albert_Sans']">
+                        Request New Payout
+                      </h3>
+                    </div>
+                    <p className="text-white/70 text-sm mb-6 font-['Albert_Sans']">
                 Select a settlement date to withdraw all transactions settled on that day
-              </p> Request New Payout
+                    </p>
 
-              <form onSubmit={handleRequestPayout} className="payout-form">
+                    <form onSubmit={handleRequestPayout} className="space-y-4">
                 {requestData.amount && (
-                  <div style={{ marginTop: 8, fontSize: 13, color: '#374151' }}>
-                    <strong>Fee preview:</strong> {feePreview.commission ? `₹${feePreview.commission.toFixed(2)} fee — ` : 'No fee — '}
+                        <div className="bg-[#263F43] border border-white/10 rounded-lg p-3 text-sm text-white/80 font-['Albert_Sans']">
+                          <strong>Fee preview:</strong>{' '}
+                          {feePreview.commission
+                            ? `₹${feePreview.commission.toFixed(2)} fee — `
+                            : 'No fee — '}
                     <span>{feePreview.warning || feePreview.note}</span>
                   </div>
                 )}
 
-                <div className="form-group">
-                  <label>Amount (₹) *</label>
+                      <div>
+                        <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                          Amount (₹) *
+                        </label>
                   <input
                     type="number"
                     value={requestData.amount}
-                    onChange={(e) => handleInputChange('amount', e.target.value)}
+                          onChange={(e) =>
+                            handleInputChange('amount', e.target.value)
+                          }
                     required
-                    placeholder={`Max: ${formatCurrency(eligibility.maximum_payout_amount)}`}
+                          placeholder={`Max: ${formatCurrency(
+                            eligibility.maximum_payout_amount
+                          )}`}
                     max={eligibility.maximum_payout_amount} 
                     min="1"
+                          className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
                   />
                 </div>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Transfer Mode *</label>
+                      <div>
+                        <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                          Transfer Mode *
+                        </label>
                     <select
                       value={requestData.transferMode}
                       onChange={(e) => {
                         handleInputChange('transferMode', e.target.value);
                       }}
+                          className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
                     >
                       <option value="upi">UPI</option>
                       <option value="bank_transfer">Bank Transfer</option>
                     </select>
-                  </div>
                 </div>
 
                 {requestData.transferMode === 'upi' ? (
-                  <div className="form-group">
-                    <label>UPI ID *</label>
+                        <div>
+                          <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                            UPI ID *
+                          </label>
                     <input
                       type="text"
                       value={requestData.beneficiaryDetails.upiId}
-                      onChange={(e) => handleInputChange('beneficiaryDetails.upiId', e.target.value)}
+                            onChange={(e) =>
+                              handleInputChange(
+                                'beneficiaryDetails.upiId',
+                                e.target.value
+                              )
+                            }
                       required
                       placeholder="merchant@paytm"
                       pattern="[a-zA-Z0-9._-]+@[a-zA-Z]+"
+                            className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
                     />
-                    <small style={{ fontSize: '12px', color: '#666' }}>
+                          <small className="text-white/60 text-xs mt-1 block font-['Albert_Sans']">
                       Example: merchant@paytm, user@ybl
                     </small>
                   </div>
                 ) : (
                   <>
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label>Account Holder Name *</label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                                Account Holder Name *
+                              </label>
                         <input
                           type="text"
-                          value={requestData.beneficiaryDetails.accountHolderName}
-                          onChange={(e) => handleInputChange('beneficiaryDetails.accountHolderName', e.target.value)}
+                                value={
+                                  requestData.beneficiaryDetails
+                                    .accountHolderName
+                                }
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    'beneficiaryDetails.accountHolderName',
+                                    e.target.value
+                                  )
+                                }
                           required
                           placeholder="Full name as per bank"
+                                className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
                         />
                       </div>
 
-                      <div className="form-group">
-                        <label>Account Number *</label>
+                            <div>
+                              <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                                Account Number *
+                              </label>
                         <input
                           type="text"
-                          value={requestData.beneficiaryDetails.accountNumber}
-                          onChange={(e) => handleInputChange('beneficiaryDetails.accountNumber', e.target.value)}
+                                value={
+                                  requestData.beneficiaryDetails.accountNumber
+                                }
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    'beneficiaryDetails.accountNumber',
+                                    e.target.value
+                                  )
+                                }
                           required
                           placeholder="1234567890123456"
                           minLength="9"
                           maxLength="18"
+                                className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
                         />
                       </div>
                     </div>
 
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label>IFSC Code *</label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                                IFSC Code *
+                              </label>
                         <input
                           type="text"
-                          value={requestData.beneficiaryDetails.ifscCode}
-                          onChange={(e) => handleInputChange('beneficiaryDetails.ifscCode', e.target.value.toUpperCase())}
+                                value={
+                                  requestData.beneficiaryDetails.ifscCode
+                                }
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    'beneficiaryDetails.ifscCode',
+                                    e.target.value.toUpperCase()
+                                  )
+                                }
                           required
                           placeholder="SBIN0001234"
                           pattern="[A-Z]{4}0[A-Z0-9]{6}"
                           maxLength="11"
+                                className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
                         />
                       </div>
 
-                      <div className="form-group">
-                        <label>Bank Name</label>
+                            <div>
+                              <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                                Bank Name
+                              </label>
                         <input
                           type="text"
-                          value={requestData.beneficiaryDetails.bankName}
-                          onChange={(e) => handleInputChange('beneficiaryDetails.bankName', e.target.value)}
+                                value={
+                                  requestData.beneficiaryDetails.bankName
+                                }
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    'beneficiaryDetails.bankName',
+                                    e.target.value
+                                  )
+                                }
                           placeholder="State Bank of India"
+                                className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
                         />
                       </div>
                     </div>
 
-                    <div className="form-group">
-                      <label>Branch Name</label>
+                          <div>
+                            <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                              Branch Name
+                            </label>
                       <input
                         type="text"
-                        value={requestData.beneficiaryDetails.branchName}
-                        onChange={(e) => handleInputChange('beneficiaryDetails.branchName', e.target.value)}
+                              value={
+                                requestData.beneficiaryDetails.branchName
+                              }
+                              onChange={(e) =>
+                                handleInputChange(
+                                  'beneficiaryDetails.branchName',
+                                  e.target.value
+                                )
+                              }
                         placeholder="Katraj Branch"
+                              className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
                       />
                     </div>
                   </>
                 )}
 
-                <div className="form-group">
-                  <label>Notes</label>
+                      <div>
+                        <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                          Notes
+                        </label>
                   <textarea
                     value={requestData.notes}
-                    onChange={(e) => handleInputChange('notes', e.target.value)}
+                          onChange={(e) =>
+                            handleInputChange('notes', e.target.value)
+                          }
                     placeholder="Optional: Add notes for this payout"
                     rows="3"
+                          className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans'] resize-none"
                   />
                 </div>
 
-                <div className="form-actions">
+                      <div className="flex gap-3 pt-4">
                   <button
                     type="button"
                     onClick={() => {
                       setShowRequestForm(false);
                       resetForm();
                     }}
-                    className="secondary-btn"
+                          className="px-6 py-2.5 bg-[#263F43] hover:bg-[#263F43]/80 text-white rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 border border-white/10"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={requestLoading || !eligibility.can_request_payout}
-                    className="primary-btn"
-                  >
-                    {requestLoading ? 'Processing...' : 'Submit Payout Request'}
+                          disabled={
+                            requestLoading || !eligibility.can_request_payout
+                          }
+                          className="px-6 py-2.5 bg-accent hover:bg-accent/90 text-white rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {requestLoading
+                            ? 'Processing...'
+                            : 'Submit Payout Request'}
                   </button>
                 </div>
               </form>
-            </div>
+                  </motion.div>
           )}
 
 
           {loading ? (
-            <div className="loading-state">
-              <div className="loading-spinner"></div>
-              <p>Loading payouts...</p>
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <div className="w-16 h-16 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
+                    <p className="mt-4 text-white/70 font-['Albert_Sans']">
+                      Loading payouts...
+                    </p>
             </div>
-          ) : (
-            <div className="payouts-container">
-              {payouts.length > 0 ? (
-                <>
-                  <h3><FiClock /> Payout History</h3>
-                  <div className="payouts-grid">
+                ) : payouts.length > 0 ? (
+                  <div className="bg-[#122D32] border border-white/10 rounded-xl overflow-auto shadow-lg">
+                    <table className="w-full border-collapse">
+                      <thead className="bg-green-600/20 sticky top-0 z-10">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                            Payout ID
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                            Amount
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                            Net Amount
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                            Commission
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                            Status
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                            Transfer Mode
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                            Requested At
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-[#263F43]">
                     {payouts.map((payout, index) => (
-                      <div key={payout.payoutId || index} className="payout-card">
-                        <div className="payout-header">
-                          <div className="payout-id">
+                          <tr
+                            key={payout.payoutId || index}
+                            className="hover:bg-green-600/10 transition-colors duration-150"
+                          >
+                            <td className="px-4 py-3 text-sm text-white border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
                             {payout.payoutId || `PAYOUT-${index + 1}`}
-                          </div>
-                          <div className={`payout-status status-${(payout.status || 'pending').toLowerCase()}`}>
-                            {getStatusIcon(payout.status)}
-                            {payout.status || 'Pending'}
-                          </div>
-                        </div>
-
-                        <div className="payout-body">
-                          <div className="payout-amount">
+                            </td>
+                            <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
                             {formatCurrency(payout.amount)}
-                          </div>
-
-                          <div className="payout-details">
-                            <div className="detail-row">
-                              <span className="detail-label">Net Amount:</span>
-                              <span className="detail-value" style={{ color: '#10b981', fontWeight: 600 }}>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-green-400 font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
                                 {formatCurrency(payout.netAmount)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                              {formatCurrency(payout.commission)}
+                            </td>
+                            <td className="px-4 py-3 text-sm border-b border-white/10 whitespace-nowrap">
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold uppercase font-['Albert_Sans'] ${
+                                  payout.status === 'completed'
+                                    ? 'bg-green-500 text-white'
+                                    : payout.status === 'rejected'
+                                    ? 'bg-amber-500 text-white'
+                                    : payout.status === 'failed' ||
+                                      payout.status === 'cancelled'
+                                    ? 'bg-red-500 text-white'
+                                    : payout.status === 'requested' ||
+                                      payout.status === 'pending' ||
+                                      payout.status === 'processing'
+                                    ? 'bg-yellow-500 text-white'
+                                    : 'bg-gray-500 text-white'
+                                }`}
+                              >
+                                {getStatusIcon(payout.status)}
+                                <span>{payout.status || 'Pending'}</span>
                               </span>
-                            </div>
-                            <div className="detail-row">
-                              <span className="detail-label">Commission:</span>
-                              <span className="detail-value">{formatCurrency(payout.commission)}</span>
-                            </div>
-                            <div className="detail-row">
-                              <span className="detail-label">Mode:</span>
-                              <span className="detail-value">
-                                {payout.transferMode === 'bank_transfer' ? 'Bank Transfer' : 'UPI'}
-                              </span>
-                            </div>
-                            <div className="detail-row">
-                              <span className="detail-label">Requested:</span>
-                              <span className="detail-value">{formatDate(payout.requestedAt)}</span>
-                            </div>
-
-                            {payout.utr && (
-                              <div className="detail-row">
-                                <span className="detail-label">UTR:</span>
-                                <span className="detail-value">{payout.utr}</span>
-                              </div>
-                            )}
-
-                            {payout.adminNotes && (
-                              <div className="detail-row">
-                                <span className="detail-label">Notes:</span>
-                                <span className="detail-value">{payout.adminNotes}</span>
-                              </div>
-                            )}
-
-                            {/* ✅ Download Invoice Button - visible only if payout status is 'approved' or 'pending' or 'completed' */}
-                            {(payout.status === 'approved' || payout.status === 'pending' || payout.status === 'completed') && (
-                              <div className="invoice-btn-wrapper">
+                            </td>
+                            <td className="px-4 py-3 text-sm text-white border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                              {payout.transferMode === 'bank_transfer'
+                                ? 'Bank Transfer'
+                                : 'UPI'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-white/90 border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                              {formatDate(payout.requestedAt)}
+                            </td>
+                            <td className="px-4 py-3 text-sm border-b border-white/10 whitespace-nowrap">
+                              {(payout.status === 'approved' ||
+                                payout.status === 'pending' ||
+                                payout.status === 'completed') && (
                                 <button
-                                  className="primary-btn"
                                   onClick={() => downloadInvoicePDF(payout)}
+                                  className="px-3 py-1.5 bg-accent hover:bg-accent/90 text-white rounded-lg text-xs font-medium font-['Albert_Sans'] flex items-center gap-1.5 transition-all duration-200"
                                 >
-                                  <FiDownload /> Download Invoice
+                                  <FiDownload className="text-xs" />
+                                  Invoice
                                 </button>
-                              </div>
                             )}
-                          </div>
-                        </div>
-                      </div>
+                            </td>
+                          </tr>
                     ))}
+                      </tbody>
+                    </table>
                   </div>
-                </>
-              ) : (
-                <div className="empty-state">
-                  <div className="empty-icon"><RiMoneyDollarCircleLine /></div>
-                  <h3>No Payouts Found</h3>
-                  <p>No payout requests have been made yet.</p>
+                ) : (
+                  <div className="bg-[#122D32] border border-white/10 rounded-xl p-12 text-center">
+                    <RiMoneyDollarCircleLine className="text-6xl text-white/20 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-white mb-2 font-['Albert_Sans']">
+                      No Payouts Found
+                    </h3>
+                    <p className="text-white/70 mb-6 font-['Albert_Sans']">
+                      No payout requests have been made yet.
+                    </p>
                   <button
                     onClick={() => setShowRequestForm(true)}
-                    className="primary-btn"
+                      className="bg-accent hover:bg-accent/90 text-white px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!eligibility.can_request_payout}
                   >
                     Request Your First Payout
                   </button>
                 </div>
               )}
+
+                {/* Pagination */}
+                {pagination.totalPages > 1 && (
+                  <div className="flex items-center justify-between bg-[#122D32] border border-white/10 rounded-xl p-4">
+                    <p className="text-white/70 text-sm font-['Albert_Sans']">
+                      Page {pagination.currentPage || filters.page} of{' '}
+                      {pagination.totalPages}
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handlePageChange(filters.page - 1)}
+                        disabled={filters.page === 1}
+                        className="px-4 py-2 bg-accent hover:bg-accent/90 text-white rounded-lg font-medium font-['Albert_Sans'] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => handlePageChange(filters.page + 1)}
+                        disabled={filters.page >= (pagination.totalPages || 1)}
+                        className="px-4 py-2 bg-accent hover:bg-accent/90 text-white rounded-lg font-medium font-['Albert_Sans'] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                      >
+                        Next
+                      </button>
             </div>
-          )}
         </div>
+                )}
       </main>
+            </div>
+          </div>
+        </section>
+      </div>
       <Toast
         message={toast.message}
         type={toast.type}
