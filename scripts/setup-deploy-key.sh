@@ -1,0 +1,61 @@
+#!/bin/bash
+# Setup script to generate SSH deploy key for GitHub Actions
+
+set -e
+
+KEY_NAME="github-actions-deploy-key"
+KEY_PATH="$HOME/.ssh/$KEY_NAME"
+
+echo "🔑 Generating SSH deploy key for GitHub Actions..."
+
+# Generate SSH key pair
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f "$KEY_PATH" -N ""
+
+echo ""
+echo "✅ SSH key pair generated!"
+echo "Private key: $KEY_PATH"
+echo "Public key: $KEY_PATH.pub"
+echo ""
+
+# Display public key for GitHub Deploy Key
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📋 GITHUB DEPLOY KEY SETUP INSTRUCTIONS"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "1. Copy the PUBLIC KEY below and add it as a Deploy Key in GitHub:"
+echo "   Repository → Settings → Deploy keys → Add deploy key"
+echo ""
+echo "   Title: Production Server Deploy Key"
+echo "   Key: (paste public key below)"
+echo "   ☑️  Allow write access (if needed for tags)"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+cat "$KEY_PATH.pub"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "2. Add the PRIVATE KEY to GitHub Secrets:"
+echo "   Repository → Settings → Secrets and variables → Actions → New repository secret"
+echo ""
+echo "   Name: SSH_PRIVATE_KEY"
+echo "   Value: (paste private key below)"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+cat "$KEY_PATH"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "3. Add the public key to the server's authorized_keys:"
+echo ""
+echo "   Run this command (replace with your actual SSH key for server access):"
+echo "   ssh -i my-new-key.pem ec2-user@ec2-13-50-107-204.eu-north-1.compute.amazonaws.com"
+echo "   cat >> ~/.ssh/authorized_keys << 'EOF'"
+echo "   $(cat $KEY_PATH.pub)"
+echo "   EOF"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "✅ Setup complete! The deploy key is ready to use."
+echo "⚠️  Keep the private key secure and never commit it to the repository!"
