@@ -170,19 +170,50 @@ export default function SuperadminMerchantsPage() {
   }, [query.status, query.includeInactive]);
 
   return (
-    <div className="page-container with-sidebar">
-      <Sidebar />
-      <main className="page-main">
-        <div className="page-header">
-          <h1>Merchants</h1>
-          {data.summary && (
-            <div className="summary">
-              <div>Total: {data.summary.total_merchants}</div>
-              <div>Active: {data.summary.active_merchants}</div>
-              <div>Inactive: {data.summary.inactive_merchants}</div>
-            </div>
-          )}
-        </div>
+    <div className="min-h-screen bg-[#001D22] relative">
+      {/* Background Image */}
+      <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0">
+        <img
+          src="/bgdashboard.png"
+          alt="Background"
+          className="object-cover w-full h-full opacity-10"
+          style={{
+            maxWidth: "none",
+            maxHeight: "none",
+          }}
+        />
+      </div>
+
+      <Navbar />
+      
+      {/* Scrollable Content Section */}
+      <section className="relative z-10 min-h-screen bg-transparent">
+        <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-[1400px] mx-auto">
+            <main className="space-y-6 sm:space-y-8">
+              {/* Header */}
+              <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8 mb-6 sm:mb-8">
+                <div className="flex justify-between items-start gap-5 flex-wrap">
+                  <div>
+                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white mb-3 font-['Albert_Sans']">
+                      Merchants
+                    </h1>
+                    {data.summary && (
+                      <div className="flex gap-4 mt-2">
+                        <span className="text-white/70 text-sm font-['Albert_Sans']">
+                          Total: <span className="text-white font-medium">{data.summary.total_merchants}</span>
+                        </span>
+                        <span className="text-white/70 text-sm font-['Albert_Sans']">
+                          Active: <span className="text-green-400 font-medium">{data.summary.active_merchants}</span>
+                        </span>
+                        <span className="text-white/70 text-sm font-['Albert_Sans']">
+                          Inactive: <span className="text-yellow-400 font-medium">{data.summary.inactive_merchants}</span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
 
         <div className="toolbar">
           <input
@@ -259,9 +290,12 @@ export default function SuperadminMerchantsPage() {
                 </div>
               </div>
             ))}
+              </div>
+            )}
+            </main>
           </div>
-        )}
-      </main>
+        </div>
+      </section>
     </div>
   );
 }

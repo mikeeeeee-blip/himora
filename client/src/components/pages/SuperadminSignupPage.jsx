@@ -97,17 +97,50 @@ const SuperadminSignupPage = () => {
   };
 
   return (
-    <div className="page-container with-sidebar superadmin-signup-page">
-      <Sidebar />
-      <main className="page-main">
-        <div className="page-header scroll-header">
-          <h1>User Registration</h1>
-          <p>Create merchant/admin accounts with complete business details</p>
-        </div>
+    <div className="min-h-screen bg-[#001D22] relative">
+      {/* Background Image */}
+      <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0">
+        <img
+          src="/bgdashboard.png"
+          alt="Background"
+          className="object-cover w-full h-full opacity-10"
+          style={{
+            maxWidth: "none",
+            maxHeight: "none",
+          }}
+        />
+      </div>
 
-        <div className="page-content">
-          {error && <div className="error-message">{error}</div>}
-          {success && <div className="success-message">{success}</div>}
+      <Navbar />
+      
+      {/* Scrollable Content Section */}
+      <section className="relative z-10 min-h-screen bg-transparent">
+        <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-[1400px] mx-auto">
+            <main className="space-y-6 sm:space-y-8">
+              {/* Header */}
+              <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8 mb-6 sm:mb-8">
+                <div>
+                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white mb-3 font-['Albert_Sans']">
+                    User Registration
+                  </h1>
+                  <p className="text-white/70 text-base sm:text-lg font-['Albert_Sans']">
+                    Create merchant/admin accounts with complete business details
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {error && (
+                  <div className="text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-4 font-['Albert_Sans']">
+                    {error}
+                  </div>
+                )}
+                {success && (
+                  <div className="text-green-400 bg-green-500/20 border border-green-500/40 rounded-lg p-4 font-['Albert_Sans']">
+                    {success}
+                  </div>
+                )}
 
           <div className="create-form-card">
             <h3>Register New User</h3>
@@ -317,13 +350,16 @@ const SuperadminSignupPage = () => {
               </div>
             </form>
           </div>
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast({ message: "", type: "success" })}
-          />
+              </div>
+            </main>
+          </div>
         </div>
-      </main>
+      </section>
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ message: "", type: "success" })}
+      />
     </div>
   );
 };

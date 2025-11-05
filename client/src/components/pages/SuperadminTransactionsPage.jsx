@@ -215,47 +215,65 @@ const SuperadminTransactionsPage = () => {
   };
 
   return (
-    <div className="page-container with-sidebar">
-      <Sidebar />
-      <main className="page-main">
-        {/* Premium Header */}
-        <div className="premium-header">
-          <div className="header-content">
-            <div className="header-title-group">
-              <div className="header-icon-wrapper">
-                <HiOutlineChartBar size={32} />
+    <div className="min-h-screen bg-[#001D22] relative">
+      {/* Background Image */}
+      <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0">
+        <img
+          src="/bgdashboard.png"
+          alt="Background"
+          className="object-cover w-full h-full opacity-10"
+          style={{
+            maxWidth: "none",
+            maxHeight: "none",
+          }}
+        />
+      </div>
+
+      <Navbar />
+      
+      {/* Scrollable Content Section */}
+      <section className="relative z-10 min-h-screen bg-transparent">
+        <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-[1400px] mx-auto">
+            <main className="space-y-6 sm:space-y-8">
+              {/* Header */}
+              <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8 mb-6 sm:mb-8">
+                <div className="flex justify-between items-start gap-5 flex-wrap">
+                  <div>
+                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white mb-3 font-['Albert_Sans'] flex items-center gap-3">
+                      <HiOutlineChartBar className="text-accent" />
+                      Transaction Monitor
+                    </h1>
+                    <p className="text-white/70 text-base sm:text-lg font-['Albert_Sans']">
+                      Complete overview of all platform transactions
+                    </p>
+                  </div>
+                  <div className="flex gap-3 flex-wrap">
+                    <button 
+                      onClick={() => setShowFilters(!showFilters)} 
+                      className={`bg-[#122D32] border border-white/10 hover:border-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 ${showFilters ? 'bg-accent/20 border-accent' : ''}`}
+                    >
+                      <FiFilter />
+                      <span>Filters</span>
+                    </button>
+                    <button 
+                      onClick={fetchTransactions} 
+                      disabled={loading} 
+                      className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FiRefreshCw className={loading ? 'animate-spin' : ''} />
+                      <span>{loading ? 'Loading...' : 'Refresh'}</span>
+                    </button>
+                    {transactions.length > 0 && (
+                      <ExportCSV 
+                        data={formatForExport()} 
+                        filename={`transactions_${new Date().toISOString().split('T')[0]}.csv`}
+                        className="bg-[#122D32] border border-white/10 hover:border-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5"
+                      />
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <h1>Transaction Monitor</h1>
-                <p>Complete overview of all platform transactions</p>
-              </div>
-            </div>
-            <div className="header-actions-premium">
-              <button 
-                onClick={() => setShowFilters(!showFilters)} 
-                className={`btn-premium filter ${showFilters ? 'active' : ''}`}
-              >
-                <FiFilter />
-                <span>Filters</span>
-              </button>
-              <button 
-                onClick={fetchTransactions} 
-                disabled={loading} 
-                className="btn-premium refresh"
-              >
-                <FiRefreshCw className={loading ? 'spinning' : ''} />
-                <span>{loading ? 'Loading...' : 'Refresh'}</span>
-              </button>
-              {transactions.length > 0 && (
-                <ExportCSV 
-                  data={formatForExport()} 
-                  filename={`transactions_${new Date().toISOString().split('T')[0]}.csv`}
-                  className="btn-premium export"
-                />
-              )}
-            </div>
-          </div>
-        </div>
 
         {/* Premium Summary Cards */}
         {summary && (
@@ -632,7 +650,10 @@ const SuperadminTransactionsPage = () => {
             </div>
           )}
         </div>
-      </main>
+            </main>
+          </div>
+        </div>
+      </section>
 
       <Toast 
         message={toast.message}

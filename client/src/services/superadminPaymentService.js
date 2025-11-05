@@ -68,7 +68,6 @@ async triggerManualSettlement() {
 
     const response = await axios.get(
       API_ENDPOINTS.MANUAL_SETTLEMENT,
-      {},
       {
         headers: {
           'x-auth-token': token,

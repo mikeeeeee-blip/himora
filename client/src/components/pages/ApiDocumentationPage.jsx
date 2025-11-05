@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FiBook,FiClock, FiCode, FiKey, FiSend, FiLink, FiRefreshCw, FiCheckCircle, FiAlertCircle, FiGlobe, FiFileText, FiDownload, FiSearch } from 'react-icons/fi';
-import Sidebar from '../Sidebar';
+import Navbar from '../Navbar';
 import './ApiDocumentationPage.css';
 import apiKeyService from '../../services/apiKeyService';
 import Toast from '../ui/Toast';
@@ -108,33 +108,69 @@ const ApiDocumentationPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#001D22]">
+    <div className="min-h-screen bg-[#001D22] relative">
+      {/* Background Image */}
+      <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0">
+        <img
+          src="/bgdashboard.png"
+          alt="Background"
+          className="object-cover w-full h-full opacity-10"
+          style={{
+            maxWidth: "none",
+            maxHeight: "none",
+          }}
+        />
+      </div>
+
       <Navbar />
-      <main className="pt-24 p-8 max-w-[1200px] mx-auto">
-        <div className="api-docs-header">
-          <div className="header-content">
-            <h1><FiBook /> API Documentation</h1>
-            <p>Complete integration guide for merchants to integrate payment APIs into their websites and applications</p>
-          </div>
-        </div>
+      
+      {/* Scrollable Content Section */}
+      <section className="relative z-10 min-h-screen bg-transparent">
+        <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-[1400px] mx-auto">
+            <main className="space-y-6 sm:space-y-8">
+              {/* Header */}
+              <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8 mb-6 sm:mb-8">
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white mb-3 font-['Albert_Sans'] flex items-center gap-3">
+                      <FiBook className="text-4xl sm:text-5xl lg:text-6xl text-accent" />
+                      API Documentation
+                    </h1>
+                    <p className="text-white/70 text-base sm:text-lg font-['Albert_Sans']">
+                      Complete integration guide for merchants to integrate payment APIs into their websites and applications
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-        <div className="api-docs-container">
-          <aside className="docs-sidebar">
-            <nav className="docs-nav">
-              {sections.map(section => (
-                <button
-                  key={section.id}
-                  className={`nav-item ${activeSection === section.id ? 'active' : ''}`}
-                  onClick={() => setActiveSection(section.id)}
-                >
-                  {section.icon}
-                  <span>{section.label}</span>
-                </button>
-              ))}
-            </nav>
-          </aside>
+              {/* Main Content Container */}
+              <div className="flex flex-col lg:flex-row gap-6">
+                {/* Sidebar */}
+                <aside className="w-full lg:w-80 flex-shrink-0">
+                  <div className="bg-[#122D32] border border-white/10 rounded-xl p-4 sticky top-24">
+                    <nav className="flex flex-col gap-2">
+                      {sections.map(section => (
+                        <button
+                          key={section.id}
+                          className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-sm font-['Albert_Sans'] transition-all duration-200 ${
+                            activeSection === section.id
+                              ? "bg-white text-[#001D22] shadow-md"
+                              : "text-white/70 hover:text-white hover:bg-white/10"
+                          }`}
+                          onClick={() => setActiveSection(section.id)}
+                        >
+                          <span className="text-xl">{section.icon}</span>
+                          <span>{section.label}</span>
+                        </button>
+                      ))}
+                    </nav>
+                  </div>
+                </aside>
 
-          <div className="docs-content">
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="docs-content bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8">
             {/* Getting Started */}
             {activeSection === 'getting-started' && (
               <section className="docs-section">
@@ -2162,9 +2198,13 @@ async function retryWithBackoff(fn, maxRetries = 3) {
                 </div>
               </section>
             )}
+                  </div>
+                </div>
+              </div>
+            </main>
           </div>
         </div>
-      </main>
+      </section>
       <Toast
         message={toast.message}
         type={toast.type}

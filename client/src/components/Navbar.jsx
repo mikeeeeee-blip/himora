@@ -7,6 +7,7 @@ import {
   FiLogOut,
   FiLink,
   FiMenu,
+  FiBook,
   FiX,
 } from "react-icons/fi";
 import { MdDashboard, MdPayments } from "react-icons/md";
@@ -117,6 +118,12 @@ const Navbar = () => {
         path: "/admin/transactions",
         label: "Transactions",
         icon: <HiOutlineChartBar />,
+      },
+      // TODO : add api docs
+      {
+        path: "/admin/api-docs",
+        label: "API",
+        icon: <FiBook />,
       },
       { path: "/admin/webhooks", label: "Webhooks", icon: <FiLink /> },
     ];

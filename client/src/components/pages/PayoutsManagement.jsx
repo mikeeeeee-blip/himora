@@ -18,8 +18,8 @@ import {
   FiCopy
 } from 'react-icons/fi';
 import { RiMoneyDollarCircleLine } from 'react-icons/ri';
-import superadminPaymentService from '../../services/superadminPaymentService'; // ✅ CHANGED
-import Sidebar from '../../components/Sidebar';
+import superadminPaymentService from '../../services/superadminPaymentService';
+import Navbar from '../../components/Navbar';
 import ExportCSV from '../../components/ExportCSV';
 import Toast from '../../components/ui/Toast';
 import "./PayoutManagement.css";
@@ -221,126 +221,155 @@ const PayoutsManagement = () => {
   };
 
   return (
-    <div className="page-container with-sidebar superadmin-payouts-page">
-      <Sidebar />
-      <main className="page-main">
-        <div className="page-header scroll-header">
-          <div>
-            <h1><RiMoneyDollarCircleLine /> Payout Management</h1>
-            <p>Approve, reject, and process merchant payout requests</p>
-          </div>
-          <div className="header-actions">
-            <button
-              onClick={fetchPayouts}
-              disabled={loading}
-              className="refresh-btn"
-            >
-              <FiRefreshCw className={loading ? 'spinning' : ''} />
-              {loading ? 'Loading...' : 'Refresh'}
-            </button>
+    <div className="min-h-screen bg-[#001D22] relative">
+      {/* Background Image */}
+      <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0">
+        <img
+          src="/bgdashboard.png"
+          alt="Background"
+          className="object-cover w-full h-full opacity-10"
+          style={{
+            maxWidth: "none",
+            maxHeight: "none",
+          }}
+        />
+      </div>
 
-            {payouts.length > 0 && (
-              <ExportCSV
-                data={formatForExport()}
-                filename={`all_payouts_${new Date().toISOString().split('T')[0]}.csv`}
-                className="export-btn"
-              />
-            )}
-          </div>
-        </div>
-
-        <div className="page-content">
-          {error && (
-            <div className="error-message">
-              <FiAlertCircle /> {error}
-            </div>
-          )}
-
-          {/* Summary Cards */}
-          {payoutsSummary && (
-            <div className="payout-summary-section">
-              <h3><FiDollarSign /> Summary Statistics</h3>
-              <div className="summary-cards-grid">
-                <div className="summary-stat-card">
-                  <div className="stat-icon"><RiMoneyDollarCircleLine /></div>
-                  <div className="stat-content">
-                    <div className="stat-value">{payoutsSummary.total_payout_requests || 0}</div>
-                    <div className="stat-label">Total Requests</div>
+      <Navbar />
+      
+      {/* Scrollable Content Section */}
+      <section className="relative z-10 min-h-screen bg-transparent">
+        <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-[1400px] mx-auto">
+            <main className="space-y-6 sm:space-y-8">
+              {/* Header */}
+              <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8 mb-6 sm:mb-8">
+                <div className="flex justify-between items-start gap-5 flex-wrap">
+                  <div>
+                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white mb-3 font-['Albert_Sans'] flex items-center gap-3">
+                      <RiMoneyDollarCircleLine className="text-accent" />
+                      Payout Management
+                    </h1>
+                    <p className="text-white/70 text-base sm:text-lg font-['Albert_Sans']">
+                      Approve, reject, and process merchant payout requests
+                    </p>
                   </div>
-                </div>
-
-                <div className="summary-stat-card warning">
-                  <div className="stat-icon"><FiClock /></div>
-                  <div className="stat-content">
-                    <div className="stat-value">{payoutsSummary.requested_payouts || 0}</div>
-                    <div className="stat-label">Pending Approval</div>
-                    <div className="stat-amount">{formatCurrency(payoutsSummary.total_pending)}</div>
-                  </div>
-                </div>
-
-                <div className="summary-stat-card success">
-                  <div className="stat-icon"><FiCheck /></div>
-                  <div className="stat-content">
-                    <div className="stat-value">{payoutsSummary.completed_payouts || 0}</div>
-                    <div className="stat-label">Completed</div>
-                    <div className="stat-amount">{formatCurrency(payoutsSummary.total_completed)}</div>
-                  </div>
-                </div>
-
-                <div className="summary-stat-card error">
-                  <div className="stat-icon"><FiXCircle /></div>
-                  <div className="stat-content">
-                    <div className="stat-value">{(payoutsSummary.rejected_payouts || 0) + (payoutsSummary.failed_payouts || 0)}</div>
-                    <div className="stat-label">Rejected/Failed</div>
+                  <div className="flex gap-3 flex-wrap">
+                    <button
+                      onClick={fetchPayouts}
+                      disabled={loading}
+                      className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FiRefreshCw className={loading ? 'animate-spin' : ''} />
+                      {loading ? 'Loading...' : 'Refresh'}
+                    </button>
+                    {payouts.length > 0 && (
+                      <ExportCSV
+                        data={formatForExport()}
+                        filename={`all_payouts_${new Date().toISOString().split('T')[0]}.csv`}
+                        className="bg-[#122D32] border border-white/10 hover:border-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5"
+                      />
+                    )}
                   </div>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Filters */}
-          <div className="filter-bar">
-            <select
-              value={filters.status}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value, page: 1 })}
-              className="filter-select"
-            >
-              <option value="">All Status</option>
-              <option value="requested">Requested</option>
-              <option value="pending">Pending</option>
-              <option value="processing">Processing</option>
-              <option value="completed">Completed</option>
-              <option value="rejected">Rejected</option>
-              <option value="failed">Failed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
+              <div className="space-y-6">
+                {error && (
+                  <div className="text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
+                    <FiAlertCircle />
+                    <span>{error}</span>
+                  </div>
+                )}
 
-          {/* Payouts Table */}
-          {/* Payouts Table - OPTIMIZED FOR ONE SCREEN */}
-          {loading ? (
-            <div className="loading-state">
-              <div className="loading-spinner"></div>
-              <p>Loading payout requests...</p>
-            </div>
-          ) : payouts.length > 0 ? (
-            <div className="modern-table-wrapper">
-              <table className="modern-table-optimized">
-                <thead>
-                  <tr>
-                    <th style={{ width: '140px' }}>Payout ID</th>
-                    <th style={{ width: '160px' }}>Merchant</th>
-                    <th style={{ width: '100px' }}>Amount</th>
-                    <th style={{ width: '100px' }}>Net</th>
-                    <th style={{ width: '90px' }}>Mode</th>
-                    <th style={{ width: '120px' }}>Status</th>
-                    <th style={{ width: '110px' }}>Requested</th>
-                    <th style={{ width: '280px' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payouts.map((payout) => (
-                    <tr key={payout.payoutId} className="table-row-optimized">
+                {/* Summary Cards */}
+                {payoutsSummary && (
+                  <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 mb-6">
+                    <h3 className="text-xl font-medium text-white mb-4 font-['Albert_Sans'] flex items-center gap-2">
+                      <FiDollarSign className="text-accent" />
+                      Summary Statistics
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="bg-[#001D22] border border-white/10 rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="text-2xl text-purple-400"><RiMoneyDollarCircleLine /></div>
+                          <div className="text-2xl font-bold text-white font-['Albert_Sans']">{payoutsSummary.total_payout_requests || 0}</div>
+                        </div>
+                        <div className="text-white/70 text-sm font-['Albert_Sans']">Total Requests</div>
+                      </div>
+
+                      <div className="bg-[#001D22] border border-yellow-500/30 rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="text-2xl text-yellow-400"><FiClock /></div>
+                          <div className="text-2xl font-bold text-white font-['Albert_Sans']">{payoutsSummary.requested_payouts || 0}</div>
+                        </div>
+                        <div className="text-white/70 text-sm font-['Albert_Sans'] mb-1">Pending Approval</div>
+                        <div className="text-yellow-400 font-medium text-sm font-['Albert_Sans']">{formatCurrency(payoutsSummary.total_pending)}</div>
+                      </div>
+
+                      <div className="bg-[#001D22] border border-green-500/30 rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="text-2xl text-green-400"><FiCheck /></div>
+                          <div className="text-2xl font-bold text-white font-['Albert_Sans']">{payoutsSummary.completed_payouts || 0}</div>
+                        </div>
+                        <div className="text-white/70 text-sm font-['Albert_Sans'] mb-1">Completed</div>
+                        <div className="text-green-400 font-medium text-sm font-['Albert_Sans']">{formatCurrency(payoutsSummary.total_completed)}</div>
+                      </div>
+
+                      <div className="bg-[#001D22] border border-red-500/30 rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="text-2xl text-red-400"><FiXCircle /></div>
+                          <div className="text-2xl font-bold text-white font-['Albert_Sans']">{(payoutsSummary.rejected_payouts || 0) + (payoutsSummary.failed_payouts || 0)}</div>
+                        </div>
+                        <div className="text-white/70 text-sm font-['Albert_Sans']">Rejected/Failed</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Filters */}
+                <div className="bg-[#122D32] border border-white/10 rounded-xl p-4">
+                  <select
+                    value={filters.status}
+                    onChange={(e) => setFilters({ ...filters, status: e.target.value, page: 1 })}
+                    className="bg-[#001D22] border border-white/10 text-white rounded-lg px-4 py-2.5 font-['Albert_Sans'] focus:outline-none focus:border-accent transition-colors w-full sm:w-auto"
+                  >
+                    <option value="">All Status</option>
+                    <option value="requested">Requested</option>
+                    <option value="pending">Pending</option>
+                    <option value="processing">Processing</option>
+                    <option value="completed">Completed</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="failed">Failed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                {/* Payouts Table */}
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center py-20 px-5 bg-[#122D32] border border-white/10 rounded-xl">
+                    <div className="w-10 h-10 border-4 border-white/30 border-t-accent rounded-full animate-spin mb-5"></div>
+                    <p className="text-white/80 font-['Albert_Sans']">Loading payout requests...</p>
+                  </div>
+                ) : payouts.length > 0 ? (
+                  <div className="bg-[#122D32] border border-white/10 rounded-xl overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-[#001D22] border-b border-white/10">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '140px' }}>Payout ID</th>
+                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '160px' }}>Merchant</th>
+                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '100px' }}>Amount</th>
+                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '100px' }}>Net</th>
+                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '90px' }}>Mode</th>
+                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '120px' }}>Status</th>
+                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '110px' }}>Requested</th>
+                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '280px' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {payouts.map((payout) => (
+                            <tr key={payout.payoutId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td>
                         <div className="payout-id-compact">
                           <div className="id-short" title={payout.payoutId}>
@@ -459,9 +488,10 @@ const PayoutsManagement = () => {
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-              <div className="mobile-payout-cards mobile-only">
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="mobile-payout-cards mobile-only">
                 {payouts.map((payout) => (
                   <div key={payout.payoutId} className="payout-card-mobile">
                     {/* Card Header */}
@@ -564,16 +594,18 @@ const PayoutsManagement = () => {
                 ))}
               </div>
             </div>
-          ) : (
-            <div className="empty-state">
-              <RiMoneyDollarCircleLine className="empty-icon" size={64} />
-              <h3>No Payout Requests</h3>
-              <p>There are no payout requests at the moment.</p>
-            </div>
-          )}
-
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-20 px-5 bg-[#122D32] border border-white/10 rounded-xl">
+                      <RiMoneyDollarCircleLine className="text-6xl text-white/50 mb-4" />
+                      <h3 className="text-xl font-medium text-white mb-2 font-['Albert_Sans']">No Payout Requests</h3>
+                      <p className="text-white/70 text-sm font-['Albert_Sans']">There are no payout requests at the moment.</p>
+                    </div>
+                  )}
+              </div>
+            </main>
+          </div>
         </div>
-      </main>
+      </section>
 
       {/* Modal for Actions */}
       {showModal && selectedPayout && (

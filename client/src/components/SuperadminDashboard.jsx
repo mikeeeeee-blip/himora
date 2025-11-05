@@ -75,10 +75,27 @@ const SuperadminDashboard = () => {
     try {
       const data = await superadminPaymentService.getDashboardStats();
       console.log("Dashboard stats:", data);
-      setStats(data);
+      
+      // Validate that we have the required data structure
+      if (data && typeof data === 'object') {
+        // Ensure all required sections exist with default values
+        const validatedStats = {
+          merchants: data.merchants || { total: 0, active: 0, inactive: 0, new_this_week: 0 },
+          transactions: data.transactions || { total: 0, paid: 0, pending: 0, failed: 0, settled: 0, unsettled: 0, today: 0, this_week: 0, success_rate: 0 },
+          revenue: data.revenue || { total: 0, commission_earned: 0, net_revenue: 0, refunded: 0, today: 0, this_week: 0, average_transaction: 0 },
+          payouts: data.payouts || { total_requests: 0, requested: 0, pending: 0, completed: 0, rejected: 0, failed: 0, total_amount_requested: 0, total_completed: 0, total_pending: 0, commission_earned: 0, today: 0 },
+          settlement: data.settlement || { settled_transactions: 0, unsettled_transactions: 0, available_for_payout: 0, in_payouts: 0, available_balance: 0 },
+          platform: data.platform || { total_commission_earned: 0, payin_commission: 0, payout_commission: 0, net_platform_revenue: 0 }
+        };
+        setStats(validatedStats);
+      } else {
+        throw new Error("Invalid stats data received from server");
+      }
     } catch (err) {
       console.error("Error fetching stats:", err);
-      setError(err.message);
+      setError(err.message || "Failed to load dashboard statistics. Please try again.");
+      // Set empty stats on error so UI doesn't break
+      setStats(null);
     } finally {
       setLoading(false);
     }
@@ -97,54 +114,89 @@ const SuperadminDashboard = () => {
 
   if (loading && !stats) {
     return (
-      <div className="min-h-screen bg-[#001D22]">
+      <div className="min-h-screen bg-[#001D22] relative">
+        {/* Background Image */}
+        <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0">
+          <img
+            src="/bgdashboard.png"
+            alt="Background"
+            className="object-cover w-full h-full opacity-10"
+            style={{
+              maxWidth: "none",
+              maxHeight: "none",
+            }}
+          />
+        </div>
         <Navbar />
-        <main className="pt-24 p-8 max-w-[1200px] mx-auto">
-          <div className="flex flex-col items-center justify-center py-20 px-5 bg-bg-secondary rounded-xl shadow-lg border border-white/10">
-            <div className="w-10 h-10 border-4 border-gray-300 border-t-accent rounded-full animate-spin mb-5"></div>
-            <p className="text-white/80">Loading dashboard...</p>
+        <section className="relative z-10 min-h-screen bg-transparent">
+          <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-[1400px] mx-auto">
+              <div className="flex flex-col items-center justify-center py-20 px-5 bg-[#122D32] border border-white/10 rounded-xl">
+                <div className="w-10 h-10 border-4 border-white/30 border-t-accent rounded-full animate-spin mb-5"></div>
+                <p className="text-white/80 font-['Albert_Sans']">Loading dashboard...</p>
+              </div>
+            </div>
           </div>
-        </main>
+        </section>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-bg-secondary">
+    <div className="min-h-screen bg-[#001D22] relative">
+      {/* Background Image */}
+      <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0">
+        <img
+          src="/bgdashboard.png"
+          alt="Background"
+          className="object-cover w-full h-full opacity-10"
+          style={{
+            maxWidth: "none",
+            maxHeight: "none",
+          }}
+        />
+      </div>
+
       <Navbar />
-      <main className="pt-24 p-8 max-w-[1200px] mx-auto">
-        <div className="bg-bg-secondary border border-white/10 rounded-xl p-8 mb-8 shadow-lg">
-          <div className="flex justify-between items-start gap-5 flex-wrap">
-            <div>
-              <h1 className="text-3xl font-medium text-white mb-2 font-['Albert_Sans']">
-                SuperAdmin Dashboard
-              </h1>
-              <p className="text-white/80">
-                Complete overview of platform operations and statistics
-              </p>
-            </div>
-            <button
-              onClick={fetchStats}
-              disabled={loading}
-              className="bg-accent hover:bg-bg-tertiary text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            >
-              <FiRefreshCw className={loading ? "animate-spin" : ""} />
-              Refresh
-            </button>
-          </div>
-        </div>
+      
+      {/* Scrollable Content Section */}
+      <section className="relative z-10 min-h-screen bg-transparent">
+        <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-[1400px] mx-auto">
+            <main className="space-y-6 sm:space-y-8">
+              {/* Header */}
+              <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8 mb-6 sm:mb-8">
+                <div className="flex justify-between items-start gap-5 flex-wrap">
+                  <div>
+                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white mb-3 font-['Albert_Sans']">
+                      SuperAdmin Dashboard
+                    </h1>
+                    <p className="text-white/70 text-base sm:text-lg font-['Albert_Sans']">
+                      Complete overview of platform operations and statistics
+                    </p>
+                  </div>
+                  <button
+                    onClick={fetchStats}
+                    disabled={loading}
+                    className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  >
+                    <FiRefreshCw className={loading ? "animate-spin" : ""} />
+                    Refresh
+                  </button>
+                </div>
+              </div>
 
-        <div className="flex flex-col gap-8">
-          {error && (
-            <div className="text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-4 flex items-center gap-2">
-              <FiAlertCircle /> {error}
-            </div>
-          )}
+              <div className="flex flex-col gap-8">
+                {error && (
+                  <div className="text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
+                    <FiAlertCircle /> {error}
+                  </div>
+                )}
 
-          {stats && (
-            <>
-              {/* Merchants Section */}
-              <div className="mb-10">
+                {stats && (
+                  <>
+                    {/* Merchants Section */}
+                    <div className="mb-10">
                 <div className="section-header-base">
                   <h2>
                     <FiUsers /> Merchants
@@ -640,12 +692,15 @@ const SuperadminDashboard = () => {
                       </div>
                     </div>
                   </div>
+                  </div>
                 </div>
+                  </>
+                )}
               </div>
-            </>
-          )}
+            </main>
+          </div>
         </div>
-      </main>
+      </section>
     </div>
   );
 };
