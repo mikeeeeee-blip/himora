@@ -173,57 +173,79 @@ const TransactionsPage = () => {
               <p>Loading transactions...</p>
             </div>
           ) : transactions.length > 0 ? (
-            <div className="table-card">
-              <table className="tx-table">
-                <thead>
+            <div className="bg-[#122D32] border border-white/10 rounded-xl overflow-auto shadow-lg">
+              <table className="w-full border-collapse">
+                <thead className="bg-green-600/30 sticky top-0 z-10">
                   <tr>
-                    <th>Transaction ID</th>
-                    <th>UTR</th>
-                    <th>Amount</th>
-                    <th>Customer</th>
-                    <th>Payment Method</th>
-                    <th>Status</th>
-                    <th>Settlement</th>
-                    <th>Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                      Transaction ID
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                      UTR
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                      Amount
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                      Customer
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                      Payment Method
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                      Settlement
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                      Date
+                    </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="bg-[#263F43]">
                   {transactions.map((txn, index) => (
-                    <tr key={index}>
-                      <td>
-                        <div className="txn-id">{txn.transaction_id}</div>
-                        <div className="txn-order-id">{txn.order_id}</div>
+                    <tr key={index} className="hover:bg-green-600/10 transition-colors duration-150">
+                      <td className="px-4 py-3 text-sm text-white border-b border-white/10 font-['Albert_Sans']">
+                        <div className="font-semibold">{txn.transaction_id}</div>
+                        <div className="text-xs text-white/60">{txn.order_id}</div>
                       </td>
-                      <td>
-                        <div className="utr-text">
-                          {txn.utr || txn.bank_transaction_id || 'N/A'}
-                        </div>
+                      <td className="px-4 py-3 text-sm text-white border-b border-white/10 font-mono font-['Albert_Sans']">
+                        {txn.utr || txn.bank_transaction_id || 'N/A'}
                       </td>
-                      <td>
-                        <strong>{formatCurrency(txn.amount)}</strong>
+                      <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 font-['Albert_Sans']">
+                        {formatCurrency(txn.amount)}
                       </td>
-                      <td>
-                        <div>{txn.customer_name}</div>
-                        <div className="txn-customer-email">{txn.customer_email}</div>
+                      <td className="px-4 py-3 text-sm text-white border-b border-white/10 font-['Albert_Sans']">
+                        <div className="font-medium">{txn.customer_name}</div>
+                        <div className="text-xs text-white/60">{txn.customer_email}</div>
                       </td>
-                      <td>
-                        <span className="payment-method-badge">
+                      <td className="px-4 py-3 text-sm border-b border-white/10">
+                        <span className="px-2.5 py-1 bg-accent/20 text-accent rounded-full text-xs font-semibold font-['Albert_Sans']">
                           {txn.payment_method || 'N/A'}
                         </span>
                       </td>
-                      <td>
-                        <span className={`status-badge status-${txn.status}`}>
+                      <td className="px-4 py-3 text-sm border-b border-white/10">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase font-['Albert_Sans'] ${
+                          txn.status === 'paid' ? 'bg-green-500/20 text-green-400' :
+                          txn.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                          txn.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-gray-500/20 text-gray-400'
+                        }`}>
                           {txn.status}
                         </span>
                       </td>
-                      <td>
-                        <span className={`settlement-badge ${txn.settlement_status}`}>
+                      <td className="px-4 py-3 text-sm border-b border-white/10">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase font-['Albert_Sans'] ${
+                          txn.settlement_status === 'settled' ? 'bg-green-500/20 text-green-400' :
+                          'bg-yellow-500/20 text-yellow-400'
+                        }`}>
                           {txn.settlement_status || 'unsettled'}
                         </span>
                       </td>
-                      <td>
+                      <td className="px-4 py-3 text-sm text-white/90 border-b border-white/10 font-['Albert_Sans']">
                         <div>{new Date(txn.created_at).toLocaleDateString('en-IN')}</div>
-                        <div className="txn-time">
+                        <div className="text-xs text-white/60">
                           {new Date(txn.created_at).toLocaleTimeString('en-IN')}
                         </div>
                       </td>

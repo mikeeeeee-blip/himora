@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import paymentService from '../../services/paymentService';
+import Navbar from '../Navbar';
 import { 
   FiArrowLeft, 
   FiCheckCircle, 
@@ -15,7 +17,6 @@ import {
 } from 'react-icons/fi';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import './TransactionDetailPage.css';
 
 const TransactionDetailPage = () => {
   const { transactionId } = useParams();
@@ -398,12 +399,29 @@ if (transaction.utr || transaction.acquirerData?.utr || transaction.bank_transac
     doc.save(fileName);
   };
 
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 },
+  };
+
   if (loading) {
     return (
-      <div className="txd-bg">
-        <div className="txd-loader">
-          <div className="txd-spinner"></div>
-          <p>Loading transaction details...</p>
+      <div className="min-h-screen bg-[#1F383D]">
+        <Navbar />
+        <div className="flex flex-col items-center justify-center min-h-[60vh] pt-24">
+          <div className="w-16 h-16 border-4 border-white/20 border-t-accent rounded-full animate-spin"></div>
+          <p className="mt-4 text-white/70 font-['Albert_Sans']">Loading transaction details...</p>
         </div>
       </div>
     );
@@ -411,14 +429,26 @@ if (transaction.utr || transaction.acquirerData?.utr || transaction.bank_transac
 
   if (error) {
     return (
-      <div className="txd-bg">
-        <div className="txd-error-card">
-          <FiXCircle className="txd-error-icon" />
-          <h3>Oops! Something went wrong</h3>
-          <p>{error}</p>
-          <button onClick={() => navigate(-1)} className="txd-error-btn">
-            Go Back
-          </button>
+      <div className="min-h-screen bg-[#1F383D]">
+        <Navbar />
+        <div className="flex items-center justify-center min-h-[60vh] pt-24 px-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#122D32] border border-white/10 rounded-xl p-8 text-center max-w-md w-full"
+          >
+            <FiXCircle className="text-red-400 text-5xl mx-auto mb-4" />
+            <h3 className="text-2xl font-medium text-white mb-2 font-['Albert_Sans']">
+              Oops! Something went wrong
+            </h3>
+            <p className="text-white/70 mb-6 font-['Albert_Sans']">{error}</p>
+            <button
+              onClick={() => navigate(-1)}
+              className="bg-accent hover:bg-accent/90 text-white px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+            >
+              Go Back
+            </button>
+          </motion.div>
         </div>
       </div>
     );
@@ -430,266 +460,495 @@ if (transaction.utr || transaction.acquirerData?.utr || transaction.bank_transac
   const StatusIcon = statusConfig.icon;
 
   return (
-    <div className="txd-bg">
-      <div className="txd-container">
-        <button className="txd-back-btn" onClick={() => navigate(-1)}>
-          <FiArrowLeft /> <span>Back to Transactions</span>
-        </button>
+    <div className="min-h-screen bg-[#1F383D]">
+      <Navbar />
 
-        {/* Hero Card */}
-        <div className="txd-hero-card">
-          <div className="txd-hero-bg"></div>
-          <div className="txd-hero-content">
-            <div 
-              className="txd-status-badge" 
-              style={{ 
-                backgroundColor: statusConfig.bg,
-                color: statusConfig.color 
-              }}
-            >
-              <StatusIcon />
-              <span>{statusConfig.label}</span>
-            </div>
-            <h1 className="txd-amount">₹{transaction.amount?.toLocaleString()}</h1>
-            <p className="txd-currency">{transaction.currency}</p>
-            <div className="txd-hero-id">
-              <span>ID: {transaction.transactionId}</span>
-              <button 
-                className={`txd-copy-btn ${copied ? 'copied' : ''}`}
-                onClick={() => copyToClipboard(transaction.transactionId)}
+      {/* Split Layout: Top Half (Graphic) + Bottom Half (Data) */}
+      <div className="relative">
+        {/* Fixed X Graphic - Background Layer */}
+        <div
+          className="fixed inset-0 flex items-center justify-center pointer-events-none z-0"
+          style={{ top: "4rem" }}
+        >
+          <img
+            src="/X.png"
+            alt="X graphic"
+            className="object-contain hidden sm:block"
+            style={{
+              filter: "drop-shadow(0 0 40px rgba(94, 234, 212, 0.5))",
+              width: "120%",
+              height: "85%",
+              maxWidth: "none",
+              maxHeight: "none",
+            }}
+          />
+          <img
+            src="/X.png"
+            alt="X graphic"
+            className="object-contain sm:hidden"
+            style={{
+              filter: "drop-shadow(0 0 20px rgba(94, 234, 212, 0.5))",
+              width: "100%",
+              height: "70%",
+              maxWidth: "none",
+              maxHeight: "none",
+            }}
+          />
+        </div>
+
+        {/* Scrollable Content Section - Overlays on top */}
+        <section className="relative z-10 min-h-screen bg-transparent">
+          <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-[1400px] mx-auto">
+              <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+                className="space-y-6"
               >
-                <FiCopy />
-                {copied ? 'Copied!' : 'Copy'}
-              </button>
-            </div>
-          </div>
-        </div>
+                {/* Back Button */}
+                <motion.button
+                  variants={itemVariants}
+                  onClick={() => navigate(-1)}
+                  className="inline-flex items-center gap-2 bg-[#122D32] border border-white/10 text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:bg-white/5 hover:-translate-x-1"
+                >
+                  <FiArrowLeft />
+                  <span className="hidden sm:inline">Back to Transactions</span>
+                </motion.button>
 
-        {/* Info Cards Grid */}
-        <div className="txd-grid">
-          {/* Transaction Info */}
-          <div className="txd-glass-card">
-            <div className="txd-card-header">
-              <FiDollarSign className="txd-card-icon" />
-              <h3>Transaction Info</h3>
-            </div>
-            <div className="txd-card-body">
-              <div className="txd-row">
-                <span className="txd-label">Order ID</span>
-                <span className="txd-value">{transaction.orderId}</span>
-              </div>
-              <div className="txd-row">
-                <span className="txd-label">Gateway</span>
-                <span className="txd-value txd-badge">{transaction.paymentGateway}</span>
-              </div>
-              <div className="txd-row">
-                <span className="txd-label">Method</span>
-                <span className="txd-value">{transaction.paymentMethod}</span>
-              </div>
-              <div className="txd-row">
-                <span className="txd-label">Description</span>
-                <span className="txd-value txd-desc">{transaction.description}</span>
-              </div>
-            </div>
-          </div>
-{/* Payment References - UTR, Bank Details */}
-{(transaction.utr || transaction.bank_transaction_id || transaction.acquirerData) && (
-  <div className="txd-glass-card">
-    <div className="txd-card-header">
-      <FiCreditCard className="txd-card-icon" />
-      <h3>Payment References</h3>
-    </div>
-    <div className="txd-card-body">
-      {(transaction.utr || transaction.acquirerData?.utr || transaction.acquirerData?.rrn) && (
-        <div className="txd-row">
-          <span className="txd-label">UTR/RRN</span>
-          <span className="txd-value txd-mono">
-            {transaction.utr || transaction.acquirerData?.utr || transaction.acquirerData?.rrn || '-'}
-          </span>
-        </div>
-      )}
-      
-      {(transaction.bank_transaction_id || transaction.acquirerData?.bank_transaction_id) && (
-        <div className="txd-row">
-          <span className="txd-label">Bank Txn ID</span>
-          <span className="txd-value txd-mono">
-            {transaction.bank_transaction_id || transaction.acquirerData?.bank_transaction_id || '-'}
-          </span>
-        </div>
-      )}
-      
-      {transaction.acquirerData?.auth_code && (
-        <div className="txd-row">
-          <span className="txd-label">Auth Code</span>
-          <span className="txd-value txd-mono">{transaction.acquirerData.auth_code}</span>
-        </div>
-      )}
-      
-      {transaction.acquirerData?.card_last4 && (
-        <div className="txd-row">
-          <span className="txd-label">Card</span>
-          <span className="txd-value">
-            **** **** **** {transaction.acquirerData.card_last4} 
-            {transaction.acquirerData.card_network && (
-              <span className="txd-badge" style={{ marginLeft: '8px' }}>
-                {transaction.acquirerData.card_network}
-              </span>
-            )}
-          </span>
-        </div>
-      )}
-      
-      {transaction.acquirerData?.bank_name && (
-        <div className="txd-row">
-          <span className="txd-label">Bank</span>
-          <span className="txd-value">{transaction.acquirerData.bank_name}</span>
-        </div>
-      )}
-      
-      {transaction.acquirerData?.vpa && (
-        <div className="txd-row">
-          <span className="txd-label">UPI ID</span>
-          <span className="txd-value txd-mono">{transaction.acquirerData.vpa}</span>
-        </div>
-      )}
-    </div>
-  </div>
-)}
-
-          {/* Customer Info */}
-          <div className="txd-glass-card">
-            <div className="txd-card-header">
-              <FiUser className="txd-card-icon" />
-              <h3>Customer Details</h3>
-            </div>
-            <div className="txd-card-body">
-              <div className="txd-row">
-                <span className="txd-label">Name</span>
-                <span className="txd-value">{transaction.customerName || '-'}</span>
-              </div>
-              <div className="txd-row">
-                <span className="txd-label">Email</span>
-                <span className="txd-value txd-email">{transaction.customerEmail || '-'}</span>
-              </div>
-              <div className="txd-row">
-                <span className="txd-label">Phone</span>
-                <span className="txd-value">{transaction.customerPhone || '-'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Timeline */}
-          <div className="txd-glass-card">
-            <div className="txd-card-header">
-              <FiCalendar className="txd-card-icon" />
-              <h3>Timeline</h3>
-            </div>
-            <div className="txd-card-body">
-              <div className="txd-timeline">
-                <div className="txd-timeline-item">
-                  <div className="txd-timeline-dot"></div>
-                  <div className="txd-timeline-content">
-                    <span className="txd-timeline-label">Created</span>
-                    <span className="txd-timeline-date">{formatDate(transaction.createdAt)}</span>
+                {/* Hero Card */}
+                <motion.div
+                  variants={itemVariants}
+                  className="relative bg-gradient-to-br from-accent/20 to-accent/10 border border-white/10 rounded-xl p-6 sm:p-8 overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent pointer-events-none"></div>
+                  <div className="relative text-center">
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold font-['Albert_Sans'] mb-4"
+                      style={{
+                        backgroundColor: statusConfig.bg,
+                        color: statusConfig.color,
+                      }}
+                    >
+                      <StatusIcon />
+                      <span>{statusConfig.label}</span>
+                    </motion.div>
+                    <motion.h1
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.1 }}
+                      className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-2 font-['Albert_Sans']"
+                    >
+                      ₹{transaction.amount?.toLocaleString()}
+                    </motion.h1>
+                    <motion.p
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.2 }}
+                      className="text-white/70 text-lg mb-4 font-['Albert_Sans']"
+                    >
+                      {transaction.currency}
+                    </motion.p>
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                      className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/20 font-mono text-sm text-white"
+                    >
+                      <span>ID: {transaction.transactionId}</span>
+                      <button
+                        onClick={() => copyToClipboard(transaction.transactionId)}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                          copied
+                            ? "bg-green-500 text-white"
+                            : "bg-white/20 hover:bg-white/30 text-white"
+                        }`}
+                      >
+                        <FiCopy className="text-xs" />
+                        {copied ? "Copied!" : "Copy"}
+                      </button>
+                    </motion.div>
                   </div>
-                </div>
-                {transaction.paidAt && (
-                  <div className="txd-timeline-item">
-                    <div className="txd-timeline-dot active"></div>
-                    <div className="txd-timeline-content">
-                      <span className="txd-timeline-label">Paid</span>
-                      <span className="txd-timeline-date">{formatDate(transaction.paidAt)}</span>
+                </motion.div>
+
+                {/* Info Cards Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                  {/* Transaction Info */}
+                  <motion.div
+                    variants={itemVariants}
+                    className="bg-[#122D32] border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all duration-200"
+                  >
+                    <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-white/10 bg-gradient-to-r from-white/5 to-transparent">
+                      <FiDollarSign className="text-accent text-xl" />
+                      <h3 className="text-lg font-semibold text-white font-['Albert_Sans']">
+                        Transaction Info
+                      </h3>
                     </div>
-                  </div>
-                )}
-                {transaction.updatedAt && (
-                  <div className="txd-timeline-item">
-                    <div className="txd-timeline-dot"></div>
-                    <div className="txd-timeline-content">
-                      <span className="txd-timeline-label">Updated</span>
-                      <span className="txd-timeline-date">{formatDate(transaction.updatedAt)}</span>
+                    <div className="p-4 sm:p-6 space-y-4">
+                      <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                        <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                          Order ID
+                        </span>
+                        <span className="text-sm text-white font-semibold text-right max-w-[60%] break-words font-['Albert_Sans']">
+                          {transaction.orderId}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                        <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                          Gateway
+                        </span>
+                        <span className="px-2.5 py-1 bg-accent/20 text-accent rounded-full text-xs font-semibold font-['Albert_Sans']">
+                          {transaction.paymentGateway}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                        <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                          Method
+                        </span>
+                        <span className="text-sm text-white font-semibold text-right max-w-[60%] break-words font-['Albert_Sans']">
+                          {transaction.paymentMethod}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                        <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                          Description
+                        </span>
+                        <span className="text-sm text-white/80 font-normal text-right max-w-[60%] break-words font-['Albert_Sans']">
+                          {transaction.description}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  </motion.div>
+                  {/* Payment References - UTR, Bank Details */}
+                  {(transaction.utr ||
+                    transaction.bank_transaction_id ||
+                    transaction.acquirerData) && (
+                    <motion.div
+                      variants={itemVariants}
+                      className="bg-[#122D32] border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all duration-200"
+                    >
+                      <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-white/10 bg-gradient-to-r from-white/5 to-transparent">
+                        <FiCreditCard className="text-accent text-xl" />
+                        <h3 className="text-lg font-semibold text-white font-['Albert_Sans']">
+                          Payment References
+                        </h3>
+                      </div>
+                      <div className="p-4 sm:p-6 space-y-4">
+                        {(transaction.utr ||
+                          transaction.acquirerData?.utr ||
+                          transaction.acquirerData?.rrn) && (
+                          <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                            <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                              UTR/RRN
+                            </span>
+                            <span className="text-sm font-mono text-white/90 bg-white/5 px-2 py-1 rounded text-right max-w-[60%] break-words">
+                              {transaction.utr ||
+                                transaction.acquirerData?.utr ||
+                                transaction.acquirerData?.rrn ||
+                                "-"}
+                            </span>
+                          </div>
+                        )}
+
+                        {(transaction.bank_transaction_id ||
+                          transaction.acquirerData?.bank_transaction_id) && (
+                          <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                            <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                              Bank Txn ID
+                            </span>
+                            <span className="text-sm font-mono text-white/90 bg-white/5 px-2 py-1 rounded text-right max-w-[60%] break-words">
+                              {transaction.bank_transaction_id ||
+                                transaction.acquirerData?.bank_transaction_id ||
+                                "-"}
+                            </span>
+                          </div>
+                        )}
+
+                        {transaction.acquirerData?.auth_code && (
+                          <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                            <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                              Auth Code
+                            </span>
+                            <span className="text-sm font-mono text-white/90 bg-white/5 px-2 py-1 rounded text-right max-w-[60%] break-words">
+                              {transaction.acquirerData.auth_code}
+                            </span>
+                          </div>
+                        )}
+
+                        {transaction.acquirerData?.card_last4 && (
+                          <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                            <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                              Card
+                            </span>
+                            <span className="text-sm text-white font-semibold text-right max-w-[60%] break-words font-['Albert_Sans']">
+                              **** **** **** {transaction.acquirerData.card_last4}
+                              {transaction.acquirerData.card_network && (
+                                <span className="ml-2 px-2.5 py-1 bg-accent/20 text-accent rounded-full text-xs font-semibold">
+                                  {transaction.acquirerData.card_network}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+
+                        {transaction.acquirerData?.bank_name && (
+                          <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                            <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                              Bank
+                            </span>
+                            <span className="text-sm text-white font-semibold text-right max-w-[60%] break-words font-['Albert_Sans']">
+                              {transaction.acquirerData.bank_name}
+                            </span>
+                          </div>
+                        )}
+
+                        {transaction.acquirerData?.vpa && (
+                          <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                            <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                              UPI ID
+                            </span>
+                            <span className="text-sm font-mono text-white/90 bg-white/5 px-2 py-1 rounded text-right max-w-[60%] break-words">
+                              {transaction.acquirerData.vpa}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Customer Info */}
+                  <motion.div
+                    variants={itemVariants}
+                    className="bg-[#122D32] border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all duration-200"
+                  >
+                    <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-white/10 bg-gradient-to-r from-white/5 to-transparent">
+                      <FiUser className="text-accent text-xl" />
+                      <h3 className="text-lg font-semibold text-white font-['Albert_Sans']">
+                        Customer Details
+                      </h3>
+                    </div>
+                    <div className="p-4 sm:p-6 space-y-4">
+                      <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                        <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                          Name
+                        </span>
+                        <span className="text-sm text-white font-semibold text-right max-w-[60%] break-words font-['Albert_Sans']">
+                          {transaction.customerName || "-"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                        <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                          Email
+                        </span>
+                        <span className="text-sm font-mono text-white/90 text-right max-w-[60%] break-words">
+                          {transaction.customerEmail || "-"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                        <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                          Phone
+                        </span>
+                        <span className="text-sm text-white font-semibold text-right max-w-[60%] break-words font-['Albert_Sans']">
+                          {transaction.customerPhone || "-"}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  {/* Timeline */}
+                  <motion.div
+                    variants={itemVariants}
+                    className="bg-[#122D32] border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all duration-200"
+                  >
+                    <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-white/10 bg-gradient-to-r from-white/5 to-transparent">
+                      <FiCalendar className="text-accent text-xl" />
+                      <h3 className="text-lg font-semibold text-white font-['Albert_Sans']">
+                        Timeline
+                      </h3>
+                    </div>
+                    <div className="p-4 sm:p-6">
+                      <div className="space-y-6">
+                        <div className="flex gap-4 relative">
+                          <div className="relative">
+                            <div className="w-6 h-6 rounded-full bg-[#263F43] border-2 border-accent flex-shrink-0"></div>
+                            {transaction.paidAt && (
+                              <div className="absolute left-1/2 top-6 w-0.5 h-6 bg-gradient-to-b from-accent/50 to-transparent -translate-x-1/2"></div>
+                            )}
+                          </div>
+                          <div className="flex-1 pb-6">
+                            <span className="block text-sm font-semibold text-white font-['Albert_Sans'] mb-1">
+                              Created
+                            </span>
+                            <span className="block text-xs text-white/60 font-['Albert_Sans']">
+                              {formatDate(transaction.createdAt)}
+                            </span>
+                          </div>
+                        </div>
+                        {transaction.paidAt && (
+                          <div className="flex gap-4 relative">
+                            <div className="relative">
+                              <div className="w-6 h-6 rounded-full bg-accent border-2 border-accent flex-shrink-0 shadow-lg shadow-accent/30"></div>
+                              {transaction.updatedAt && (
+                                <div className="absolute left-1/2 top-6 w-0.5 h-6 bg-gradient-to-b from-accent/50 to-transparent -translate-x-1/2"></div>
+                              )}
+                            </div>
+                            <div className="flex-1 pb-6">
+                              <span className="block text-sm font-semibold text-white font-['Albert_Sans'] mb-1">
+                                Paid
+                              </span>
+                              <span className="block text-xs text-white/60 font-['Albert_Sans']">
+                                {formatDate(transaction.paidAt)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        {transaction.updatedAt && (
+                          <div className="flex gap-4">
+                            <div className="w-6 h-6 rounded-full bg-[#263F43] border-2 border-accent flex-shrink-0"></div>
+                            <div className="flex-1">
+                              <span className="block text-sm font-semibold text-white font-['Albert_Sans'] mb-1">
+                                Updated
+                              </span>
+                              <span className="block text-xs text-white/60 font-['Albert_Sans']">
+                                {formatDate(transaction.updatedAt)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  {/* Settlement Info */}
+                  <motion.div
+                    variants={itemVariants}
+                    className="bg-[#122D32] border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all duration-200"
+                  >
+                    <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-white/10 bg-gradient-to-r from-white/5 to-transparent">
+                      <FiCreditCard className="text-accent text-xl" />
+                      <h3 className="text-lg font-semibold text-white font-['Albert_Sans']">
+                        Settlement
+                      </h3>
+                    </div>
+                    <div className="p-4 sm:p-6 space-y-4">
+                      <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                        <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                          Status
+                        </span>
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-semibold uppercase font-['Albert_Sans'] ${
+                            transaction.settlementStatus === "settled"
+                              ? "bg-green-500/20 text-green-400"
+                              : "bg-yellow-500/20 text-yellow-400"
+                          }`}
+                        >
+                          {transaction.settlementStatus || "unsettled"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                        <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                          Expected
+                        </span>
+                        <span className="text-sm text-white font-semibold text-right max-w-[60%] break-words font-['Albert_Sans']">
+                          {formatDate(transaction.expectedSettlementDate)}
+                        </span>
+                      </div>
+                      {transaction.settlementDate && (
+                        <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                          <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                            Settled On
+                          </span>
+                          <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-semibold font-['Albert_Sans']">
+                            {formatDate(transaction.settlementDate)}
+                          </span>
+                        </div>
+                      )}
+                      {transaction.payoutStatus && (
+                        <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                          <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                            Payout Status
+                          </span>
+                          <span className="text-sm text-white font-semibold text-right max-w-[60%] break-words font-['Albert_Sans']">
+                            {transaction.payoutStatus}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                </div>
+
+                {/* Gateway Details */}
+                {(transaction.razorpayPaymentLinkId ||
+                  transaction.razorpayOrderId) && (
+                  <motion.div
+                    variants={itemVariants}
+                    className="bg-[#122D32] border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all duration-200"
+                  >
+                    <div className="px-4 sm:px-6 py-4 border-b border-white/10 bg-gradient-to-r from-white/5 to-transparent">
+                      <h3 className="text-lg font-semibold text-white font-['Albert_Sans']">
+                        Gateway Reference IDs
+                      </h3>
+                    </div>
+                    <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {transaction.razorpayPaymentLinkId && (
+                        <div className="bg-[#263F43] border border-white/10 rounded-lg p-4 hover:border-white/20 transition-all">
+                          <span className="block text-xs text-white/60 font-semibold uppercase mb-2 font-['Albert_Sans']">
+                            Payment Link ID
+                          </span>
+                          <span className="block font-mono text-sm text-white/90 break-all font-['Albert_Sans']">
+                            {transaction.razorpayPaymentLinkId}
+                          </span>
+                        </div>
+                      )}
+                      {transaction.razorpayOrderId && (
+                        <div className="bg-[#263F43] border border-white/10 rounded-lg p-4 hover:border-white/20 transition-all">
+                          <span className="block text-xs text-white/60 font-semibold uppercase mb-2 font-['Albert_Sans']">
+                            Order ID
+                          </span>
+                          <span className="block font-mono text-sm text-white/90 break-all font-['Albert_Sans']">
+                            {transaction.razorpayOrderId}
+                          </span>
+                        </div>
+                      )}
+                      {transaction.razorpayPaymentId && (
+                        <div className="bg-[#263F43] border border-white/10 rounded-lg p-4 hover:border-white/20 transition-all">
+                          <span className="block text-xs text-white/60 font-semibold uppercase mb-2 font-['Albert_Sans']">
+                            Payment ID
+                          </span>
+                          <span className="block font-mono text-sm text-white/90 break-all font-['Albert_Sans']">
+                            {transaction.razorpayPaymentId}
+                          </span>
+                        </div>
+                      )}
+                      {transaction.razorpayReferenceId && (
+                        <div className="bg-[#263F43] border border-white/10 rounded-lg p-4 hover:border-white/20 transition-all">
+                          <span className="block text-xs text-white/60 font-semibold uppercase mb-2 font-['Albert_Sans']">
+                            Reference ID
+                          </span>
+                          <span className="block font-mono text-sm text-white/90 break-all font-['Albert_Sans']">
+                            {transaction.razorpayReferenceId}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
                 )}
-              </div>
+
+                {/* Action Button */}
+                <motion.button
+                  variants={itemVariants}
+                  onClick={downloadReceipt}
+                  className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent/90 text-white px-6 py-3.5 rounded-lg font-semibold font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg shadow-accent/20"
+                >
+                  <FiDownload className="text-lg" />
+                  Download Receipt
+                </motion.button>
+              </motion.div>
             </div>
           </div>
-
-          {/* Settlement Info */}
-        {/* Settlement Info */}
-<div className="txd-glass-card">
-  <div className="txd-card-header">
-    <FiCreditCard className="txd-card-icon" />
-    <h3>Settlement</h3>
-  </div>
-  <div className="txd-card-body">
-    <div className="txd-row">
-      <span className="txd-label">Status</span>
-      <span className={`txd-value ${transaction.settlementStatus === 'settled' ? 'txd-badge-success' : 'txd-badge-warning'}`}>
-        {transaction.settlementStatus || 'unsettled'}
-      </span>
-    </div>
-    <div className="txd-row">
-      <span className="txd-label">Expected</span>
-      <span className="txd-value">{formatDate(transaction.expectedSettlementDate)}</span>
-    </div>
-    {transaction.settlementDate && (
-      <div className="txd-row">
-        <span className="txd-label">Settled On</span>
-        <span className="txd-value txd-badge-success">{formatDate(transaction.settlementDate)}</span>
-      </div>
-    )}
-    {transaction.payoutStatus && (
-      <div className="txd-row">
-        <span className="txd-label">Payout Status</span>
-        <span className="txd-value">{transaction.payoutStatus}</span>
-      </div>
-    )}
-  </div>
-</div>
-
-        </div>
-
-        {/* Gateway Details */}
-        {(transaction.razorpayPaymentLinkId || transaction.razorpayOrderId) && (
-          <div className="txd-glass-card txd-full-width">
-            <div className="txd-card-header">
-              <h3>Gateway Reference IDs</h3>
-            </div>
-            <div className="txd-card-body txd-gateway-grid">
-              {transaction.razorpayPaymentLinkId && (
-                <div className="txd-ref-item">
-                  <span className="txd-ref-label">Payment Link ID</span>
-                  <span className="txd-ref-value">{transaction.razorpayPaymentLinkId}</span>
-                </div>
-              )}
-              {transaction.razorpayOrderId && (
-                <div className="txd-ref-item">
-                  <span className="txd-ref-label">Order ID</span>
-                  <span className="txd-ref-value">{transaction.razorpayOrderId}</span>
-                </div>
-              )}
-              {transaction.razorpayPaymentId && (
-                <div className="txd-ref-item">
-                  <span className="txd-ref-label">Payment ID</span>
-                  <span className="txd-ref-value">{transaction.razorpayPaymentId}</span>
-                </div>
-              )}
-              {transaction.razorpayReferenceId && (
-                <div className="txd-ref-item">
-                  <span className="txd-ref-label">Reference ID</span>
-                  <span className="txd-ref-value">{transaction.razorpayReferenceId}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Action Button */}
-        <button className="txd-download-btn" onClick={downloadReceipt}>
-          <FiDownload />
-          Download Receipt
-        </button>
+        </section>
       </div>
     </div>
   );

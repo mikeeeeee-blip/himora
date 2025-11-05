@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import superadminPaymentService from '../../services/superadminPaymentService';
-import Sidebar from '../Sidebar';
+import Navbar from '../Navbar';
 import './PageLayout.css';
 
 const SuperadminPayoutsPage = () => {

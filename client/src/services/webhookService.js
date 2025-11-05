@@ -54,7 +54,43 @@ class WebhookService {
     }
   }
 
-  // Get webhook configuration
+  // Get all webhook configurations (unified - recommended)
+  async getAllWebhookConfigs() {
+    try {
+      const token = await this.getAuthToken();
+
+      const response = await axios.get(API_ENDPOINTS.WEBHOOK_ALL_CONFIG, {
+        headers: {
+          'x-auth-token': token,
+        },
+      });
+
+      console.log('🔍 Service - Raw API response:', response.data);
+      console.log('🔍 Service - payment_webhook:', response.data?.payment_webhook);
+      console.log('🔍 Service - payout_webhook:', response.data?.payout_webhook);
+
+      // Return the unified response with both payment and payout webhooks
+      if (response.data?.success !== false) {
+        const result = {
+          paymentWebhook: response.data.payment_webhook || null,
+          payoutWebhook: response.data.payout_webhook || null
+        };
+        console.log('🔍 Service - Returning mapped result:', result);
+        return result;
+      }
+      console.log('⚠️ Service - API returned success: false');
+      return { paymentWebhook: null, payoutWebhook: null };
+    } catch (error) {
+      console.error('All webhook configs fetch error:', error);
+      // If merchant not found or other errors, return null configs
+      if (error.response?.status === 404 || error.response?.status === 500) {
+        return { paymentWebhook: null, payoutWebhook: null };
+      }
+      throw new Error(this.getApiErrorMessage(error, 'Failed to fetch webhook configurations'));
+    }
+  }
+
+  // Get webhook configuration (individual - for backward compatibility)
   async getWebhookConfig() {
     try {
       const token = await this.getAuthToken();

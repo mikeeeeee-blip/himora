@@ -1,7 +1,7 @@
 /* Page Layout Styles */
 .page-container {
   min-height: 100vh;
-  background: var(--bg);
+  background: var(--bg-primary);
 }
 /* Warning Balance Card */
 .balance-card.warning {
@@ -376,11 +376,12 @@
 }
 
 .page-header {
-  background: var(--card);
+  background: var(--bg-secondary);
   border-radius: 12px;
   padding: 30px;
   margin-bottom: 30px;
   box-shadow: var(--shadow);
+  border: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -389,17 +390,18 @@
 }
 
 .page-header h1 {
-  color: var(--text);
+  color: var(--text-light);
   font-size: 32px;
-  font-weight: 700;
+  font-weight: 500;
   margin: 0 0 8px 0;
   display: flex;
   align-items: center;
   gap: 12px;
+  font-family: 'Albert Sans', sans-serif;
 }
 
 .page-header p {
-  color: var(--muted);
+  color: var(--text-muted-light);
   font-size: 16px;
   margin: 0;
   line-height: 1.6;

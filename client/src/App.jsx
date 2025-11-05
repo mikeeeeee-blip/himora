@@ -1,22 +1,28 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './components/Login';
-import SuperadminDashboard from './components/SuperadminDashboard';
-import AdminDashboard from './components/AdminDashboard';
-import TransactionsPage from './components/pages/TransactionsPage';
-import PayoutsPage from './components/pages/PayoutsPage';
-import BalancePage from './components/pages/BalancePage';
-import PaymentsPage from './components/pages/PaymentsPage';
-import SuperadminSignupPage from './components/pages/SuperadminSignupPage';
-import SuperadminTransactionsPage from './components/pages/SuperadminTransactionsPage';
-import SuperadminPayoutsPage from './components/pages/PayoutsManagement';
-import SuperadminMerchantsPage from './components/pages/SuperadminMerchantsPage';
-import WebhookPage from './components/pages/WebhookPage';
-import WebhookHowTo from './components/pages/WebhookHowTo';
-import ApiDocumentationPage from './components/pages/ApiDocumentationPage';
-import AuthWrapper from './components/AuthWrapper';
-import { USER_ROLES } from './constants/api';
-import TransactionDetailPage from './components/pages/TransactionDetailPage';
+import React from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import Login from "./components/Login";
+import SuperadminDashboard from "./components/SuperadminDashboard";
+import AdminDashboard from "./components/AdminDashboard";
+import TransactionsPage from "./components/pages/TransactionsPage";
+import PayoutsPage from "./components/pages/PayoutsPage";
+import PayinsPage from "./components/pages/PayinsPage";
+import BalancePage from "./components/pages/BalancePage";
+import PaymentsPage from "./components/pages/PaymentsPage";
+import SuperadminSignupPage from "./components/pages/SuperadminSignupPage";
+import SuperadminTransactionsPage from "./components/pages/SuperadminTransactionsPage";
+import SuperadminPayoutsPage from "./components/pages/PayoutsManagement";
+import SuperadminMerchantsPage from "./components/pages/SuperadminMerchantsPage";
+import WebhookPage from "./components/pages/WebhookPage";
+import WebhookHowTo from "./components/pages/WebhookHowTo";
+import ApiDocumentationPage from "./components/pages/ApiDocumentationPage";
+import AuthWrapper from "./components/AuthWrapper";
+import { USER_ROLES } from "./constants/api";
+import TransactionDetailPage from "./components/pages/TransactionDetailPage";
 
 function App() {
   return (
@@ -91,7 +97,7 @@ function App() {
           path="/admin/payins"
           element={
             <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
-              <BalancePage />
+              <PayinsPage />
             </AuthWrapper>
           }
         />
@@ -141,4 +147,4 @@ function App() {
   );
 }
 
-export default App
+export default App;

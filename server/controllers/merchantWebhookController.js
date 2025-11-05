@@ -111,6 +111,57 @@ exports.getMerchantWebhookConfig = async (req, res) => {
     }
 };
 
+// ============ GET ALL WEBHOOK CONFIGS (UNIFIED) ============
+exports.getAllWebhookConfigs = async (req, res) => {
+    try {
+        const merchantId = req.user.id;
+
+        const merchant = await User.findById(merchantId).select(
+            'webhookUrl webhookSecret webhookEnabled webhookEvents webhookRetries successUrl failureUrl payoutWebhookUrl payoutWebhookSecret payoutWebhookEnabled payoutWebhookEvents payoutWebhookRetries'
+        );
+
+        if (!merchant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Merchant not found'
+            });
+        }
+
+        // Build payment webhook config (can be null if not configured)
+        const paymentWebhook = (merchant.webhookUrl && merchant.webhookEnabled) ? {
+            webhook_url: merchant.webhookUrl,
+            webhook_secret: merchant.webhookSecret,
+            webhook_enabled: merchant.webhookEnabled,
+            webhook_events: merchant.webhookEvents || [],
+            webhook_retries: merchant.webhookRetries || 3,
+            success_url: merchant.successUrl,
+            failure_url: merchant.failureUrl
+        } : null;
+
+        // Build payout webhook config (can be null if not configured)
+        const payoutWebhook = (merchant.payoutWebhookUrl && merchant.payoutWebhookEnabled) ? {
+            webhook_url: merchant.payoutWebhookUrl,
+            webhook_secret: merchant.payoutWebhookSecret,
+            webhook_enabled: merchant.payoutWebhookEnabled,
+            webhook_events: merchant.payoutWebhookEvents || [],
+            webhook_retries: merchant.payoutWebhookRetries || 3
+        } : null;
+
+        res.json({
+            success: true,
+            payment_webhook: paymentWebhook,
+            payout_webhook: payoutWebhook
+        });
+
+    } catch (error) {
+        console.error('❌ Get All Webhook Configs Error:', error.message);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get webhook configurations'
+        });
+    }
+};
+
 // ============ TEST MERCHANT WEBHOOK ============
 exports.testMerchantWebhook = async (req, res) => {
     try {
