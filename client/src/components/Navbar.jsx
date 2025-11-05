@@ -159,11 +159,16 @@ const Navbar = () => {
 
           {/* Logo */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-teal-400 to-teal-600 rounded-lg flex items-center justify-center text-white font-bold text-lg sm:text-xl flex-shrink-0">
-              X
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br  rounded-lg flex items-center justify-center text-white font-bold text-lg sm:text-xl flex-shrink-0">
+            {/* src="/X.png" */}
+            <img
+              src="/X.png"
+              alt="Ninex Group Logo"
+              className="h-8 w-8 sm:h-10 sm:w-10 object-contain"
+            />
             </div>
             <span className="text-white font-medium text-base sm:text-lg font-['Albert_Sans'] hidden sm:block whitespace-nowrap">
-              Ninex<span className="text-accent">Group</span>
+              NineX<span className="text-accent">Group</span>
             </span>
           </div>
 

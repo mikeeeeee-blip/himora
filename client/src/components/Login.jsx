@@ -108,19 +108,11 @@ const Login = () => {
           <div className="bg-[#122D32] border border-white/10 rounded-3xl p-8 sm:p-10 shadow-2xl backdrop-blur-sm">
             {/* Logo Section */}
             <div className="flex items-center justify-center mb-8">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-teal-400 to-teal-600 rounded-3xl flex items-center justify-center text-white font-bold text-xl">
-                  X
-                </div>
-                <div className="flex flex-row items-baseline gap-0.5">
-                  <div className="text-2xl sm:text-3xl font-bold text-white leading-none font-['Albert_Sans']">
-                    Ninex
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-bold text-accent leading-none font-['Albert_Sans']">
-                    Group
-                  </div>
-                </div>
-              </div>
+              <img
+                src="/X.png"
+                alt="Ninex Group Logo"
+                className="h-16 sm:h-20 w-auto object-contain"
+              />
             </div>
 
             {/* Welcome Text */}

@@ -8,6 +8,8 @@ import {
   FiPlay,
   FiCheck,
   FiRefreshCw,
+  FiEye,
+  FiEyeOff,
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import Navbar from "../Navbar";
@@ -33,15 +35,85 @@ const WebhookPage = () => {
     url: "",
     events: [],
   });
+  const [showPaymentSecret, setShowPaymentSecret] = useState(false);
+  const [showPayoutSecret, setShowPayoutSecret] = useState(false);
 
   const webhookEvents = webhookService.getAvailableEvents();
   const payoutEvents = webhookService.getAvailablePayoutEvents();
 
+  // Debug: Log state changes
   useEffect(() => {
-    fetchWebhookConfig();
-    fetchPayoutWebhookConfig();
+    console.log("🔄 webhookConfig state changed:", webhookConfig);
+  }, [webhookConfig]);
+
+  useEffect(() => {
+    console.log("🔄 payoutWebhookConfig state changed:", payoutWebhookConfig);
+  }, [payoutWebhookConfig]);
+
+  useEffect(() => {
+    fetchAllWebhookConfigs();
   }, []);
 
+  // Unified function to fetch both webhook configs in a single API call
+  const fetchAllWebhookConfigs = async () => {
+    setLoading(true);
+    setPayoutLoading(true);
+    try {
+      const configs = await webhookService.getAllWebhookConfigs();
+      console.log("📥 Fetched webhook configs (raw):", configs);
+      console.log("📥 Payment webhook exists:", !!configs?.paymentWebhook);
+      console.log("📥 Payout webhook exists:", !!configs?.payoutWebhook);
+      
+      // Handle payment webhook config - only update if we have data
+      const paymentWebhook = configs?.paymentWebhook;
+      console.log("💳 Payment webhook data:", paymentWebhook);
+      if (paymentWebhook) {
+        setWebhookConfig(paymentWebhook);
+        console.log("💳 Setting webhookConfig state to:", paymentWebhook);
+        setWebhookData({
+          url: paymentWebhook.webhook_url || paymentWebhook.url || "",
+          events: paymentWebhook.webhook_events || paymentWebhook.events || [],
+        });
+      } else {
+        // Only set to null if it was previously null (don't overwrite existing config)
+        setWebhookConfig((prev) => prev || null);
+        setWebhookData({ url: "", events: [] });
+      }
+
+      // Handle payout webhook config - only update if we have data
+      const payoutWebhook = configs?.payoutWebhook;
+      console.log("💰 Payout webhook data:", payoutWebhook);
+      if (payoutWebhook) {
+        setPayoutWebhookConfig(payoutWebhook);
+        console.log("💰 Setting payoutWebhookConfig state to:", payoutWebhook);
+        setPayoutWebhookData({
+          url: payoutWebhook.webhook_url || payoutWebhook.url || "",
+          events: payoutWebhook.webhook_events || payoutWebhook.events || [],
+        });
+      } else {
+        // Only set to null if it was previously null (don't overwrite existing config)
+        setPayoutWebhookConfig((prev) => prev || null);
+        setPayoutWebhookData({ url: "", events: [] });
+      }
+    } catch (error) {
+      console.error("Error fetching webhook configs:", error);
+      setError("Failed to fetch webhook configurations");
+      setToast({
+        message: "Failed to fetch webhook configurations",
+        type: "error",
+      });
+      // Don't reset configs on error - keep existing state
+      // setWebhookConfig(null);
+      // setPayoutWebhookConfig(null);
+      setWebhookData({ url: "", events: [] });
+      setPayoutWebhookData({ url: "", events: [] });
+    } finally {
+      setLoading(false);
+      setPayoutLoading(false);
+    }
+  };
+
+  // Keep individual functions for backward compatibility (when refreshing after config changes)
   const fetchWebhookConfig = async () => {
     setLoading(true);
     try {
@@ -177,8 +249,8 @@ const WebhookPage = () => {
         });
       }
 
-      // Refresh the webhook config to get latest state
-      await fetchWebhookConfig();
+      // Refresh all webhook configs to get latest state
+      await fetchAllWebhookConfigs();
       setShowConfigForm(false);
     } catch (error) {
       setError(error.message);
@@ -225,8 +297,8 @@ const WebhookPage = () => {
         });
       }
 
-      // Refresh the payout webhook config to get latest state
-      await fetchPayoutWebhookConfig();
+      // Refresh all webhook configs to get latest state
+      await fetchAllWebhookConfigs();
       setShowPayoutConfigForm(false);
     } catch (error) {
       setError(error.message);
@@ -297,8 +369,8 @@ const WebhookPage = () => {
         setSuccess(successMessage);
         setToast({ message: successMessage, type: "success" });
 
-        // Refresh to ensure UI is updated
-        await Promise.all([fetchWebhookConfig(), fetchPayoutWebhookConfig()]);
+        // Refresh all webhook configs to ensure UI is updated
+        await fetchAllWebhookConfigs();
       } catch (error) {
         setError(error.message);
         setToast({ message: error.message, type: "error" });
@@ -799,328 +871,330 @@ const WebhookPage = () => {
                     </motion.div>
                   )}
 
+                  {/* Always show both webhook cards - loading state only shows spinner */}
                   {loading || payoutLoading ? (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="flex flex-col items-center justify-center py-12 sm:py-16 bg-[#122D32] border border-white/10 rounded-xl"
-                    >
-                      <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mb-4"></div>
-                      <p className="text-white/70 text-sm sm:text-base font-['Albert_Sans']">
-                        Loading webhook configuration...
-                      </p>
-                    </motion.div>
-                  ) : webhookConfig || payoutWebhookConfig ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 flex flex-col items-center justify-center min-h-[300px]">
+                        <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p className="text-white/70 text-sm font-['Albert_Sans']">Loading Payment Webhook...</p>
+                      </div>
+                      <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 flex flex-col items-center justify-center min-h-[300px]">
+                        <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p className="text-white/70 text-sm font-['Albert_Sans']">Loading Payout Webhook...</p>
+                      </div>
+                    </div>
+                  ) : (
                     <motion.div
                       variants={containerVariants}
                       initial="hidden"
                       animate="visible"
                       className="grid grid-cols-1 lg:grid-cols-2 gap-6"
                     >
-                      {/* Payment Webhook Configuration */}
-                      {webhookConfig ? (
-                        <motion.div
-                          variants={itemVariants}
-                          whileHover={{ scale: 1.02 }}
-                          className="bg-[#122D32] border border-white/10 rounded-xl p-6 hover:border-accent/30 transition-all duration-300 group"
-                        >
-                          <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-lg bg-accent/20 flex items-center justify-center group-hover:bg-accent/30 transition-colors">
-                                <FiLink className="text-accent text-xl" />
+                      {/* Payment Webhook Configuration Card - Always Show */}
+                      <motion.div
+                        variants={itemVariants}
+                        whileHover={{ scale: webhookConfig ? 1.02 : 1 }}
+                        className="bg-[#122D32] border border-white/10 rounded-xl p-6 hover:border-accent/30 transition-all duration-300 group"
+                      >
+                        {webhookConfig ? (
+                          <>
+                            <div className="flex items-center justify-between mb-6">
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-lg bg-accent/20 flex items-center justify-center group-hover:bg-accent/30 transition-colors">
+                                  <FiLink className="text-accent text-xl" />
+                                </div>
+                                <div>
+                                  <h4 className="text-lg font-medium text-white font-['Albert_Sans']">
+                                    Payment Webhook
+                                  </h4>
+                                  <p className="text-white/60 text-xs font-['Albert_Sans']">
+                                    Transaction notifications
+                                  </p>
+                                </div>
                               </div>
+                              <span
+                                className={`px-3 py-1.5 rounded-md text-xs font-medium font-['Albert_Sans'] ${
+                                  webhookConfig.webhook_enabled
+                                    ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                                    : "bg-red-500/20 text-red-400 border border-red-500/30"
+                                }`}
+                              >
+                                {webhookConfig.webhook_enabled
+                                  ? "Enabled"
+                                  : "Disabled"}
+                              </span>
+                            </div>
+
+                            <div className="space-y-4">
                               <div>
-                                <h4 className="text-lg font-medium text-white font-['Albert_Sans']">
-                                  Payment Webhook
-                                </h4>
-                                <p className="text-white/60 text-xs font-['Albert_Sans']">
-                                  Transaction notifications
-                                </p>
-                              </div>
-                            </div>
-                            <span
-                              className={`px-3 py-1.5 rounded-md text-xs font-medium font-['Albert_Sans'] ${
-                                webhookConfig.webhook_enabled
-                                  ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                                  : "bg-red-500/20 text-red-400 border border-red-500/30"
-                              }`}
-                            >
-                              {webhookConfig.webhook_enabled
-                                ? "Enabled"
-                                : "Disabled"}
-                            </span>
-                          </div>
-
-                          <div className="space-y-4">
-                            <div>
-                              <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
-                                Webhook URL
-                              </label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  value={webhookConfig.webhook_url}
-                                  readOnly
-                                  className="flex-1 px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-accent"
-                                />
-                                <button
-                                  onClick={() =>
-                                    copyToClipboard(webhookConfig.webhook_url)
-                                  }
-                                  className="bg-accent/20 hover:bg-accent/30 text-accent px-4 py-2.5 rounded-lg transition-all duration-200 hover:scale-105"
-                                  title="Copy URL"
-                                >
-                                  <FiCopy className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-
-                            <div>
-                              <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
-                                Webhook Secret
-                              </label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  value={
-                                    webhookConfig.webhook_secret
-                                      ? `${webhookConfig.webhook_secret.substring(
-                                          0,
-                                          12
-                                        )}...`
-                                      : "Not available"
-                                  }
-                                  readOnly
-                                  className="flex-1 px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-accent"
-                                />
-                                {webhookConfig.webhook_secret && (
+                                <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
+                                  Webhook URL
+                                </label>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={webhookConfig.webhook_url}
+                                    readOnly
+                                    className="flex-1 px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-accent"
+                                  />
                                   <button
                                     onClick={() =>
-                                      copyToClipboard(
-                                        webhookConfig.webhook_secret
-                                      )
+                                      copyToClipboard(webhookConfig.webhook_url)
                                     }
                                     className="bg-accent/20 hover:bg-accent/30 text-accent px-4 py-2.5 rounded-lg transition-all duration-200 hover:scale-105"
-                                    title="Copy Secret"
+                                    title="Copy URL"
                                   >
                                     <FiCopy className="w-4 h-4" />
                                   </button>
-                                )}
+                                </div>
                               </div>
-                            </div>
 
-                            <div>
-                              <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
-                                Subscribed Events
-                              </label>
-                              <div className="flex flex-wrap gap-2">
-                                {webhookConfig.webhook_events?.map(
-                                  (eventId) => {
-                                    const event = webhookEvents.find(
-                                      (e) => e.id === eventId
-                                    );
-                                    return (
-                                      <span
-                                        key={eventId}
-                                        className="px-3 py-1.5 bg-accent/10 text-accent border border-accent/30 rounded-md text-xs font-medium font-['Albert_Sans']"
-                                      >
-                                        {event ? event.label : eventId}
-                                      </span>
-                                    );
-                                  }
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between pt-4 border-t border-white/10">
-                              <span className="text-white/60 text-xs font-medium font-['Albert_Sans'] uppercase tracking-wider">
-                                Retry Attempts
-                              </span>
-                              <span className="text-white text-sm font-semibold font-['Albert_Sans']">
-                                {webhookConfig.webhook_retries || 3}
-                              </span>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ) : (
-                        <motion.div
-                          variants={itemVariants}
-                          className="bg-[#122D32] border border-white/10 rounded-xl p-8 flex flex-col items-center justify-center min-h-[300px]"
-                        >
-                          <div className="w-16 h-16 rounded-full bg-bg-tertiary flex items-center justify-center mb-4">
-                            <FiLink className="text-accent text-2xl" />
-                          </div>
-                          <h3 className="text-lg font-medium text-white mb-2 font-['Albert_Sans']">
-                            No Payment Webhook Configured
-                          </h3>
-                          <p className="text-white/60 text-sm text-center font-['Albert_Sans']">
-                            Configure your payment webhook to start receiving
-                            payment notifications.
-                          </p>
-                        </motion.div>
-                      )}
-
-                      {/* Payout Webhook Configuration */}
-                      {payoutWebhookConfig ? (
-                        <motion.div
-                          variants={itemVariants}
-                          whileHover={{ scale: 1.02 }}
-                          className="bg-[#122D32] border border-white/10 rounded-xl p-6 hover:border-accent/30 transition-all duration-300 group"
-                        >
-                          <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-lg bg-accent/20 flex items-center justify-center group-hover:bg-accent/30 transition-colors">
-                                <FiLink className="text-accent text-xl" />
-                              </div>
                               <div>
-                                <h4 className="text-lg font-medium text-white font-['Albert_Sans']">
-                                  Payout Webhook
-                                </h4>
-                                <p className="text-white/60 text-xs font-['Albert_Sans']">
-                                  Payout notifications
-                                </p>
+                                <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
+                                  Webhook Secret
+                                </label>
+                                <div className="flex gap-2">
+                                  <div className="flex-1 relative">
+                                    <input
+                                      type={showPaymentSecret ? "text" : "password"}
+                                      value={
+                                        webhookConfig.webhook_secret || "Not available"
+                                      }
+                                      readOnly
+                                      className="w-full px-4 py-2.5 pr-12 bg-[#263F43] border border-white/10 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-accent"
+                                    />
+                                    {webhookConfig.webhook_secret && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowPaymentSecret(!showPaymentSecret)}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-white/60 hover:text-white transition-colors p-1.5"
+                                        title={showPaymentSecret ? "Hide Secret" : "Show Secret"}
+                                      >
+                                        {showPaymentSecret ? (
+                                          <FiEyeOff className="w-4 h-4" />
+                                        ) : (
+                                          <FiEye className="w-4 h-4" />
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                  {webhookConfig.webhook_secret && (
+                                    <button
+                                      onClick={() =>
+                                        copyToClipboard(
+                                          webhookConfig.webhook_secret
+                                        )
+                                      }
+                                      className="bg-accent/20 hover:bg-accent/30 text-accent px-4 py-2.5 rounded-lg transition-all duration-200 hover:scale-105"
+                                      title="Copy Secret"
+                                    >
+                                      <FiCopy className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
+                                  Subscribed Events
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                  {webhookConfig.webhook_events?.map(
+                                    (eventId) => {
+                                      const event = webhookEvents.find(
+                                        (e) => e.id === eventId
+                                      );
+                                      return (
+                                        <span
+                                          key={eventId}
+                                          className="px-3 py-1.5 bg-accent/10 text-accent border border-accent/30 rounded-md text-xs font-medium font-['Albert_Sans']"
+                                        >
+                                          {event ? event.label : eventId}
+                                        </span>
+                                      );
+                                    }
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                                <span className="text-white/60 text-xs font-medium font-['Albert_Sans'] uppercase tracking-wider">
+                                  Retry Attempts
+                                </span>
+                                <span className="text-white text-sm font-semibold font-['Albert_Sans']">
+                                  {webhookConfig.webhook_retries || 3}
+                                </span>
                               </div>
                             </div>
-                            <span
-                              className={`px-3 py-1.5 rounded-md text-xs font-medium font-['Albert_Sans'] ${
-                                payoutWebhookConfig.webhook_enabled
-                                  ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                                  : "bg-red-500/20 text-red-400 border border-red-500/30"
-                              }`}
-                            >
-                              {payoutWebhookConfig.webhook_enabled
-                                ? "Enabled"
-                                : "Disabled"}
-                            </span>
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-8">
+                            <div className="w-16 h-16 rounded-full bg-bg-tertiary flex items-center justify-center mb-4">
+                              <FiLink className="text-accent text-2xl" />
+                            </div>
+                            <h4 className="text-lg font-medium text-white mb-2 font-['Albert_Sans']">
+                              Payment Webhook
+                            </h4>
+                            <p className="text-white/60 text-sm text-center font-['Albert_Sans'] mb-4">
+                              No payment webhook configured
+                            </p>
                           </div>
+                        )}
+                      </motion.div>
 
-                          <div className="space-y-4">
-                            <div>
-                              <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
-                                Webhook URL
-                              </label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  value={payoutWebhookConfig.webhook_url}
-                                  readOnly
-                                  className="flex-1 px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-accent"
-                                />
-                                <button
-                                  onClick={() =>
-                                    copyToClipboard(
-                                      payoutWebhookConfig.webhook_url
-                                    )
-                                  }
-                                  className="bg-accent/20 hover:bg-accent/30 text-accent px-4 py-2.5 rounded-lg transition-all duration-200 hover:scale-105"
-                                  title="Copy URL"
-                                >
-                                  <FiCopy className="w-4 h-4" />
-                                </button>
+                      {/* Payout Webhook Configuration Card - Always Show */}
+                      <motion.div
+                        variants={itemVariants}
+                        whileHover={{ scale: payoutWebhookConfig ? 1.02 : 1 }}
+                        className="bg-[#122D32] border border-white/10 rounded-xl p-6 hover:border-accent/30 transition-all duration-300 group"
+                      >
+                        {payoutWebhookConfig ? (
+                          <>
+                            <div className="flex items-center justify-between mb-6">
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-lg bg-accent/20 flex items-center justify-center group-hover:bg-accent/30 transition-colors">
+                                  <FiLink className="text-accent text-xl" />
+                                </div>
+                                <div>
+                                  <h4 className="text-lg font-medium text-white font-['Albert_Sans']">
+                                    Payout Webhook
+                                  </h4>
+                                  <p className="text-white/60 text-xs font-['Albert_Sans']">
+                                    Payout notifications
+                                  </p>
+                                </div>
                               </div>
+                              <span
+                                className={`px-3 py-1.5 rounded-md text-xs font-medium font-['Albert_Sans'] ${
+                                  payoutWebhookConfig.webhook_enabled
+                                    ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                                    : "bg-red-500/20 text-red-400 border border-red-500/30"
+                                }`}
+                              >
+                                {payoutWebhookConfig.webhook_enabled
+                                  ? "Enabled"
+                                  : "Disabled"}
+                              </span>
                             </div>
 
-                            <div>
-                              <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
-                                Webhook Secret
-                              </label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  value={
-                                    payoutWebhookConfig.webhook_secret
-                                      ? `${payoutWebhookConfig.webhook_secret.substring(
-                                          0,
-                                          12
-                                        )}...`
-                                      : "Not available"
-                                  }
-                                  readOnly
-                                  className="flex-1 px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-accent"
-                                />
-                                {payoutWebhookConfig.webhook_secret && (
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
+                                  Webhook URL
+                                </label>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={payoutWebhookConfig.webhook_url}
+                                    readOnly
+                                    className="flex-1 px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-accent"
+                                  />
                                   <button
                                     onClick={() =>
                                       copyToClipboard(
-                                        payoutWebhookConfig.webhook_secret
+                                        payoutWebhookConfig.webhook_url
                                       )
                                     }
                                     className="bg-accent/20 hover:bg-accent/30 text-accent px-4 py-2.5 rounded-lg transition-all duration-200 hover:scale-105"
-                                    title="Copy Secret"
+                                    title="Copy URL"
                                   >
                                     <FiCopy className="w-4 h-4" />
                                   </button>
-                                )}
+                                </div>
                               </div>
-                            </div>
 
-                            <div>
-                              <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
-                                Subscribed Events
-                              </label>
-                              <div className="flex flex-wrap gap-2">
-                                {payoutWebhookConfig.webhook_events?.map(
-                                  (eventId) => {
-                                    const event = payoutEvents.find(
-                                      (e) => e.id === eventId
-                                    );
-                                    return (
-                                      <span
-                                        key={eventId}
-                                        className="px-3 py-1.5 bg-accent/10 text-accent border border-accent/30 rounded-md text-xs font-medium font-['Albert_Sans']"
+                              <div>
+                                <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
+                                  Webhook Secret
+                                </label>
+                                <div className="flex gap-2">
+                                  <div className="flex-1 relative">
+                                    <input
+                                      type={showPayoutSecret ? "text" : "password"}
+                                      value={
+                                        payoutWebhookConfig.webhook_secret || "Not available"
+                                      }
+                                      readOnly
+                                      className="w-full px-4 py-2.5 pr-12 bg-[#263F43] border border-white/10 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-accent"
+                                    />
+                                    {payoutWebhookConfig.webhook_secret && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowPayoutSecret(!showPayoutSecret)}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-white/60 hover:text-white transition-colors p-1.5"
+                                        title={showPayoutSecret ? "Hide Secret" : "Show Secret"}
                                       >
-                                        {event ? event.label : eventId}
-                                      </span>
-                                    );
-                                  }
-                                )}
+                                        {showPayoutSecret ? (
+                                          <FiEyeOff className="w-4 h-4" />
+                                        ) : (
+                                          <FiEye className="w-4 h-4" />
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                  {payoutWebhookConfig.webhook_secret && (
+                                    <button
+                                      onClick={() =>
+                                        copyToClipboard(
+                                          payoutWebhookConfig.webhook_secret
+                                        )
+                                      }
+                                      className="bg-accent/20 hover:bg-accent/30 text-accent px-4 py-2.5 rounded-lg transition-all duration-200 hover:scale-105"
+                                      title="Copy Secret"
+                                    >
+                                      <FiCopy className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-white/60 text-xs font-medium font-['Albert_Sans'] mb-2 uppercase tracking-wider">
+                                  Subscribed Events
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                  {payoutWebhookConfig.webhook_events?.map(
+                                    (eventId) => {
+                                      const event = payoutEvents.find(
+                                        (e) => e.id === eventId
+                                      );
+                                      return (
+                                        <span
+                                          key={eventId}
+                                          className="px-3 py-1.5 bg-accent/10 text-accent border border-accent/30 rounded-md text-xs font-medium font-['Albert_Sans']"
+                                        >
+                                          {event ? event.label : eventId}
+                                        </span>
+                                      );
+                                    }
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                                <span className="text-white/60 text-xs font-medium font-['Albert_Sans'] uppercase tracking-wider">
+                                  Retry Attempts
+                                </span>
+                                <span className="text-white text-sm font-semibold font-['Albert_Sans']">
+                                  {payoutWebhookConfig.webhook_retries || 3}
+                                </span>
                               </div>
                             </div>
-
-                            <div className="flex items-center justify-between pt-4 border-t border-white/10">
-                              <span className="text-white/60 text-xs font-medium font-['Albert_Sans'] uppercase tracking-wider">
-                                Retry Attempts
-                              </span>
-                              <span className="text-white text-sm font-semibold font-['Albert_Sans']">
-                                {payoutWebhookConfig.webhook_retries || 3}
-                              </span>
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-8">
+                            <div className="w-16 h-16 rounded-full bg-bg-tertiary flex items-center justify-center mb-4">
+                              <FiLink className="text-accent text-2xl" />
                             </div>
+                            <h4 className="text-lg font-medium text-white mb-2 font-['Albert_Sans']">
+                              Payout Webhook
+                            </h4>
+                            <p className="text-white/60 text-sm text-center font-['Albert_Sans'] mb-4">
+                              No payout webhook configured
+                            </p>
                           </div>
-                        </motion.div>
-                      ) : (
-                        <motion.div
-                          variants={itemVariants}
-                          className="bg-[#122D32] border border-white/10 rounded-xl p-8 flex flex-col items-center justify-center min-h-[300px]"
-                        >
-                          <div className="w-16 h-16 rounded-full bg-bg-tertiary flex items-center justify-center mb-4">
-                            <FiLink className="text-accent text-2xl" />
-                          </div>
-                          <h3 className="text-lg font-medium text-white mb-2 font-['Albert_Sans']">
-                            No Payout Webhook Configured
-                          </h3>
-                          <p className="text-white/60 text-sm text-center font-['Albert_Sans']">
-                            Configure your payout webhook to start receiving
-                            payout notifications.
-                          </p>
-                        </motion.div>
-                      )}
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-[#122D32] border border-white/10 rounded-xl p-12 flex flex-col items-center justify-center min-h-[400px]"
-                    >
-                      <div className="w-20 h-20 rounded-full bg-bg-tertiary flex items-center justify-center mb-6">
-                        <FiLink className="text-accent text-3xl" />
-                      </div>
-                      <h3 className="text-xl font-medium text-white mb-3 font-['Albert_Sans']">
-                        No Webhook Configured
-                      </h3>
-                      <p className="text-white/60 text-base text-center max-w-md font-['Albert_Sans']">
-                        Configure your webhook to start receiving payment
-                        notifications.
-                      </p>
+                        )}
+                      </motion.div>
                     </motion.div>
                   )}
                 </div>

@@ -28,7 +28,8 @@ const {
     updatePayoutWebhook,
     getPayoutWebhookConfig,
     testPayoutWebhook,
-    deletePayoutWebhook
+    deletePayoutWebhook,
+    getAllWebhookConfigs
 } = require('../controllers/merchantWebhookController.js');
 const {
     getMyPayouts,
@@ -50,6 +51,9 @@ router.get('/status/:orderId', apiKeyAuth, getPaymentStatus);
 router.get('/transactions', apiKeyAuth, getTransactions);
 
 // ============ MERCHANT WEBHOOK CONFIGURATION APIS ============
+// Unified endpoint to get all webhook configs (recommended)
+router.get('/merchant/webhook/all/config', auth, getAllWebhookConfigs);
+// Individual endpoints (for backward compatibility)
 router.post('/merchant/webhook/configure', auth, configureMerchantWebhook);
 router.get('/merchant/webhook/config', auth, getMerchantWebhookConfig);
 router.post('/merchant/webhook/test', auth, testMerchantWebhook);

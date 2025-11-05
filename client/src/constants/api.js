@@ -40,6 +40,9 @@ export const API_ENDPOINTS = {
     MANUAL_SETTLEMENT: `${BASE_URL}/superadmin/manual-settlement`,
 
   // ============ WEBHOOK CONFIGURATION ============
+  // Unified endpoint to get all webhook configs (recommended)
+  WEBHOOK_ALL_CONFIG: `${BASE_URL}/payments/merchant/webhook/all/config`,
+  // Individual endpoints
   WEBHOOK_CONFIGURE: `${BASE_URL}/payments/merchant/webhook/configure`,
   WEBHOOK_CONFIG: `${BASE_URL}/payments/merchant/webhook/config`,
   WEBHOOK_TEST: `${BASE_URL}/payments/merchant/webhook/test`,
