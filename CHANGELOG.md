@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API documentation layout and spacing issues
 - Code block alignment in authentication tabs
 
+## [undefined] - undefined
+
 ## [Unreleased]
 
 ### Added
