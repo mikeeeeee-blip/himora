@@ -82,9 +82,32 @@ exports.getMyBalance = async (req, res) => {
             { $match: { merchantId: merchantObjectId, status: { $in: ['requested', 'pending', 'processing'] } } },
             { $group: { _id: null, totalPending: { $sum: '$netAmount' }, count: { $sum: 1 } } }
         ]);
+        // Todays payin data 
         const totalPaidOut = completedPayoutAgg[0]?.totalPaidOut || 0;
         const totalPending = pendingPayoutAgg[0]?.totalPending || 0;
-
+        // todays pauout data 
+        // Get total payout commission for today (completed payouts created or updated today)
+        const { start: todayStart, end: todayEnd } = getIstDayRange();
+        const todayPayoutCommissionAgg = await Payout.aggregate([
+            { 
+                $match: { 
+                    merchantId: merchantObjectId, 
+                    status: 'completed',
+                    $or: [
+                        { createdAt: { $gte: todayStart, $lte: todayEnd } },
+                        { updatedAt: { $gte: todayStart, $lte: todayEnd } }
+                    ]
+                } 
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalTodaysPayoutCommission: { $sum: { $ifNull: ['$commission', 0] } }
+                }
+            }
+        ]);
+        const totalTodaysPayoutCommission = todayPayoutCommissionAgg[0]?.totalTodaysPayoutCommission || 0;
+        
         // Calculations
         const settledNetRevenue = settled.settledRevenue - settled.settledRefunded - settledCommission;
         const availableBalance = settledNetRevenue - totalPaidOut - totalPending;
@@ -125,6 +148,7 @@ exports.getMyBalance = async (req, res) => {
                 available_balance:  (availableBalance.toFixed(2)),
                 totalTodayRevenue : totalTodayRevenue,
                 totalPayinCommission : totalPayinCommission,
+                totalTodaysPayoutCommission : parseFloat(totalTodaysPayoutCommission.toFixed(2)),
                 unsettled_revenue: unsettled.unsettledRevenue.toFixed(2) ,
                 unsettled_commission: unsettledCommission.toFixed(2),
                 unsettled_net_revenue: (unsettled.unsettledRevenue - unsettledCommission).toFixed(2),
