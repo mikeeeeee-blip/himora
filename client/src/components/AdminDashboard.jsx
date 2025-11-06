@@ -158,11 +158,12 @@ const AdminDashboard = () => {
       let startDate = new Date();
 
       if (dateRange === "daily") {
-        startDate.setDate(now.getDate() - 7); // Last 7 days
+        startDate.setDate(now.getDate() - 6); // Last 7 days (including today)
       } else if (dateRange === "weekly") {
-        startDate.setDate(now.getDate() - 30); // Last 30 days
+        startDate.setDate(now.getDate() - 6); // Last 7 days (including today)
       } else {
-        startDate.setDate(now.getDate() - 90); // Last 90 days
+        // monthly
+        startDate.setDate(now.getDate() - 29); // Last 30 days (including today)
       }
 
       const startDateStr = startDate.toISOString().split("T")[0];
@@ -957,8 +958,20 @@ const AdminDashboard = () => {
   const balanceData = dashboardStats.balance;
 
   // Calculate metrics from balance API data (using /payments/merchant/balance endpoint structure)
-  const totalRevenue =
-    balance?.total_revenue || balance?.settled_revenue || "0.00";
+  // Use weekly/monthly data based on selected date range
+  const getPeriodData = () => {
+    if (dateRange === "weekly" && balanceData?.balanceOfPastWeek) {
+      return balanceData.balanceOfPastWeek;
+    } else if (dateRange === "monthly" && balanceData?.balanceOfPastMonth) {
+      return balanceData.balanceOfPastMonth;
+    }
+    return null; // Use default balance for daily
+  };
+
+  const periodData = getPeriodData();
+  const totalRevenue = periodData
+    ? periodData.total_revenue
+    : balance?.total_revenue || balance?.settled_revenue || "0.00";
   const totalPayoutCount =
     balanceData?.transaction_summary?.total_payouts_completed ||
     dashboardStats.payouts?.summary?.total_payout_requests ||
@@ -971,7 +984,15 @@ const AdminDashboard = () => {
     balanceData?.transaction_summary?.pending_payout_requests ||
     dashboardStats.payouts?.payouts?.length ||
     0;
-  const totalPayinCommission = balance?.totalPayinCommission || 0;
+  const totalPayinCommission = periodData
+    ? periodData.total_commission
+    : balance?.totalPayinCommission || 0;
+  const totalPaidOut = periodData
+    ? periodData.total_paid_out
+    : balance?.total_paid_out || "0.00";
+  const totalPayoutCommission = periodData
+    ? periodData.total_payout_commission
+    : balance?.totalTodaysPayoutCommission || 0;
 
   // Calculate trends (mock data for now - can be enhanced with historical data)
   const calculateTrend = (current, previous = 0) => {
@@ -998,14 +1019,16 @@ const AdminDashboard = () => {
     {
       icon: <TbArrowsTransferDown className="text-xl" />,
       title: "Total Paid payout",
-      value: `${formatCurrency(balance?.total_paid_out || 0)}`,
+      value: `${formatCurrency(totalPaidOut)}`,
       trend: "0% VS PREV. 28 DAYS",
       trendColor: "text-white/60",
     },
     {
       icon: <FiArrowUp className="text-xl" />,
-      title: "Today payin",
-      value:formatCurrency(todayPayinAmount),
+      title: dateRange === "weekly" ? "Week Payin" : dateRange === "monthly" ? "Month Payin" : "Today payin",
+      value: dateRange === "weekly" || dateRange === "monthly"
+        ? formatCurrency(parseFloat(totalRevenue || 0))
+        : formatCurrency(todayPayinAmount),
     },
     {
       icon: <FiArrowDown className="text-xl" />,
@@ -1048,13 +1071,13 @@ const AdminDashboard = () => {
     },
     {
       icon: <FiBook className="text-xl" />,
-      title: "Today payin Commission",
-      value:formatCurrency(parseFloat(balance?.totalPayinCommission || 0)),
+      title: dateRange === "weekly" ? "Week Payin Commission" : dateRange === "monthly" ? "Month Payin Commission" : "Today payin Commission",
+      value: formatCurrency(parseFloat(totalPayinCommission || 0)),
     },
     {
       icon: <FiBook className="text-xl" />,
-      title: "Today Payout commission",
-      value:formatCurrency(parseFloat(balance?.totalTodaysPayoutCommission || 0)),
+      title: dateRange === "weekly" ? "Week Payout commission" : dateRange === "monthly" ? "Month Payout commission" : "Today Payout commission",
+      value: formatCurrency(parseFloat(totalPayoutCommission || 0)),
       progressLabel: "Low",
     },
   ];
@@ -1129,9 +1152,21 @@ const AdminDashboard = () => {
       "November",
       "December",
     ];
-    return `Displaying the data from ${
-      monthNames[now.getMonth()]
-    } ${now.getFullYear()}`;
+    
+    if (dateRange === "daily") {
+      const startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 6);
+      return `Displaying data from ${startDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} to ${now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} (Last 7 days)`;
+    } else if (dateRange === "weekly") {
+      const startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 6);
+      return `Displaying data from ${startDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} to ${now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} (Last 7 days)`;
+    } else {
+      // monthly
+      const startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 29);
+      return `Displaying data from ${startDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} to ${now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} (Last 30 days)`;
+    }
   };
 
   return (
