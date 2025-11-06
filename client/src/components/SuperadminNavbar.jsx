@@ -7,6 +7,7 @@ import {
   FiX,
   FiUsers,
   FiHome,
+  FiUserPlus,
 } from "react-icons/fi";
 import { TbArrowsTransferDown } from "react-icons/tb";
 import { HiOutlineChartBar } from "react-icons/hi2";
@@ -47,10 +48,7 @@ const SuperadminNavbar = () => {
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        userMenuRef.current &&
-        !userMenuRef.current.contains(event.target)
-      ) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
         setShowUserMenu(false);
       }
       if (
@@ -183,6 +181,20 @@ const SuperadminNavbar = () => {
                 )}
               </React.Fragment>
             ))}
+            <div className="h-6 w-px bg-white/20 mx-2"></div>
+            <button
+              onClick={() => navigate("/superadmin/signup")}
+              className={`flex items-center gap-2 px-4 md:px-5 py-2 rounded-full font-medium text-xs sm:text-sm font-['Albert_Sans'] transition-all duration-200 ${
+                isActive("/superadmin/signup")
+                  ? "bg-white text-[#001D22] shadow-md"
+                  : "bg-gradient-to-r from-accent/90 to-bg-tertiary/90 hover:from-accent hover:to-bg-tertiary text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 border border-accent/30"
+              }`}
+            >
+              <span className="text-base">
+                <FiUserPlus />
+              </span>
+              <span>Create</span>
+            </button>
           </div>
         </div>
 
@@ -353,6 +365,22 @@ const SuperadminNavbar = () => {
                   <span>{item.label}</span>
                 </button>
               ))}
+              <button
+                onClick={() => {
+                  navigate("/superadmin/signup");
+                  setShowMobileMenu(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-sm font-['Albert_Sans'] transition-all duration-200 ${
+                  isActive("/superadmin/signup")
+                    ? "bg-white text-[#001D22] shadow-md"
+                    : "bg-gradient-to-r from-accent/90 to-bg-tertiary/90 hover:from-accent hover:to-bg-tertiary text-white shadow-sm hover:shadow-md border border-accent/30"
+                }`}
+              >
+                <span className="text-xl">
+                  <FiUserPlus />
+                </span>
+                <span>Create Account</span>
+              </button>
             </div>
           </nav>
 
@@ -389,4 +417,3 @@ const SuperadminNavbar = () => {
 };
 
 export default SuperadminNavbar;
-
