@@ -310,3 +310,134 @@ exports.updateProfile = async (req, res) => {
         });
     }
 };
+
+// ============ DELETE USER (SuperAdmin Only) ============
+exports.deleteUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        // Validate userId
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                error: 'User ID is required'
+            });
+        }
+
+        // Find user
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found'
+            });
+        }
+
+        // Prevent deleting superAdmin users
+        if (user.role === 'superAdmin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Cannot delete superAdmin users'
+            });
+        }
+
+        // Prevent deleting yourself
+        if (user._id.toString() === req.user.id.toString()) {
+            return res.status(403).json({
+                success: false,
+                error: 'Cannot delete your own account'
+            });
+        }
+
+        // Delete user
+        await User.findByIdAndDelete(userId);
+
+        console.log(`✅ User deleted by SuperAdmin ${req.user.name}: ${user.email}`);
+
+        res.json({
+            success: true,
+            message: 'User deleted successfully',
+            deletedUser: {
+                id: user._id,
+                email: user.email,
+                name: user.name
+            }
+        });
+
+    } catch (err) {
+        console.error('Delete User Error:', err.message);
+        res.status(500).json({
+            success: false,
+            error: 'Server error'
+        });
+    }
+};
+
+// ============ CHANGE USER PASSWORD (SuperAdmin Only) ============
+exports.changeUserPassword = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { newPassword } = req.body;
+
+        // Validate userId
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                error: 'User ID is required'
+            });
+        }
+
+        // Validate new password
+        if (!newPassword) {
+            return res.status(400).json({
+                success: false,
+                error: 'New password is required'
+            });
+        }
+
+        // Validate password strength
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'Password must be at least 6 characters long'
+            });
+        }
+
+        // Find user
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found'
+            });
+        }
+
+        // Hash new password
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+
+        // Save user
+        await user.save();
+
+        console.log(`✅ Password changed by SuperAdmin ${req.user.name} for user: ${user.email}`);
+
+        res.json({
+            success: true,
+            message: 'Password changed successfully',
+            user: {
+                id: user._id,
+                email: user.email,
+                name: user.name
+            }
+        });
+
+    } catch (err) {
+        console.error('Change Password Error:', err.message);
+        res.status(500).json({
+            success: false,
+            error: 'Server error'
+        });
+    }
+};

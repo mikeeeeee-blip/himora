@@ -56,6 +56,63 @@ class SuperadminPaymentService {
       this.handleError(error, 'Failed to fetch merchants data');
     }
   }
+
+  // ============ USER MANAGEMENT ============
+  async deleteUser(userId) {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      console.log('Deleting user:', userId);
+
+      const response = await axios.delete(API_ENDPOINTS.SUPERADMIN_DELETE_USER(userId), {
+        headers: {
+          'x-auth-token': token,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('Delete user response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Delete user error:', error);
+      this.handleError(error, 'Failed to delete user');
+    }
+  }
+
+  async changeUserPassword(userId, newPassword) {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      if (!newPassword || newPassword.length < 6) {
+        throw new Error('Password must be at least 6 characters long');
+      }
+
+      console.log('Changing password for user:', userId);
+
+      const response = await axios.put(
+        API_ENDPOINTS.SUPERADMIN_CHANGE_PASSWORD(userId),
+        { newPassword },
+        {
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('Change password response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Change password error:', error);
+      this.handleError(error, 'Failed to change user password');
+    }
+  }
 // ============ MANUAL SETTLEMENT ============
 async triggerManualSettlement() {
   try {
