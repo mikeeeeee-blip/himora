@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useMemo } from "react";
 import { FiArrowRight } from "react-icons/fi";
 import {
   Area,
@@ -11,7 +10,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import paymentService from "../../services/paymentService";
 
 // Chart Component using Recharts
 const AnalyticsChart = ({ data = [], type = "payin", color = "#10b981" }) => {
@@ -201,20 +199,19 @@ const AnalyticsChart = ({ data = [], type = "payin", color = "#10b981" }) => {
 
 const QuickAnalytics = ({
   dateRange = "monthly", // Accept dateRange as prop from parent
+  chartData: chartDataProp = { payin: [], payout: [], settlement: [], loading: true }, // Accept chartData from parent
+  summaryCards: summaryCardsProp = [], // Accept summaryCards from parent
+  actionItems = [], // Accept actionItems from parent
 }) => {
-  const navigate = useNavigate();
   const [selectedView, setSelectedView] = useState("payin");
-  const [chartData, setChartData] = useState({
-    payin: [],
-    payout: [],
-    settlement: [],
-    loading: true,
-  });
-  const [summaryCards, setSummaryCards] = useState([
+  
+  // Use props if provided, otherwise use local state (for backward compatibility)
+  const chartData = chartDataProp;
+  const summaryCards = summaryCardsProp.length > 0 ? summaryCardsProp : [
     { label: "Today payin", value: "₹0.00" },
     { label: "Last payin", value: "₹0.00" },
     { label: "Today payout", value: "0 items" },
-  ]);
+  ];
 
   // Process chart data by grouping transactions/payouts by date
   const processChartData = (data, type) => {
@@ -288,223 +285,8 @@ const QuickAnalytics = ({
     return filled.length > 0 ? filled : sorted;
   };
 
-  // Fetch chart data from API endpoints
-  const fetchChartData = async () => {
-    try {
-      setChartData((prev) => ({ ...prev, loading: true }));
-
-      // Calculate date range based on selected period
-      const now = new Date();
-      let startDate = new Date();
-
-      if (dateRange === "daily") {
-        startDate.setDate(now.getDate() - 7); // Last 7 days
-      } else if (dateRange === "weekly") {
-        startDate.setDate(now.getDate() - 30); // Last 30 days
-      } else {
-        startDate.setDate(now.getDate() - 90); // Last 90 days
-      }
-
-      const startDateStr = startDate.toISOString().split("T")[0];
-      const endDateStr = now.toISOString().split("T")[0];
-
-      console.log("📊 QuickAnalytics: Fetching chart data", {
-        dateRange,
-        startDate: startDateStr,
-        endDate: endDateStr,
-      });
-
-      // Fetch payin transactions
-      // Endpoint: /api/payments/merchant/transactions/search (same as PayinsPage.jsx)
-      // Uses: paymentService.searchTransactions() → API_ENDPOINTS.SEARCH_TRANSACTIONS
-      let payinData = [];
-      try {
-        const payinResult = await paymentService.searchTransactions({
-          startDate: startDateStr,
-          endDate: endDateStr,
-          page: 1,
-          limit: 1000,
-          sortBy: "createdAt",
-          sortOrder: "asc",
-        });
-        payinData = payinResult.transactions || [];
-        console.log(
-          "✅ QuickAnalytics: Payin data fetched from /api/payments/merchant/transactions/search",
-          payinData.length,
-          "transactions"
-        );
-      } catch (err) {
-        console.error("❌ QuickAnalytics: Payin fetch error", err.message);
-      }
-
-      // Fetch payout data
-      // Endpoint: /api/payments/merchant/payouts/search (same as PayoutsPage.jsx)
-      // Uses: paymentService.searchPayouts() → API_ENDPOINTS.SEARCH_PAYOUTS
-      let payoutData = [];
-      try {
-        const payoutResult = await paymentService.searchPayouts({
-          startDate: startDateStr,
-          endDate: endDateStr,
-          page: 1,
-          limit: 1000,
-          sortBy: "createdAt",
-          sortOrder: "asc",
-        });
-        payoutData = payoutResult.payouts || [];
-        console.log(
-          "✅ QuickAnalytics: Payout data fetched from /api/payments/merchant/payouts/search",
-          payoutData.length,
-          "payouts"
-        );
-      } catch (err) {
-        console.error("❌ QuickAnalytics: Payout fetch error", err.message);
-      }
-
-      // Fetch settlement transactions (paid + settled)
-      // Endpoint: /api/payments/merchant/transactions/search (with status='paid', then filtered for settled)
-      // Uses: paymentService.searchTransactions() → API_ENDPOINTS.SEARCH_TRANSACTIONS
-      let settlementData = [];
-      try {
-        const settlementResult = await paymentService.searchTransactions({
-          startDate: startDateStr,
-          endDate: endDateStr,
-          status: "paid",
-          page: 1,
-          limit: 1000,
-          sortBy: "createdAt",
-          sortOrder: "asc",
-        });
-        const rawSettlements = settlementResult.transactions || [];
-        settlementData = rawSettlements.filter((txn) => {
-          if (!txn) return false;
-          const hasSettlementStatus =
-            txn.settlementStatus === "settled" ||
-            txn.settlement_status === "settled";
-          const hasSettlementDate = txn.settlementDate || txn.settlement_date;
-          return hasSettlementStatus || hasSettlementDate;
-        });
-        console.log(
-          "✅ QuickAnalytics: Settlement data fetched from /api/payments/merchant/transactions/search",
-          settlementData.length,
-          "settled transactions"
-        );
-      } catch (err) {
-        console.error("❌ QuickAnalytics: Settlement fetch error", err.message);
-      }
-
-      // Process data for charts
-      const processedPayin = processChartData(payinData, "payin");
-      const processedPayout = processChartData(payoutData, "payout");
-      const processedSettlement = processChartData(
-        settlementData,
-        "settlement"
-      );
-
-      // Fetch today's data for summary cards
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split("T")[0];
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split("T")[0];
-
-      // Get today's payin for summary cards
-      // Endpoint: /api/payments/merchant/transactions/search (same as PayinsPage.jsx)
-      // Uses: paymentService.searchTransactions() → API_ENDPOINTS.SEARCH_TRANSACTIONS
-      let todayPayin = 0;
-      let todayPayoutCount = 0;
-      let lastPayinAmount = 0;
-
-      try {
-        const todayPayinResult = await paymentService.searchTransactions({
-          startDate: todayStr,
-          endDate: tomorrowStr,
-          limit: 100,
-          sortBy: "createdAt",
-          sortOrder: "desc",
-        });
-        const todayPayins = todayPayinResult.transactions || [];
-        todayPayin = todayPayins.reduce(
-          (sum, txn) => sum + parseFloat(txn.amount || 0),
-          0
-        );
-
-        // Get last payin amount (most recent)
-        if (todayPayins.length > 0) {
-          lastPayinAmount = parseFloat(todayPayins[0].amount || 0);
-        } else if (processedPayin.length > 0) {
-          // Fallback to most recent from chart data
-          const recentPayins = processedPayin
-            .filter((d) => d.amount > 0)
-            .sort((a, b) => new Date(b.date) - new Date(a.date));
-          if (recentPayins.length > 0) {
-            lastPayinAmount = recentPayins[0].amount;
-          }
-        }
-      } catch (err) {
-        console.error(
-          "❌ QuickAnalytics: Today payin fetch error",
-          err.message
-        );
-      }
-
-      // Get today's payout count for summary cards
-      // Endpoint: /api/payments/merchant/payouts/search (same as PayoutsPage.jsx)
-      // Uses: paymentService.searchPayouts() → API_ENDPOINTS.SEARCH_PAYOUTS
-      try {
-        const todayPayoutResult = await paymentService.searchPayouts({
-          startDate: todayStr,
-          endDate: tomorrowStr,
-          limit: 100,
-          sortBy: "createdAt",
-          sortOrder: "desc",
-        });
-        const todayPayouts = todayPayoutResult.payouts || [];
-        todayPayoutCount = todayPayouts.length;
-      } catch (err) {
-        console.error(
-          "❌ QuickAnalytics: Today payout fetch error",
-          err.message
-        );
-      }
-
-      // Format currency
-      const formatCurrency = (amount) => {
-        return `₹${parseFloat(amount || 0).toLocaleString("en-IN", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`;
-      };
-
-      // Update summary cards
-      setSummaryCards([
-        { label: "Today payin", value: formatCurrency(todayPayin) },
-        { label: "Last payin", value: formatCurrency(lastPayinAmount) },
-        { label: "Today payout", value: `${todayPayoutCount} items` },
-      ]);
-
-      setChartData({
-        payin: processedPayin,
-        payout: processedPayout,
-        settlement: processedSettlement,
-        loading: false,
-      });
-
-      console.log("✅ QuickAnalytics: Chart data processed", {
-        payin: processedPayin.length,
-        payout: processedPayout.length,
-        settlement: processedSettlement.length,
-      });
-    } catch (error) {
-      console.error("❌ QuickAnalytics: Chart data fetch error", error);
-      setChartData((prev) => ({ ...prev, loading: false }));
-    }
-  };
-
-  // Fetch data on mount and when dateRange changes
-  useEffect(() => {
-    fetchChartData();
-  }, [dateRange]);
+  // Note: Data fetching is now handled by parent component (AdminDashboard)
+  // This component receives chartData, summaryCards, and actionItems as props
 
   // Handle view change - only updates the graph, no navigation
   const handleViewClick = (view) => {
@@ -588,40 +370,27 @@ const QuickAnalytics = ({
       </div>
 
       {/* Action Items */}
-      <div>
-        <h3 className="text-sm font-medium text-white/80 mb-3 font-['Albert_Sans']">
-          Action Items
-        </h3>
-        <div className="space-y-2">
-          <div
-            onClick={() => navigate("/admin/payins")}
-            className="flex items-center justify-between p-3 bg-bg-tertiary border border-white/10 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group"
-          >
-            <span className="text-white/80 text-sm font-['Albert_Sans']">
-              View Payins
-            </span>
-            <FiArrowRight className="text-white/40 group-hover:text-white/60 transition-colors" />
-          </div>
-          <div
-            onClick={() => navigate("/admin/payouts")}
-            className="flex items-center justify-between p-3 bg-bg-tertiary border border-white/10 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group"
-          >
-            <span className="text-white/80 text-sm font-['Albert_Sans']">
-              View Payouts
-            </span>
-            <FiArrowRight className="text-white/40 group-hover:text-white/60 transition-colors" />
-          </div>
-          <div
-            onClick={() => navigate("/admin/transactions?tab=settlement")}
-            className="flex items-center justify-between p-3 bg-bg-tertiary border border-white/10 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group"
-          >
-            <span className="text-white/80 text-sm font-['Albert_Sans']">
-              View Settlements
-            </span>
-            <FiArrowRight className="text-white/40 group-hover:text-white/60 transition-colors" />
+      {actionItems && actionItems.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-white/80 mb-3 font-['Albert_Sans']">
+            Action Items
+          </h3>
+          <div className="space-y-2">
+            {actionItems.map((item, index) => (
+              <div
+                key={index}
+                onClick={item.onClick}
+                className="flex items-center justify-between p-3 bg-bg-tertiary border border-white/10 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group"
+              >
+                <span className="text-white/80 text-sm font-['Albert_Sans']">
+                  {item.label}
+                </span>
+                <FiArrowRight className="text-white/40 group-hover:text-white/60 transition-colors" />
+              </div>
+            ))}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
