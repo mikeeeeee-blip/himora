@@ -60,6 +60,10 @@ export const API_ENDPOINTS = {
   // ============ SUPERADMIN - MERCHANTS ============
   SUPERADMIN_MERCHANTS_COMPREHENSIVE: `${BASE_URL}/superadmin/merchants/comprehensive`,
   
+  // ============ SUPERADMIN - USER MANAGEMENT ============
+  SUPERADMIN_DELETE_USER: (userId) => `${BASE_URL}/superadmin/users/${userId}`,
+  SUPERADMIN_CHANGE_PASSWORD: (userId) => `${BASE_URL}/superadmin/users/${userId}/password`,
+  
   // ============ SUPERADMIN - PAYOUTS ============
   ADMIN_PAYOUTS: `${BASE_URL}/payments/admin/payouts/all`,
   ADMIN_PAYOUT_APPROVE: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}/approve`,

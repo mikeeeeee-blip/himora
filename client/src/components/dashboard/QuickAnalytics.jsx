@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useMemo } from "react";
 import { FiArrowRight } from "react-icons/fi";
 import {
   Area,
@@ -11,7 +10,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import paymentService from "../../services/paymentService";
 
 // Chart Component using Recharts
 const AnalyticsChart = ({ data = [], type = "payin", color = "#10b981" }) => {
@@ -201,8 +199,10 @@ const AnalyticsChart = ({ data = [], type = "payin", color = "#10b981" }) => {
 
 const QuickAnalytics = ({
   dateRange = "monthly", // Accept dateRange as prop from parent
+  chartData: chartDataProp = { payin: [], payout: [], settlement: [], loading: true }, // Accept chartData from parent
+  summaryCards: summaryCardsProp = [], // Accept summaryCards from parent
+  actionItems = [], // Accept actionItems from parent
 }) => {
-  const navigate = useNavigate();
   const [selectedView, setSelectedView] = useState("payin");
   const [chartData, setChartData] = useState({
     payin: [],
@@ -213,7 +213,7 @@ const QuickAnalytics = ({
     { label: "Today payin", value: "₹0.00" },
     { label: "Last payin", value: "₹0.00" },
     { label: "Today payout", value: "0 items" },
-  ]);
+  ];
 
   // Process chart data by grouping transactions/payouts by date
   // Use createdAt for all types to create a consistent timeline
@@ -594,40 +594,27 @@ const QuickAnalytics = ({
       </div>
 
       {/* Action Items */}
-      <div>
-        <h3 className="text-sm font-medium text-white/80 mb-3 font-['Albert_Sans']">
-          Action Items
-        </h3>
-        <div className="space-y-2">
-          <div
-            onClick={() => navigate("/admin/payins")}
-            className="flex items-center justify-between p-3 bg-bg-tertiary border border-white/10 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group"
-          >
-            <span className="text-white/80 text-sm font-['Albert_Sans']">
-              View Payins
-            </span>
-            <FiArrowRight className="text-white/40 group-hover:text-white/60 transition-colors" />
-          </div>
-          <div
-            onClick={() => navigate("/admin/payouts")}
-            className="flex items-center justify-between p-3 bg-bg-tertiary border border-white/10 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group"
-          >
-            <span className="text-white/80 text-sm font-['Albert_Sans']">
-              View Payouts
-            </span>
-            <FiArrowRight className="text-white/40 group-hover:text-white/60 transition-colors" />
-          </div>
-          <div
-            onClick={() => navigate("/admin/transactions?tab=settlement")}
-            className="flex items-center justify-between p-3 bg-bg-tertiary border border-white/10 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group"
-          >
-            <span className="text-white/80 text-sm font-['Albert_Sans']">
-              View Settlements
-            </span>
-            <FiArrowRight className="text-white/40 group-hover:text-white/60 transition-colors" />
+      {actionItems && actionItems.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-white/80 mb-3 font-['Albert_Sans']">
+            Action Items
+          </h3>
+          <div className="space-y-2">
+            {actionItems.map((item, index) => (
+              <div
+                key={index}
+                onClick={item.onClick}
+                className="flex items-center justify-between p-3 bg-bg-tertiary border border-white/10 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group"
+              >
+                <span className="text-white/80 text-sm font-['Albert_Sans']">
+                  {item.label}
+                </span>
+                <FiArrowRight className="text-white/40 group-hover:text-white/60 transition-colors" />
+              </div>
+            ))}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

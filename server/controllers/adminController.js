@@ -108,6 +108,143 @@ exports.getMyBalance = async (req, res) => {
         ]);
         const totalTodaysPayoutCommission = todayPayoutCommissionAgg[0]?.totalTodaysPayoutCommission || 0;
         
+        // Calculate past week and past month date ranges (IST)
+        // Past week: 7 days ago to today (inclusive)
+        const weekAgo = new Date(todayStart);
+        weekAgo.setDate(weekAgo.getDate() - 6); // 7 days including today
+        const weekStart = getIstDayRange(weekAgo).start;
+        const weekEnd = todayEnd;
+        
+        // Past month: 30 days ago to today (inclusive)
+        const monthAgo = new Date(todayStart);
+        monthAgo.setDate(monthAgo.getDate() - 29); // 30 days including today
+        const monthStart = getIstDayRange(monthAgo).start;
+        const monthEnd = todayEnd;
+
+        // Aggregate past week transactions
+        const weekTransactionAgg = await Transaction.aggregate([
+            {
+                $match: {
+                    merchantId: merchantObjectId,
+                    status: 'paid',
+                    $or: [
+                        { createdAt: { $gte: weekStart, $lte: weekEnd } },
+                        { updatedAt: { $gte: weekStart, $lte: weekEnd } }
+                    ]
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: { $sum: '$amount' },
+                    totalCommission: { $sum: { $ifNull: ['$commission', 0] } },
+                    totalRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
+                    transactionCount: { $sum: 1 }
+                }
+            }
+        ]);
+        const weekTransactions = weekTransactionAgg[0] || { totalRevenue: 0, totalCommission: 0, totalRefunded: 0, transactionCount: 0 };
+
+        // Aggregate past week payouts
+        const weekPayoutAgg = await Payout.aggregate([
+            {
+                $match: {
+                    merchantId: merchantObjectId,
+                    $or: [
+                        { createdAt: { $gte: weekStart, $lte: weekEnd } },
+                        { updatedAt: { $gte: weekStart, $lte: weekEnd } }
+                    ]
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalPaidOut: {
+                        $sum: {
+                            $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$netAmount', 0] }, 0]
+                        }
+                    },
+                    totalPending: {
+                        $sum: {
+                            $cond: [
+                                { $in: ['$status', ['requested', 'pending', 'processing']] },
+                                { $ifNull: ['$netAmount', 0] },
+                                0
+                            ]
+                        }
+                    },
+                    totalPayoutCommission: {
+                        $sum: {
+                            $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$commission', 0] }, 0]
+                        }
+                    }
+                }
+            }
+        ]);
+        const weekPayouts = weekPayoutAgg[0] || { totalPaidOut: 0, totalPending: 0, totalPayoutCommission: 0 };
+
+        // Aggregate past month transactions
+        const monthTransactionAgg = await Transaction.aggregate([
+            {
+                $match: {
+                    merchantId: merchantObjectId,
+                    status: 'paid',
+                    $or: [
+                        { createdAt: { $gte: monthStart, $lte: monthEnd } },
+                        { updatedAt: { $gte: monthStart, $lte: monthEnd } }
+                    ]
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: { $sum: '$amount' },
+                    totalCommission: { $sum: { $ifNull: ['$commission', 0] } },
+                    totalRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
+                    transactionCount: { $sum: 1 }
+                }
+            }
+        ]);
+        const monthTransactions = monthTransactionAgg[0] || { totalRevenue: 0, totalCommission: 0, totalRefunded: 0, transactionCount: 0 };
+
+        // Aggregate past month payouts
+        const monthPayoutAgg = await Payout.aggregate([
+            {
+                $match: {
+                    merchantId: merchantObjectId,
+                    $or: [
+                        { createdAt: { $gte: monthStart, $lte: monthEnd } },
+                        { updatedAt: { $gte: monthStart, $lte: monthEnd } }
+                    ]
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalPaidOut: {
+                        $sum: {
+                            $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$netAmount', 0] }, 0]
+                        }
+                    },
+                    totalPending: {
+                        $sum: {
+                            $cond: [
+                                { $in: ['$status', ['requested', 'pending', 'processing']] },
+                                { $ifNull: ['$netAmount', 0] },
+                                0
+                            ]
+                        }
+                    },
+                    totalPayoutCommission: {
+                        $sum: {
+                            $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$commission', 0] }, 0]
+                        }
+                    }
+                }
+            }
+        ]);
+        const monthPayouts = monthPayoutAgg[0] || { totalPaidOut: 0, totalPending: 0, totalPayoutCommission: 0 };
+        
         // Calculations
         const settledNetRevenue = settled.settledRevenue - settled.settledRefunded - settledCommission;
         const availableBalance = settledNetRevenue - totalPaidOut - totalPending;
@@ -167,9 +304,26 @@ exports.getMyBalance = async (req, res) => {
                     payout_above_1000: '(1.77%)'
                 }
             },
-            // TODO : add the balance of past week and past month  with all the feilds like totalRevenue, totalCommission, totalRefunded, totalPaidOut, totalPending, totalTodaysPayoutCommission, etc.
-            // balanceOfPastWeek : {....}
-            // balanceOfPastMonth : {....}
+            balanceOfPastWeek: {
+                total_revenue: parseFloat(weekTransactions.totalRevenue.toFixed(2)),
+                total_commission: parseFloat(weekTransactions.totalCommission.toFixed(2)),
+                total_refunded: parseFloat(weekTransactions.totalRefunded.toFixed(2)),
+                total_paid_out: parseFloat(weekPayouts.totalPaidOut.toFixed(2)),
+                total_pending: parseFloat(weekPayouts.totalPending.toFixed(2)),
+                total_payout_commission: parseFloat(weekPayouts.totalPayoutCommission.toFixed(2)),
+                net_revenue: parseFloat((weekTransactions.totalRevenue - weekTransactions.totalCommission - weekTransactions.totalRefunded).toFixed(2)),
+                transaction_count: weekTransactions.transactionCount
+            },
+            balanceOfPastMonth: {
+                total_revenue: parseFloat(monthTransactions.totalRevenue.toFixed(2)),
+                total_commission: parseFloat(monthTransactions.totalCommission.toFixed(2)),
+                total_refunded: parseFloat(monthTransactions.totalRefunded.toFixed(2)),
+                total_paid_out: parseFloat(monthPayouts.totalPaidOut.toFixed(2)),
+                total_pending: parseFloat(monthPayouts.totalPending.toFixed(2)),
+                total_payout_commission: parseFloat(monthPayouts.totalPayoutCommission.toFixed(2)),
+                net_revenue: parseFloat((monthTransactions.totalRevenue - monthTransactions.totalCommission - monthTransactions.totalRefunded).toFixed(2)),
+                transaction_count: monthTransactions.transactionCount
+            },
             settlement_info: {
                 settled_transactions: settled.settledCount,
                 unsettled_transactions: unsettled.unsettledCount,
