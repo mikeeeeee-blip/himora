@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { FiArrowRight } from "react-icons/fi";
 import {
   Area,
@@ -199,7 +199,12 @@ const AnalyticsChart = ({ data = [], type = "payin", color = "#10b981" }) => {
 
 const QuickAnalytics = ({
   dateRange = "monthly", // Accept dateRange as prop from parent
-  chartData: chartDataProp = { payin: [], payout: [], settlement: [], loading: true }, // Accept chartData from parent
+  chartData: chartDataProp = {
+    payin: [],
+    payout: [],
+    settlement: [],
+    loading: true,
+  }, // Accept chartData from parent
   summaryCards: summaryCardsProp = [], // Accept summaryCards from parent
   actionItems = [], // Accept actionItems from parent
 }) => {
@@ -213,7 +218,7 @@ const QuickAnalytics = ({
     { label: "Today payin", value: "₹0.00" },
     { label: "Last payin", value: "₹0.00" },
     { label: "Today payout", value: "0 items" },
-  ];
+  ]);
 
   // Process chart data by grouping transactions/payouts by date
   // Use createdAt for all types to create a consistent timeline

@@ -361,6 +361,120 @@ const SuperadminDashboard = () => {
                     </div>
                   </div>
 
+                  {/* Revenue Section */}
+                  <div>
+                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
+                      <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
+                        <FiDollarSign /> Revenue
+                      </h2>
+                      <span className="text-lg font-medium text-green-400 font-['Albert_Sans']">
+                        {formatCurrency(stats.revenue.total)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 sm:col-span-2">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiDollarSign />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Total Revenue
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.revenue.total)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                Avg:{" "}
+                                {formatCurrency(
+                                  stats.revenue.average_transaction
+                                )}{" "}
+                                per txn
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
+                              <FiTrendingUp />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Commission (3.8%)
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(
+                                  stats.revenue.commission_earned
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiCreditCard />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Net Revenue
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.revenue.net_revenue)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 flex-shrink-0">
+                              <FiArrowDown />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Refunded
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.revenue.refunded)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Today & Week Revenue Stats */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                      <div className="bg-[#263F43] border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="text-xs text-white/80 font-medium mb-2 font-['Albert_Sans']">
+                          Today's Revenue
+                        </div>
+                        <div className="text-2xl font-medium text-white font-['Albert_Sans']">
+                          {formatCurrency(stats.revenue.today)}
+                        </div>
+                      </div>
+                      <div className="bg-[#263F43] border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="text-xs text-white/80 font-medium mb-2 font-['Albert_Sans']">
+                          This Week
+                        </div>
+                        <div className="text-2xl font-medium text-white font-['Albert_Sans']">
+                          {formatCurrency(stats.revenue.this_week)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Transactions Section */}
                   <div>
                     <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
@@ -503,120 +617,6 @@ const SuperadminDashboard = () => {
                         </div>
                         <div className="text-2xl font-medium text-white font-['Albert_Sans']">
                           {formatNumber(stats.transactions.this_week)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Revenue Section */}
-                  <div>
-                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
-                      <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
-                        <FiDollarSign /> Revenue
-                      </h2>
-                      <span className="text-lg font-medium text-green-400 font-['Albert_Sans']">
-                        {formatCurrency(stats.revenue.total)}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 sm:col-span-2">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
-                              <FiDollarSign />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                Total Revenue
-                              </h3>
-                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                {formatCurrency(stats.revenue.total)}
-                              </div>
-                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
-                                Avg:{" "}
-                                {formatCurrency(
-                                  stats.revenue.average_transaction
-                                )}{" "}
-                                per txn
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
-                              <FiTrendingUp />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                Commission (3.8%)
-                              </h3>
-                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                {formatCurrency(
-                                  stats.revenue.commission_earned
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
-                              <FiCreditCard />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                Net Revenue
-                              </h3>
-                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                {formatCurrency(stats.revenue.net_revenue)}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 flex-shrink-0">
-                              <FiArrowDown />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                Refunded
-                              </h3>
-                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                {formatCurrency(stats.revenue.refunded)}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Today & Week Revenue Stats */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                      <div className="bg-[#263F43] border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5">
-                        <div className="text-xs text-white/80 font-medium mb-2 font-['Albert_Sans']">
-                          Today's Revenue
-                        </div>
-                        <div className="text-2xl font-medium text-white font-['Albert_Sans']">
-                          {formatCurrency(stats.revenue.today)}
-                        </div>
-                      </div>
-                      <div className="bg-[#263F43] border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5">
-                        <div className="text-xs text-white/80 font-medium mb-2 font-['Albert_Sans']">
-                          This Week
-                        </div>
-                        <div className="text-2xl font-medium text-white font-['Albert_Sans']">
-                          {formatCurrency(stats.revenue.this_week)}
                         </div>
                       </div>
                     </div>

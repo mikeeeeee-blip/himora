@@ -20,9 +20,10 @@ class SignupService {
       console.error('Error response:', error.response?.data);
       console.error('Error status:', error.response?.status);
       
-      // Handle specific error cases
+      // Handle specific error cases - show actual server error message
       if (error.response?.status === 400) {
-        throw new Error('Invalid signup data. Please check all fields.');
+        const serverError = error.response?.data?.error || error.response?.data?.message;
+        throw new Error(serverError || 'Invalid signup data. Please check all fields.');
       } else if (error.response?.status === 409) {
         throw new Error('User already exists with this email address.');
       } else if (error.response?.status === 422) {
@@ -30,7 +31,7 @@ class SignupService {
       } else if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
         throw new Error('Network error. Please check your connection and try again.');
       } else {
-        throw new Error(error.response?.data?.message || error.message || 'Signup failed');
+        throw new Error(error.response?.data?.error || error.response?.data?.message || error.message || 'Signup failed');
       }
     }
   }

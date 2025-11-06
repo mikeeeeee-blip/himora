@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { FiTrash2, FiKey, FiX } from 'react-icons/fi';
 import superadminPaymentService from '../../services/superadminPaymentService';
 import '../pages/PageLayout.css';
 import './SuperadminMerchantsPage.css';
@@ -131,6 +132,12 @@ export default function SuperadminMerchantsPage() {
   const [error, setError] = useState(null);
   const [data, setData] = useState({ merchants: [], summary: null });
   const [query, setQuery] = useState({ search: '', status: 'active', includeInactive: false });
+  
+  // Modal states
+  const [deleteModal, setDeleteModal] = useState({ open: false, merchant: null });
+  const [passwordModal, setPasswordModal] = useState({ open: false, merchant: null, newPassword: '', loading: false });
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
 
   const filteredMerchants = useMemo(() => {
     const q = (query.search || '').toLowerCase().trim();
@@ -145,28 +152,94 @@ export default function SuperadminMerchantsPage() {
     });
   }, [data.merchants, query.search]);
 
+  const loadMerchants = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await superadminPaymentService.getAllMerchantsData({
+        status: query.status === 'all' ? undefined : query.status,
+        includeInactive: query.includeInactive,
+      });
+      setData(res || { merchants: [], summary: null });
+    } catch (e) {
+      setError(e.message || 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
     async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await superadminPaymentService.getAllMerchantsData({
-          status: query.status === 'all' ? undefined : query.status,
-          includeInactive: query.includeInactive,
-        });
-        if (mounted) {
-          setData(res || { merchants: [], summary: null });
-        }
-      } catch (e) {
-        if (mounted) setError(e.message || 'Failed to load');
-      } finally {
-        if (mounted) setLoading(false);
-      }
+      await loadMerchants();
     }
     load();
     return () => { mounted = false; };
   }, [query.status, query.includeInactive]);
+
+  const handleDeleteClick = (merchant) => {
+    setDeleteModal({ open: true, merchant });
+    setActionError('');
+    setActionSuccess('');
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteModal.merchant) return;
+    
+    const userId = deleteModal.merchant.merchant_id || deleteModal.merchant.merchant_info?._id || deleteModal.merchant.merchant_info?.id;
+    if (!userId) {
+      setActionError('User ID not found');
+      return;
+    }
+
+    try {
+      setActionError('');
+      await superadminPaymentService.deleteUser(userId);
+      setActionSuccess('User deleted successfully');
+      setDeleteModal({ open: false, merchant: null });
+      setTimeout(() => {
+        setActionSuccess('');
+        loadMerchants();
+      }, 1500);
+    } catch (e) {
+      setActionError(e.message || 'Failed to delete user');
+    }
+  };
+
+  const handlePasswordChangeClick = (merchant) => {
+    setPasswordModal({ open: true, merchant, newPassword: '', loading: false });
+    setActionError('');
+    setActionSuccess('');
+  };
+
+  const handlePasswordChange = async () => {
+    if (!passwordModal.merchant) return;
+    
+    const userId = passwordModal.merchant.merchant_id || passwordModal.merchant.merchant_info?._id || passwordModal.merchant.merchant_info?.id;
+    if (!userId) {
+      setActionError('User ID not found');
+      return;
+    }
+
+    if (!passwordModal.newPassword || passwordModal.newPassword.length < 6) {
+      setActionError('Password must be at least 6 characters long');
+      return;
+    }
+
+    try {
+      setActionError('');
+      setPasswordModal(prev => ({ ...prev, loading: true }));
+      await superadminPaymentService.changeUserPassword(userId, passwordModal.newPassword);
+      setActionSuccess('Password changed successfully');
+      setPasswordModal({ open: false, merchant: null, newPassword: '', loading: false });
+      setTimeout(() => {
+        setActionSuccess('');
+      }, 1500);
+    } catch (e) {
+      setActionError(e.message || 'Failed to change password');
+      setPasswordModal(prev => ({ ...prev, loading: false }));
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#001D22]">
@@ -287,6 +360,7 @@ export default function SuperadminMerchantsPage() {
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">Revenue</th>
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">Payouts</th>
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden xl:table-cell">Balance</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -325,6 +399,24 @@ export default function SuperadminMerchantsPage() {
                               <div>Paid Out: ₹ {currency(m.balance_information?.total_paid_out)}</div>
                               <div>Pending: ₹ {currency(m.balance_information?.pending_payouts)}</div>
                             </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handlePasswordChangeClick(m)}
+                                  className="p-2 bg-accent/20 hover:bg-accent/30 border border-accent/30 rounded-lg text-accent transition-all duration-200"
+                                  title="Change Password"
+                                >
+                                  <FiKey className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteClick(m)}
+                                  className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg text-red-400 transition-all duration-200"
+                                  title="Delete User"
+                                >
+                                  <FiTrash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -332,10 +424,119 @@ export default function SuperadminMerchantsPage() {
                   </div>
                 </div>
               )}
+
+              {/* Success/Error Messages */}
+              {actionSuccess && (
+                <div className="mt-4 text-green-400 bg-green-500/20 border border-green-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
+                  {actionSuccess}
+                </div>
+              )}
+              {actionError && (
+                <div className="mt-4 text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
+                  {actionError}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </section>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.open && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#122D32] border border-white/10 rounded-xl shadow-2xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-white font-['Albert_Sans']">Delete User</h3>
+                <button
+                  onClick={() => setDeleteModal({ open: false, merchant: null })}
+                  className="text-white/60 hover:text-white transition-colors"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-white/80 font-['Albert_Sans'] mb-6">
+                Are you sure you want to delete the user{' '}
+                <span className="font-semibold text-white">
+                  {deleteModal.merchant?.merchant_info?.business_name || deleteModal.merchant?.merchant_info?.name || deleteModal.merchant?.merchant_info?.email}
+                </span>?
+                <br />
+                <span className="text-red-400 text-sm mt-2 block">This action cannot be undone.</span>
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteModal({ open: false, merchant: null })}
+                  className="flex-1 px-4 py-2.5 bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteConfirm}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {passwordModal.open && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#122D32] border border-white/10 rounded-xl shadow-2xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-white font-['Albert_Sans']">Change Password</h3>
+                <button
+                  onClick={() => setPasswordModal({ open: false, merchant: null, newPassword: '', loading: false })}
+                  className="text-white/60 hover:text-white transition-colors"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="mb-4">
+                <p className="text-white/80 font-['Albert_Sans'] mb-2">
+                  User: <span className="font-semibold text-white">
+                    {passwordModal.merchant?.merchant_info?.business_name || passwordModal.merchant?.merchant_info?.name || passwordModal.merchant?.merchant_info?.email}
+                  </span>
+                </p>
+                <label className="block text-sm font-medium text-white/70 font-['Albert_Sans'] mb-2">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  value={passwordModal.newPassword}
+                  onChange={(e) => setPasswordModal(prev => ({ ...prev, newPassword: e.target.value }))}
+                  placeholder="Enter new password (min 6 characters)"
+                  className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                  disabled={passwordModal.loading}
+                />
+                <p className="text-xs text-white/50 mt-1 font-['Albert_Sans']">
+                  Password must be at least 6 characters long
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPasswordModal({ open: false, merchant: null, newPassword: '', loading: false })}
+                  disabled={passwordModal.loading}
+                  className="flex-1 px-4 py-2.5 bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePasswordChange}
+                  disabled={passwordModal.loading || !passwordModal.newPassword || passwordModal.newPassword.length < 6}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                >
+                  {passwordModal.loading ? 'Changing...' : 'Change Password'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
