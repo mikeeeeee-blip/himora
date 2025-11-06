@@ -997,36 +997,15 @@ const AdminDashboard = () => {
     },
     {
       icon: <TbArrowsTransferDown className="text-xl" />,
-      title: "Total payout",
-      value: `${totalPayoutCount} Item${totalPayoutCount !== 1 ? "s" : ""}`,
+      title: "Total Paid payout",
+      value: `${formatCurrency(balance?.total_paid_out || 0)}`,
       trend: "0% VS PREV. 28 DAYS",
       trendColor: "text-white/60",
     },
     {
       icon: <FiArrowUp className="text-xl" />,
       title: "Today payin",
-      value:
-        todayPayinAmount > 0
-          ? `${(
-              (todayPayinAmount / parseFloat(totalRevenue || 1)) *
-              100
-            ).toFixed(2)}%`
-          : "0.00%",
-      trend:
-        todayPayinAmount > 0
-          ? calculateTrend(todayPayinAmount, todayPayinAmount * 0.983)
-          : "0% VS PREV. 28 DAYS",
-      trendColor: todayPayinAmount > 0 ? "text-green-400" : "text-white/60",
-      showChart: true,
-      showProgressBar: true,
-      progressValue:
-        todayPayinAmount > 0
-          ? Math.min(
-              (todayPayinAmount / parseFloat(totalRevenue || 1)) * 100,
-              100
-            )
-          : 0,
-      progressLabel: "Low",
+      value:formatCurrency(todayPayinAmount),
     },
     {
       icon: <FiArrowDown className="text-xl" />,
@@ -1070,62 +1049,12 @@ const AdminDashboard = () => {
     {
       icon: <FiBook className="text-xl" />,
       title: "Today payin Commission",
-      value:
-        totalPayinCommission > 0
-          ? `${(
-              (totalPayinCommission / parseFloat(totalRevenue || 1)) *
-              100
-            ).toFixed(2)}%`
-          : "0.00%",
-      trend:
-        totalPayinCommission > 0
-          ? calculateTrend(totalPayinCommission, totalPayinCommission * 0.983)
-          : "0% VS PREV. 28 DAYS",
-      trendColor: totalPayinCommission > 0 ? "text-green-400" : "text-white/60",
-      showChart: true,
-      showProgressBar: true,
-      progressValue:
-        totalPayinCommission > 0
-          ? Math.min(
-              (totalPayinCommission / parseFloat(totalRevenue || 1)) * 100,
-              100
-            )
-          : 0,
-      progressLabel: "Low",
+      value:formatCurrency(parseFloat(balance?.totalPayinCommission || 0)),
     },
     {
       icon: <FiBook className="text-xl" />,
       title: "Today Payout commission",
-      value:
-        parseFloat(balance?.commission_deducted || 0) > 0
-          ? `${(
-              (parseFloat(balance?.commission_deducted || 0) /
-                parseFloat(totalRevenue || 1)) *
-              100
-            ).toFixed(2)}%`
-          : "0.00%",
-      trend:
-        parseFloat(balance?.commission_deducted || 0) > 0
-          ? calculateTrend(
-              parseFloat(balance?.commission_deducted || 0),
-              parseFloat(balance?.commission_deducted || 0) * 0.983
-            )
-          : "0% VS PREV. 28 DAYS",
-      trendColor:
-        parseFloat(balance?.commission_deducted || 0) > 0
-          ? "text-green-400"
-          : "text-white/60",
-      showChart: true,
-      showProgressBar: true,
-      progressValue:
-        parseFloat(balance?.commission_deducted || 0) > 0
-          ? Math.min(
-              (parseFloat(balance?.commission_deducted || 0) /
-                parseFloat(totalRevenue || 1)) *
-                100,
-              100
-            )
-          : 0,
+      value:formatCurrency(parseFloat(balance?.totalTodaysPayoutCommission || 0)),
       progressLabel: "Low",
     },
   ];

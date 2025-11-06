@@ -167,6 +167,9 @@ exports.getMyBalance = async (req, res) => {
                     payout_above_1000: '(1.77%)'
                 }
             },
+            // TODO : add the balance of past week and past month  with all the feilds like totalRevenue, totalCommission, totalRefunded, totalPaidOut, totalPending, totalTodaysPayoutCommission, etc.
+            // balanceOfPastWeek : {....}
+            // balanceOfPastMonth : {....}
             settlement_info: {
                 settled_transactions: settled.settledCount,
                 unsettled_transactions: unsettled.unsettledCount,
