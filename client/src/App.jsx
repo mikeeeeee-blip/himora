@@ -21,6 +21,7 @@ import WebhookPage from "./components/pages/WebhookPage";
 import WebhookHowTo from "./components/pages/WebhookHowTo";
 import ApiDocumentationPage from "./components/pages/ApiDocumentationPage";
 import AuthWrapper from "./components/AuthWrapper";
+import SuperadminLayout from "./components/SuperadminLayout";
 import { USER_ROLES } from "./constants/api";
 import TransactionDetailPage from "./components/pages/TransactionDetailPage";
 
@@ -33,7 +34,9 @@ function App() {
           path="/superadmin"
           element={
             <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminDashboard />
+              <SuperadminLayout>
+                <SuperadminDashboard />
+              </SuperadminLayout>
             </AuthWrapper>
           }
         />
@@ -41,7 +44,9 @@ function App() {
           path="/superadmin/signup"
           element={
             <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminSignupPage />
+              <SuperadminLayout>
+                <SuperadminSignupPage />
+              </SuperadminLayout>
             </AuthWrapper>
           }
         />
@@ -49,7 +54,9 @@ function App() {
           path="/superadmin/transactions"
           element={
             <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminTransactionsPage />
+              <SuperadminLayout>
+                <SuperadminTransactionsPage />
+              </SuperadminLayout>
             </AuthWrapper>
           }
         />
@@ -57,7 +64,9 @@ function App() {
           path="/superadmin/payouts"
           element={
             <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminPayoutsPage />
+              <SuperadminLayout>
+                <SuperadminPayoutsPage />
+              </SuperadminLayout>
             </AuthWrapper>
           }
         />
@@ -65,7 +74,9 @@ function App() {
           path="/superadmin/merchants"
           element={
             <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminMerchantsPage />
+              <SuperadminLayout>
+                <SuperadminMerchantsPage />
+              </SuperadminLayout>
             </AuthWrapper>
           }
         />

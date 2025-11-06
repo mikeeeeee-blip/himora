@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import signupService from "../../services/signupService";
-import Navbar from "../Navbar";
 import "./PageLayout.css";
 import Toast from "../ui/Toast";
 
@@ -112,7 +111,7 @@ const SuperadminSignupPage = () => {
       </div>
 
       <Navbar />
-      
+
       {/* Scrollable Content Section */}
       <section className="relative z-10 min-h-screen bg-transparent">
         <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
@@ -125,7 +124,8 @@ const SuperadminSignupPage = () => {
                     User Registration
                   </h1>
                   <p className="text-white/70 text-base sm:text-lg font-['Albert_Sans']">
-                    Create merchant/admin accounts with complete business details
+                    Create merchant/admin accounts with complete business
+                    details
                   </p>
                 </div>
               </div>
@@ -142,214 +142,214 @@ const SuperadminSignupPage = () => {
                   </div>
                 )}
 
-          <div className="create-form-card">
-            <h3>Register New User</h3>
-            <form onSubmit={handleSubmit} className="signup-form">
-              <div className="form-section">
-                <h4>Basic Information</h4>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Full Name *</label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) =>
-                        handleInputChange("name", e.target.value)
-                      }
-                      required
-                      placeholder="Rajesh Kumar"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Email *</label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) =>
-                        handleInputChange("email", e.target.value)
-                      }
-                      required
-                      placeholder="rajesh@electronics.com"
-                    />
-                  </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Password *</label>
-                    <input
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) =>
-                        handleInputChange("password", e.target.value)
-                      }
-                      required
-                      placeholder="SecurePass123"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Role *</label>
-                    <select
-                      value={formData.role}
-                      onChange={(e) =>
-                        handleInputChange("role", e.target.value)
-                      }
-                      required
-                    >
-                      <option value="admin">Admin</option>
-                      <option value="superAdmin">Super Admin</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
+                <div className="create-form-card">
+                  <h3>Register New User</h3>
+                  <form onSubmit={handleSubmit} className="signup-form">
+                    <div className="form-section">
+                      <h4>Basic Information</h4>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Full Name *</label>
+                          <input
+                            type="text"
+                            value={formData.name}
+                            onChange={(e) =>
+                              handleInputChange("name", e.target.value)
+                            }
+                            required
+                            placeholder="Rajesh Kumar"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Email *</label>
+                          <input
+                            type="email"
+                            value={formData.email}
+                            onChange={(e) =>
+                              handleInputChange("email", e.target.value)
+                            }
+                            required
+                            placeholder="rajesh@electronics.com"
+                          />
+                        </div>
+                      </div>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Password *</label>
+                          <input
+                            type="password"
+                            value={formData.password}
+                            onChange={(e) =>
+                              handleInputChange("password", e.target.value)
+                            }
+                            required
+                            placeholder="SecurePass123"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Role *</label>
+                          <select
+                            value={formData.role}
+                            onChange={(e) =>
+                              handleInputChange("role", e.target.value)
+                            }
+                            required
+                          >
+                            <option value="admin">Admin</option>
+                            <option value="superAdmin">Super Admin</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="form-section">
-                <h4>Business Information</h4>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Business Name *</label>
-                    <input
-                      type="text"
-                      value={formData.businessName}
-                      onChange={(e) =>
-                        handleInputChange("businessName", e.target.value)
-                      }
-                      required
-                      placeholder="Rajesh Electronics"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Business Logo URL</label>
-                    <input
-                      type="url"
-                      value={formData.businessLogo}
-                      onChange={(e) =>
-                        handleInputChange("businessLogo", e.target.value)
-                      }
-                      placeholder="https://example.com/logo.png"
-                    />
-                  </div>
-                </div>
-              </div>
+                    <div className="form-section">
+                      <h4>Business Information</h4>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Business Name *</label>
+                          <input
+                            type="text"
+                            value={formData.businessName}
+                            onChange={(e) =>
+                              handleInputChange("businessName", e.target.value)
+                            }
+                            required
+                            placeholder="Rajesh Electronics"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Business Logo URL</label>
+                          <input
+                            type="url"
+                            value={formData.businessLogo}
+                            onChange={(e) =>
+                              handleInputChange("businessLogo", e.target.value)
+                            }
+                            placeholder="https://example.com/logo.png"
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="form-section">
-                <h4>Business Details</h4>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Display Name</label>
-                    <input
-                      type="text"
-                      value={formData.businessDetails.displayName}
-                      onChange={(e) =>
-                        handleInputChange(
-                          "businessDetails.displayName",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Rajesh Electronics - Your Trusted Partner"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Description</label>
-                    <input
-                      type="text"
-                      value={formData.businessDetails.description}
-                      onChange={(e) =>
-                        handleInputChange(
-                          "businessDetails.description",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Best electronics store in Pune"
-                    />
-                  </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Website</label>
-                    <input
-                      type="url"
-                      value={formData.businessDetails.website}
-                      onChange={(e) =>
-                        handleInputChange(
-                          "businessDetails.website",
-                          e.target.value
-                        )
-                      }
-                      placeholder="https://rajeshelectronics.com"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Support Email</label>
-                    <input
-                      type="email"
-                      value={formData.businessDetails.supportEmail}
-                      onChange={(e) =>
-                        handleInputChange(
-                          "businessDetails.supportEmail",
-                          e.target.value
-                        )
-                      }
-                      placeholder="support@rajeshelectronics.com"
-                    />
-                  </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Support Phone</label>
-                    <input
-                      type="tel"
-                      value={formData.businessDetails.supportPhone}
-                      onChange={(e) =>
-                        handleInputChange(
-                          "businessDetails.supportPhone",
-                          e.target.value
-                        )
-                      }
-                      placeholder="9876543210"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>GSTIN</label>
-                    <input
-                      type="text"
-                      value={formData.businessDetails.gstin}
-                      onChange={(e) =>
-                        handleInputChange(
-                          "businessDetails.gstin",
-                          e.target.value
-                        )
-                      }
-                      placeholder="27AABCU9603R1ZM"
-                    />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>Address</label>
-                  <textarea
-                    value={formData.businessDetails.address}
-                    onChange={(e) =>
-                      handleInputChange(
-                        "businessDetails.address",
-                        e.target.value
-                      )
-                    }
-                    placeholder="123 MG Road, Pune, Maharashtra 411001"
-                    rows="3"
-                  />
-                </div>
-              </div>
+                    <div className="form-section">
+                      <h4>Business Details</h4>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Display Name</label>
+                          <input
+                            type="text"
+                            value={formData.businessDetails.displayName}
+                            onChange={(e) =>
+                              handleInputChange(
+                                "businessDetails.displayName",
+                                e.target.value
+                              )
+                            }
+                            placeholder="Rajesh Electronics - Your Trusted Partner"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Description</label>
+                          <input
+                            type="text"
+                            value={formData.businessDetails.description}
+                            onChange={(e) =>
+                              handleInputChange(
+                                "businessDetails.description",
+                                e.target.value
+                              )
+                            }
+                            placeholder="Best electronics store in Pune"
+                          />
+                        </div>
+                      </div>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Website</label>
+                          <input
+                            type="url"
+                            value={formData.businessDetails.website}
+                            onChange={(e) =>
+                              handleInputChange(
+                                "businessDetails.website",
+                                e.target.value
+                              )
+                            }
+                            placeholder="https://rajeshelectronics.com"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Support Email</label>
+                          <input
+                            type="email"
+                            value={formData.businessDetails.supportEmail}
+                            onChange={(e) =>
+                              handleInputChange(
+                                "businessDetails.supportEmail",
+                                e.target.value
+                              )
+                            }
+                            placeholder="support@rajeshelectronics.com"
+                          />
+                        </div>
+                      </div>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Support Phone</label>
+                          <input
+                            type="tel"
+                            value={formData.businessDetails.supportPhone}
+                            onChange={(e) =>
+                              handleInputChange(
+                                "businessDetails.supportPhone",
+                                e.target.value
+                              )
+                            }
+                            placeholder="9876543210"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>GSTIN</label>
+                          <input
+                            type="text"
+                            value={formData.businessDetails.gstin}
+                            onChange={(e) =>
+                              handleInputChange(
+                                "businessDetails.gstin",
+                                e.target.value
+                              )
+                            }
+                            placeholder="27AABCU9603R1ZM"
+                          />
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label>Address</label>
+                        <textarea
+                          value={formData.businessDetails.address}
+                          onChange={(e) =>
+                            handleInputChange(
+                              "businessDetails.address",
+                              e.target.value
+                            )
+                          }
+                          placeholder="123 MG Road, Pune, Maharashtra 411001"
+                          rows="3"
+                        />
+                      </div>
+                    </div>
 
-              <div className="form-actions">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="primary-btn"
-                >
-                  {loading ? "Registering..." : "Register User"}
-                </button>
-              </div>
-            </form>
-          </div>
+                    <div className="form-actions">
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="primary-btn"
+                      >
+                        {loading ? "Registering..." : "Register User"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </main>
           </div>
