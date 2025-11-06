@@ -213,7 +213,7 @@ const QuickAnalytics = ({
     { label: "Today payin", value: "₹0.00" },
     { label: "Last payin", value: "₹0.00" },
     { label: "Today payout", value: "0 items" },
-  ];
+  ]);
 
   // Process chart data by grouping transactions/payouts by date
   // Use createdAt for all types to create a consistent timeline
