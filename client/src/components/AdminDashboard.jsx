@@ -333,186 +333,239 @@ const AdminDashboard = () => {
     }
   };
 
-  // Fetch today's transactions for the Today Transactions section
+  // Fetch transactions for the last 25 hours (frontend filtered)
   const fetchTodayTransactions = async () => {
     try {
       setTodayTransactions((prev) => ({ ...prev, loading: true }));
 
-      // Get today's date range (00:00:00 to 23:59:59)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split("T")[0];
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+      // Calculate 25 hours ago timestamp
+      const now = new Date();
+      const twentyFiveHoursAgo = new Date(now.getTime() - 25 * 60 * 60 * 1000);
 
-      console.log("📅 Fetching today's transactions:", {
-        today: todayStr,
-        tomorrow: tomorrowStr,
+      console.log("📅 Fetching transactions from last 25 hours:", {
+        now: now.toISOString(),
+        twentyFiveHoursAgo: twentyFiveHoursAgo.toISOString(),
       });
 
-      // Fetch today's payin transactions using API_ENDPOINTS.SEARCH_TRANSACTIONS from api.js
+      // Fetch all payin transactions (no date limit, we'll filter on frontend)
       // Endpoint: /api/payments/merchant/transactions/search
       let payinData = [];
       try {
         const payinResult = await paymentService.searchTransactions({
-          startDate: todayStr,
-          endDate: tomorrowStr,
-          limit: 100,
+          limit: 1000, // Fetch more data, filter on frontend
           sortBy: "createdAt",
           sortOrder: "desc",
         });
         const rawPayins = payinResult.transactions || [];
-        // Validate payin data - must have createdAt and amount
-        payinData = rawPayins.filter(
-          (txn) =>
-            txn &&
-            (txn.createdAt || txn.created_at) &&
+        // Filter: must be within last 25 hours (createdAt or updatedAt)
+        // IMPORTANT: Exclude settled transactions from payin data
+        payinData = rawPayins.filter((txn) => {
+          if (!txn) return false;
+          // Exclude settled transactions - they belong in settlement array
+          const isSettled =
+            txn.settlementStatus === "settled" ||
+            txn.settlement_status === "settled" ||
+            txn.settlementDate ||
+            txn.settlement_date;
+          if (isSettled) return false; // Skip settled transactions
+
+          const createdAt = txn.createdAt || txn.created_at;
+          const updatedAt = txn.updatedAt || txn.updated_at;
+          const txnDate = createdAt
+            ? new Date(createdAt)
+            : updatedAt
+            ? new Date(updatedAt)
+            : null;
+          if (!txnDate) return false;
+          const isWithin25Hours = txnDate >= twentyFiveHoursAgo;
+          const hasValidAmount =
             typeof (txn.amount || 0) === "number" &&
-            parseFloat(txn.amount || 0) > 0
-        );
+            parseFloat(txn.amount || 0) > 0;
+          return isWithin25Hours && hasValidAmount;
+        });
         console.log(
-          "✅ Today payin fetched:",
+          "✅ Payin fetched (last 25 hours):",
           payinData.length,
           "valid transactions out of",
           rawPayins.length,
           "total"
         );
       } catch (err) {
-        console.error("❌ Today payin fetch error:", err.message);
+        console.error("❌ Payin fetch error:", err.message);
         payinData = [];
       }
 
-      // Fetch today's payouts using API_ENDPOINTS.SEARCH_PAYOUTS from api.js
+      // Fetch all payouts (no date limit, we'll filter on frontend)
       // Endpoint: /api/payments/merchant/payouts/search
       let payoutData = [];
       try {
         const payoutResult = await paymentService.searchPayouts({
-          startDate: todayStr,
-          endDate: tomorrowStr,
-          limit: 100,
+          limit: 1000, // Fetch more data, filter on frontend
           sortBy: "createdAt",
           sortOrder: "desc",
         });
         const rawPayouts = payoutResult.payouts || [];
-        // Validate payout data - must have requestedAt/createdAt and netAmount/amount
-        payoutData = rawPayouts.filter(
-          (payout) =>
-            payout &&
-            (payout.requestedAt ||
-              payout.createdAt ||
-              payout.created_at) &&
-            (typeof (payout.netAmount || payout.amount || 0) === "number") &&
-            parseFloat(payout.netAmount || payout.amount || 0) > 0
-        );
+        // Filter: must be within last 25 hours (createdAt or updatedAt)
+        // IMPORTANT: Only include actual payout records (not transactions)
+        payoutData = rawPayouts.filter((payout) => {
+          if (!payout) return false;
+          // Ensure this is actually a payout (has payoutId or is from payout endpoint)
+          const isPayout = payout.payoutId || payout.payout_id || payout.id;
+          if (!isPayout) return false; // Skip if not a valid payout
+
+          const createdAt = payout.createdAt || payout.created_at;
+          const updatedAt = payout.updatedAt || payout.updated_at;
+          const payoutDate = createdAt
+            ? new Date(createdAt)
+            : updatedAt
+            ? new Date(updatedAt)
+            : null;
+          if (!payoutDate) return false;
+          const isWithin25Hours = payoutDate >= twentyFiveHoursAgo;
+          const hasValidAmount =
+            typeof (payout.netAmount || payout.amount || 0) === "number" &&
+            parseFloat(payout.netAmount || payout.amount || 0) > 0;
+          return isWithin25Hours && hasValidAmount;
+        });
         console.log(
-          "✅ Today payout fetched:",
+          "✅ Payout fetched (last 25 hours):",
           payoutData.length,
           "valid payouts out of",
           rawPayouts.length,
           "total"
         );
       } catch (err) {
-        console.error("❌ Today payout fetch error:", err.message);
+        console.error("❌ Payout fetch error:", err.message);
         payoutData = [];
       }
 
-      // Get settled transactions from today using API_ENDPOINTS.SEARCH_TRANSACTIONS from api.js
-      // Endpoint: /api/payments/merchant/transactions/search (with status=paid, then filtered for settled)
-      // Must be paid AND settled
+      // Fetch all settled transactions (no date limit, we'll filter on frontend)
+      // Endpoint: /api/payments/merchant/transactions/search
+      // Filter for transactions with settlementStatus: "settled" (server-side filter)
       let settlementData = [];
       try {
         const settlementResult = await paymentService.searchTransactions({
-          startDate: todayStr,
-          endDate: tomorrowStr,
-          status: "paid",
-          limit: 100,
+          settlementStatus: "settled", // Server-side filter
+          limit: 1000, // Fetch more data, filter on frontend
           sortBy: "createdAt",
           sortOrder: "desc",
         });
         const rawSettlements = settlementResult.transactions || [];
-        // Filter for settled transactions - must have settlement status or settlement date
+        // Filter: must be within last 25 hours (createdAt or updatedAt)
+        // IMPORTANT: Only include truly settled transactions
         settlementData = rawSettlements.filter((txn) => {
           if (!txn) return false;
-          const hasSettlementStatus =
+          // Must be settled - double check settlement status
+          const isSettled =
             txn.settlementStatus === "settled" ||
-            txn.settlement_status === "settled";
-          const hasSettlementDate =
-            txn.settlementDate || txn.settlement_date;
+            txn.settlement_status === "settled" ||
+            txn.settlementDate ||
+            txn.settlement_date;
+          if (!isSettled) return false; // Skip if not settled
+
+          const createdAt = txn.createdAt || txn.created_at;
+          const updatedAt = txn.updatedAt || txn.updated_at;
+          const txnDate = createdAt
+            ? new Date(createdAt)
+            : updatedAt
+            ? new Date(updatedAt)
+            : null;
+          if (!txnDate) return false;
+          const isWithin25Hours = txnDate >= twentyFiveHoursAgo;
           const hasValidAmount =
-            typeof (txn.netAmount ||
-              txn.net_amount ||
-              txn.amount ||
-              0) === "number" &&
+            typeof (txn.netAmount || txn.net_amount || txn.amount || 0) ===
+              "number" &&
             parseFloat(txn.netAmount || txn.net_amount || txn.amount || 0) > 0;
-          return (hasSettlementStatus || hasSettlementDate) && hasValidAmount;
+          return isWithin25Hours && hasValidAmount;
         });
         console.log(
-          "✅ Today settlement fetched:",
+          "✅ Settlement fetched (last 25 hours):",
           settlementData.length,
           "valid settled transactions out of",
           rawSettlements.length,
-          "paid transactions"
+          "total transactions"
         );
       } catch (err) {
-        console.error("❌ Today settlement fetch error:", err.message);
+        console.error("❌ Settlement fetch error:", err.message);
         settlementData = [];
       }
 
       // Map data with type and ensure all required fields
-      const processedPayins = payinData.map((txn) => ({
-        ...txn,
-        type: "payin",
-        transactionId:
-          txn.transactionId ||
-          txn.transaction_id ||
-          txn.id ||
-          `payin-${Date.now()}-${Math.random()}`,
-        amount: parseFloat(txn.amount || 0),
-        customerName:
-          txn.customerName ||
-          txn.customer_name ||
-          txn.customer?.name ||
-          "Unknown",
-        status: txn.status || "pending",
-      }));
+      const processedPayins = payinData.map((txn) => {
+        // Ensure type is explicitly set to "payin" and override any existing type
+        const processed = {
+          ...txn,
+          type: "payin", // Explicitly set type to payin
+          transactionId:
+            txn.transactionId ||
+            txn.transaction_id ||
+            txn.id ||
+            `payin-${Date.now()}-${Math.random()}`,
+          amount: parseFloat(txn.amount || 0),
+          customerName:
+            txn.customerName ||
+            txn.customer_name ||
+            txn.customer?.name ||
+            "Unknown",
+          status: txn.status || "pending",
+        };
+        // Force type to be "payin" to prevent any type confusion
+        processed.type = "payin";
+        return processed;
+      });
 
-      const processedPayouts = payoutData.map((payout) => ({
-        ...payout,
-        type: "payout",
-        payoutId:
-          payout.payoutId ||
-          payout.payout_id ||
-          payout.id ||
-          `payout-${Date.now()}-${Math.random()}`,
-        netAmount: parseFloat(payout.netAmount || payout.amount || 0),
-        amount: parseFloat(payout.amount || 0),
-        description:
-          payout.description ||
-          payout.beneficiaryDetails?.accountHolderName ||
-          "Payout",
-        status: payout.status || "pending",
-      }));
+      const processedPayouts = payoutData.map((payout) => {
+        // Ensure type is explicitly set to "payout" and override any existing type
+        const processed = {
+          ...payout,
+          type: "payout", // Explicitly set type to payout
+          payoutId:
+            payout.payoutId ||
+            payout.payout_id ||
+            payout.id ||
+            `payout-${Date.now()}-${Math.random()}`,
+          netAmount: parseFloat(payout.netAmount || payout.amount || 0),
+          amount: parseFloat(payout.amount || 0),
+          description:
+            payout.description ||
+            payout.beneficiaryDetails?.accountHolderName ||
+            "Payout",
+          status: payout.status || "pending",
+        };
+        // Force type to be "payout" to prevent any type confusion
+        processed.type = "payout";
+        return processed;
+      });
 
-      const processedSettlements = settlementData.map((txn) => ({
-        ...txn,
-        type: "settlement",
-        transactionId:
-          txn.transactionId ||
-          txn.transaction_id ||
-          txn.id ||
-          `settlement-${Date.now()}-${Math.random()}`,
-        netAmount: parseFloat(
-          txn.netAmount || txn.net_amount || txn.amount || 0
-        ),
-        amount: parseFloat(txn.amount || 0),
-        customerName:
-          txn.customerName ||
-          txn.customer_name ||
-          txn.customer?.name ||
-          "Unknown",
-        status: txn.status || "paid",
-      }));
+      const processedSettlements = settlementData.map((txn) => {
+        // Ensure type is explicitly set to "settlement" and override any existing type
+        // Settlement transactions are identified by settlementStatus: "settled"
+        const processed = {
+          ...txn,
+          type: "settlement", // Explicitly set type to settlement
+          settlementStatus:
+            txn.settlementStatus || txn.settlement_status || "settled", // Ensure settlementStatus is set
+          transactionId:
+            txn.transactionId ||
+            txn.transaction_id ||
+            txn.id ||
+            `settlement-${Date.now()}-${Math.random()}`,
+          netAmount: parseFloat(
+            txn.netAmount || txn.net_amount || txn.amount || 0
+          ),
+          amount: parseFloat(txn.amount || 0),
+          customerName:
+            txn.customerName ||
+            txn.customer_name ||
+            txn.customer?.name ||
+            "Unknown",
+          status: txn.status || "paid",
+        };
+        // Force type to be "settlement" and ensure settlementStatus is "settled"
+        processed.type = "settlement";
+        processed.settlementStatus = "settled";
+        return processed;
+      });
 
       const totalToday = {
         payin: processedPayins.length,
@@ -915,24 +968,103 @@ const AdminDashboard = () => {
   };
 
   // Filter transactions based on selected filter - using real API data
+  // Limit to 25 items maximum
   const getFilteredTransactions = () => {
     if (todayTransactions.loading) return [];
 
-    let allTransactions = [];
+    let filtered = [];
 
-    // Combine all today's transactions
-    allTransactions = [
-      ...todayTransactions.payin,
-      ...todayTransactions.payout,
-      ...todayTransactions.settlement,
-    ];
-
-    // Apply filter
-    if (todayPayinFilter === "all") {
-      return allTransactions;
+    // Apply filter based on selected tab - show only the selected type
+    // Strictly filter to ensure only the correct type is shown
+    if (todayPayinFilter === "payin") {
+      // Show only payin transactions (label: "In")
+      // Filter from payin array and ensure type is exactly "payin" AND not settled
+      filtered = todayTransactions.payin.filter((txn) => {
+        if (!txn) return false;
+        // Must be payin type
+        if (txn.type !== "payin") return false;
+        // Must NOT be settled (settled transactions should not appear in payin)
+        const isSettled =
+          txn.settlementStatus === "settled" ||
+          txn.settlement_status === "settled" ||
+          txn.settlementDate ||
+          txn.settlement_date;
+        if (isSettled) return false;
+        return true;
+      });
+    } else if (todayPayinFilter === "payout") {
+      // Show only payout transactions (label: "Out")
+      // Filter from payout array and ensure type is exactly "payout"
+      filtered = todayTransactions.payout.filter((txn) => {
+        if (!txn) return false;
+        // Must be payout type
+        return txn.type === "payout";
+      });
+    } else if (todayPayinFilter === "settlement") {
+      // Show only settlement transactions (label: "Settled")
+      // Filter from settlement array - transactions with settlementStatus: "settled"
+      filtered = todayTransactions.settlement.filter((txn) => {
+        if (!txn) return false;
+        // Must be settlement type
+        if (txn.type !== "settlement") return false;
+        // Must have settlementStatus: "settled" (this is the key identifier)
+        const isSettled =
+          txn.settlementStatus === "settled" ||
+          txn.settlement_status === "settled" ||
+          txn.settlementDate ||
+          txn.settlement_date;
+        if (!isSettled) return false;
+        return true;
+      });
     } else {
-      return allTransactions.filter((txn) => txn.type === todayPayinFilter);
+      // Show all transactions (when filter is "all")
+      // Include: payin (non-settled), payout, and settlement (settlementStatus: "settled")
+      filtered = [
+        // Payin transactions (excluding settled ones)
+        ...todayTransactions.payin.filter((txn) => {
+          if (!txn) return false;
+          if (txn.type !== "payin") return false;
+          // Exclude settled from payin - settled transactions belong in settlement
+          const isSettled =
+            txn.settlementStatus === "settled" ||
+            txn.settlement_status === "settled" ||
+            txn.settlementDate ||
+            txn.settlement_date;
+          return !isSettled;
+        }),
+        // Payout transactions
+        ...todayTransactions.payout.filter(
+          (txn) => txn && txn.type === "payout"
+        ),
+        // Settlement transactions (settlementStatus: "settled")
+        ...todayTransactions.settlement.filter((txn) => {
+          if (!txn) return false;
+          // Must be settlement type
+          if (txn.type !== "settlement") return false;
+          // Must have settlementStatus: "settled" - this is the key identifier for settlement data
+          const isSettled =
+            txn.settlementStatus === "settled" ||
+            txn.settlement_status === "settled" ||
+            txn.settlementDate ||
+            txn.settlement_date;
+          return isSettled;
+        }),
+      ];
     }
+
+    // Sort by date (most recent first) - prioritize createdAt, fallback to updatedAt
+    filtered.sort((a, b) => {
+      const dateA = new Date(
+        a.createdAt || a.created_at || a.updatedAt || a.updated_at || 0
+      );
+      const dateB = new Date(
+        b.createdAt || b.created_at || b.updatedAt || b.updated_at || 0
+      );
+      return dateB - dateA; // Descending (newest first)
+    });
+
+    // Limit to 25 items maximum
+    return filtered.slice(0, 25);
   };
 
   const filteredTransactions = getFilteredTransactions();
@@ -1295,7 +1427,7 @@ const AdminDashboard = () => {
                   <div className="flex flex-col gap-3 mb-4 sm:mb-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <h2 className="text-lg sm:text-xl font-medium text-white font-['Albert_Sans']">
-                        Today Transactions{" "}
+                        Last 25 Hours{" "}
                         {todayTransactions.loading
                           ? "..."
                           : filteredTransactions.length || 0}
@@ -1333,7 +1465,7 @@ const AdminDashboard = () => {
                   </div>
 
                   {/* Table - Scrollable */}
-                  <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                  <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                     <table className="w-full">
                       <thead className="sticky top-0 bg-bg-secondary z-10">
                         <tr className="border-b border-white/10">
@@ -1371,90 +1503,96 @@ const AdminDashboard = () => {
                             </td>
                           </tr>
                         ) : filteredTransactions.length > 0 ? (
-                          filteredTransactions
-                            .slice(0, 10)
-                            .map((txn, index) => (
-                              <tr
-                                key={
-                                  txn.transactionId ||
-                                  txn.payoutId ||
-                                  txn.transaction_id ||
-                                  txn.id ||
-                                  index
+                          filteredTransactions.map((txn, index) => (
+                            <tr
+                              key={
+                                txn.transactionId ||
+                                txn.payoutId ||
+                                txn.transaction_id ||
+                                txn.id ||
+                                index
+                              }
+                              className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
+                              onClick={() => {
+                                if (
+                                  txn.type === "payin" ||
+                                  txn.type === "settlement"
+                                ) {
+                                  navigate(
+                                    `/admin/transactions/${
+                                      txn.transactionId ||
+                                      txn.transaction_id ||
+                                      txn.id
+                                    }`
+                                  );
                                 }
-                                className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
-                                onClick={() => {
-                                  if (
-                                    txn.type === "payin" ||
+                              }}
+                            >
+                              <td className="py-2 sm:py-3 px-2 sm:px-4">
+                                <input
+                                  type="checkbox"
+                                  className="rounded border-white/20"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </td>
+                              <td className="py-2 sm:py-3 px-2 sm:px-4 text-white text-xs sm:text-sm font-['Albert_Sans']">
+                                {/* Display name based on transaction type */}
+                                {txn.type === "payout"
+                                  ? txn.description ||
+                                    txn.beneficiaryDetails?.accountHolderName ||
+                                    `Payout ${txn.payoutId || index + 1}`
+                                  : txn.customerName ||
+                                    txn.customer_name ||
+                                    txn.customer?.name ||
+                                    txn.description ||
+                                    `Transaction ${index + 1}`}
+                                <span className="ml-2 text-xs text-white/40">
+                                  ({txn.type || "payin"})
+                                </span>
+                              </td>
+                              <td className="py-2 sm:py-3 px-2 sm:px-4 text-white text-xs sm:text-sm font-['Albert_Sans'] hidden sm:table-cell">
+                                {/* Show netAmount for payout/settlement, amount for payin */}
+                                {formatCurrency(
+                                  txn.type === "payout" ||
                                     txn.type === "settlement"
-                                  ) {
-                                    navigate(
-                                      `/admin/transactions/${
-                                        txn.transactionId ||
-                                        txn.transaction_id ||
-                                        txn.id
-                                      }`
-                                    );
-                                  }
-                                }}
-                              >
-                                <td className="py-2 sm:py-3 px-2 sm:px-4">
-                                  <input
-                                    type="checkbox"
-                                    className="rounded border-white/20"
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                </td>
-                                <td className="py-2 sm:py-3 px-2 sm:px-4 text-white text-xs sm:text-sm font-['Albert_Sans']">
-                                  {/* Display name based on transaction type */}
-                                  {txn.type === "payout"
-                                    ? txn.description ||
-                                      txn.beneficiaryDetails?.accountHolderName ||
-                                      `Payout ${txn.payoutId || index + 1}`
-                                    : txn.customerName ||
-                                      txn.customer_name ||
-                                      txn.customer?.name ||
-                                      txn.description ||
-                                      `Transaction ${index + 1}`}
-                                  <span className="ml-2 text-xs text-white/40">
-                                    ({txn.type || "payin"})
-                                  </span>
-                                </td>
-                                <td className="py-2 sm:py-3 px-2 sm:px-4 text-white text-xs sm:text-sm font-['Albert_Sans'] hidden sm:table-cell">
-                                  {/* Show netAmount for payout/settlement, amount for payin */}
-                                  {formatCurrency(
-                                    txn.type === "payout" || txn.type === "settlement"
-                                      ? txn.netAmount || txn.net_amount || txn.amount || 0
-                                      : txn.amount || 0
-                                  )}
-                                </td>
-                                <td className="py-2 sm:py-3 px-2 sm:px-4 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden md:table-cell">
-                                  {txn.type || "payin"}
-                                </td>
-                                <td className="py-2 sm:py-3 px-2 sm:px-4 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
-                                  {txn.status || "-"}
-                                </td>
-                                <td className="py-2 sm:py-3 px-2 sm:px-4">
-                                  <div className="flex items-center gap-1 sm:gap-2">
-                                    <span
-                                      className={`text-xs font-['Albert_Sans'] ${
-                                        txn.type === "payin"
-                                          ? "text-green-400"
-                                          : txn.type === "payout"
-                                          ? "text-amber-400"
-                                          : "text-blue-400"
-                                      }`}
-                                    >
-                                      {txn.type === "payin"
-                                        ? "In"
+                                    ? txn.netAmount ||
+                                        txn.net_amount ||
+                                        txn.amount ||
+                                        0
+                                    : txn.amount || 0
+                                )}
+                              </td>
+                              <td className="py-2 sm:py-3 px-2 sm:px-4 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden md:table-cell">
+                                {txn.type || "payin"}
+                              </td>
+                              <td className="py-2 sm:py-3 px-2 sm:px-4 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
+                                {txn.status || "-"}
+                              </td>
+                              <td className="py-2 sm:py-3 px-2 sm:px-4">
+                                <div className="flex items-center gap-1 sm:gap-2">
+                                  <span
+                                    className={`text-xs font-['Albert_Sans'] ${
+                                      txn.type === "payin"
+                                        ? "text-green-400"
                                         : txn.type === "payout"
-                                        ? "Out"
-                                        : "Settled"}
-                                    </span>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
+                                        ? "text-amber-400"
+                                        : txn.type === "settlement"
+                                        ? "text-blue-400"
+                                        : "text-white/60"
+                                    }`}
+                                  >
+                                    {txn.type === "payin"
+                                      ? "In"
+                                      : txn.type === "payout"
+                                      ? "Out"
+                                      : txn.type === "settlement"
+                                      ? "Settled"
+                                      : "-"}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
                         ) : (
                           <tr>
                             <td

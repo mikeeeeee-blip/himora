@@ -204,16 +204,19 @@ const QuickAnalytics = ({
   actionItems = [], // Accept actionItems from parent
 }) => {
   const [selectedView, setSelectedView] = useState("payin");
-  
-  // Use props if provided, otherwise use local state (for backward compatibility)
-  const chartData = chartDataProp;
-  const summaryCards = summaryCardsProp.length > 0 ? summaryCardsProp : [
+  const [chartData, setChartData] = useState({
+    payin: [],
+    settlement: [],
+    loading: true,
+  });
+  const [summaryCards, setSummaryCards] = useState([
     { label: "Today payin", value: "₹0.00" },
     { label: "Last payin", value: "₹0.00" },
     { label: "Today payout", value: "0 items" },
   ];
 
   // Process chart data by grouping transactions/payouts by date
+  // Use createdAt for all types to create a consistent timeline
   const processChartData = (data, type) => {
     if (!data || data.length === 0) {
       return [];
@@ -224,30 +227,43 @@ const QuickAnalytics = ({
       let dateKey;
       let amount;
 
+      // Use createdAt for all types to create a consistent timeline
+      // This ensures all data points are plotted based on when they were created
+      const date = item.createdAt || item.created_at;
+      if (!date) return;
+
+      // Parse the date and get YYYY-MM-DD format for grouping
+      const dateObj = new Date(date);
+      if (isNaN(dateObj.getTime())) return; // Invalid date
+      dateKey = dateObj.toISOString().split("T")[0];
+
+      // Calculate amount based on type
       if (type === "payin") {
-        const date = item.createdAt || item.created_at;
-        if (!date) return;
-        dateKey = new Date(date).toISOString().split("T")[0];
-        amount = parseFloat(item.amount || 0);
+        // Amount: API returns in rupees (e.g., 100 = ₹100)
+        // If amount is very large (> 100000) and divisible by 100, might be in paise
+        let rawAmount = parseFloat(item.amount || 0);
+        amount =
+          rawAmount > 100000 && rawAmount % 100 === 0
+            ? rawAmount / 100
+            : rawAmount;
       } else if (type === "payout") {
-        const date = item.requestedAt || item.createdAt || item.created_at;
-        if (!date) return;
-        dateKey = new Date(date).toISOString().split("T")[0];
-        amount = parseFloat(item.netAmount || item.amount || 0);
-      } else {
-        // settlement
-        const date =
-          item.settlementDate ||
-          item.settlement_date ||
-          item.paidAt ||
-          item.paid_at ||
-          item.createdAt ||
-          item.created_at;
-        if (!date) return;
-        dateKey = new Date(date).toISOString().split("T")[0];
-        amount = parseFloat(
+        // Use netAmount for payouts (amount after commission)
+        let rawAmount = parseFloat(
           item.netAmount || item.net_amount || item.amount || 0
         );
+        amount =
+          rawAmount > 100000 && rawAmount % 100 === 0
+            ? rawAmount / 100
+            : rawAmount;
+      } else {
+        // settlement - use netAmount (amount after commission)
+        let rawAmount = parseFloat(
+          item.netAmount || item.net_amount || item.amount || 0
+        );
+        amount =
+          rawAmount > 100000 && rawAmount % 100 === 0
+            ? rawAmount / 100
+            : rawAmount;
       }
 
       if (!dateKey || isNaN(amount) || amount <= 0) return;
@@ -285,12 +301,220 @@ const QuickAnalytics = ({
     return filled.length > 0 ? filled : sorted;
   };
 
-  // Note: Data fetching is now handled by parent component (AdminDashboard)
-  // This component receives chartData, summaryCards, and actionItems as props
+  // Fetch chart data from API endpoints
+  // Fetch ALL data (not date-filtered) for graphs
+  const fetchChartData = async () => {
+    try {
+      setChartData((prev) => ({ ...prev, loading: true }));
+
+      console.log(
+        "📊 QuickAnalytics: Fetching ALL chart data (no date filter)"
+      );
+
+      // Fetch ALL payin transactions (exclude settled ones)
+      // Endpoint: /api/payments/merchant/transactions/search
+      // Uses: paymentService.searchTransactions() → API_ENDPOINTS.SEARCH_TRANSACTIONS
+      let payinData = [];
+      try {
+        const payinResult = await paymentService.searchTransactions({
+          page: 1,
+          limit: 1000, // Fetch more data for graphs
+          sortBy: "createdAt",
+          sortOrder: "asc",
+        });
+        const allTransactions = payinResult.transactions || [];
+        // Exclude settled transactions from payin - they belong in settlement
+        payinData = allTransactions.filter((txn) => {
+          if (!txn) return false;
+          // Exclude settled transactions
+          const isSettled =
+            txn.settlementStatus === "settled" ||
+            txn.settlement_status === "settled" ||
+            txn.settlementDate ||
+            txn.settlement_date;
+          return !isSettled;
+        });
+        console.log(
+          "✅ QuickAnalytics: Payin data fetched from /api/payments/merchant/transactions/search",
+          payinData.length,
+          "transactions (excluding settled)"
+        );
+      } catch (err) {
+        console.error("❌ QuickAnalytics: Payin fetch error", err.message);
+      }
+
+      // Fetch settlement transactions with settlementStatus: "settled"
+      // Endpoint: /api/payments/merchant/transactions/search (with settlementStatus='settled')
+      // Uses: paymentService.searchTransactions() → API_ENDPOINTS.SEARCH_TRANSACTIONS
+      let settlementData = [];
+      try {
+        const settlementResult = await paymentService.searchTransactions({
+          settlementStatus: "settled", // Filter for settled transactions
+          page: 1,
+          limit: 1000, // Fetch more data for graphs
+          sortBy: "createdAt",
+          sortOrder: "asc",
+        });
+        // Filter to ensure only settled transactions are included
+        settlementData = (settlementResult.transactions || []).filter((txn) => {
+          if (!txn) return false;
+          // Must have settlementStatus: "settled"
+          const isSettled =
+            txn.settlementStatus === "settled" ||
+            txn.settlement_status === "settled" ||
+            txn.settlementDate ||
+            txn.settlement_date;
+          return isSettled;
+        });
+        console.log(
+          "✅ QuickAnalytics: Settlement data fetched from /api/payments/merchant/transactions/search (settlementStatus: 'settled')",
+          settlementData.length,
+          "settled transactions"
+        );
+      } catch (err) {
+        console.error("❌ QuickAnalytics: Settlement fetch error", err.message);
+      }
+
+      // Process data for charts
+      const processedPayin = processChartData(payinData, "payin");
+      const processedSettlement = processChartData(
+        settlementData,
+        "settlement"
+      );
+
+      // Debug logging
+      console.log("📊 QuickAnalytics: Processed chart data", {
+        payin: {
+          raw: payinData.length,
+          processed: processedPayin.length,
+          sample: processedPayin.slice(0, 3),
+        },
+        settlement: {
+          raw: settlementData.length,
+          processed: processedSettlement.length,
+          sample: processedSettlement.slice(0, 3),
+        },
+      });
+
+      // Fetch today's data for summary cards
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split("T")[0];
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
+      // Get today's payin for summary cards
+      // Endpoint: /api/payments/merchant/transactions/search (same as PayinsPage.jsx)
+      // Uses: paymentService.searchTransactions() → API_ENDPOINTS.SEARCH_TRANSACTIONS
+      let todayPayin = 0;
+      let todayPayoutCount = 0;
+      let lastPayinAmount = 0;
+
+      try {
+        const todayPayinResult = await paymentService.searchTransactions({
+          startDate: todayStr,
+          endDate: tomorrowStr,
+          limit: 100,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        });
+        const todayPayins = todayPayinResult.transactions || [];
+        todayPayin = todayPayins.reduce((sum, txn) => {
+          let rawAmount = parseFloat(txn.amount || 0);
+          // Convert from paise to rupees if needed (if > 100000 and divisible by 100)
+          let amount =
+            rawAmount > 100000 && rawAmount % 100 === 0
+              ? rawAmount / 100
+              : rawAmount;
+          return sum + amount;
+        }, 0);
+
+        // Get last payin amount (most recent)
+        if (todayPayins.length > 0) {
+          let rawAmount = parseFloat(todayPayins[0].amount || 0);
+          lastPayinAmount =
+            rawAmount > 100000 && rawAmount % 100 === 0
+              ? rawAmount / 100
+              : rawAmount;
+        } else if (processedPayin.length > 0) {
+          // Fallback to most recent from chart data
+          const recentPayins = processedPayin
+            .filter((d) => d.amount > 0)
+            .sort((a, b) => new Date(b.date) - new Date(a.date));
+          if (recentPayins.length > 0) {
+            lastPayinAmount = recentPayins[0].amount;
+          }
+        }
+      } catch (err) {
+        console.error(
+          "❌ QuickAnalytics: Today payin fetch error",
+          err.message
+        );
+      }
+
+      // Get today's payout count for summary cards
+      // Endpoint: /api/payments/merchant/payouts/search (same as PayoutsPage.jsx)
+      // Uses: paymentService.searchPayouts() → API_ENDPOINTS.SEARCH_PAYOUTS
+      try {
+        const todayPayoutResult = await paymentService.searchPayouts({
+          startDate: todayStr,
+          endDate: tomorrowStr,
+          limit: 100,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        });
+        const todayPayouts = todayPayoutResult.payouts || [];
+        todayPayoutCount = todayPayouts.length;
+      } catch (err) {
+        console.error(
+          "❌ QuickAnalytics: Today payout fetch error",
+          err.message
+        );
+      }
+
+      // Format currency
+      const formatCurrency = (amount) => {
+        return `₹${parseFloat(amount || 0).toLocaleString("en-IN", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`;
+      };
+
+      // Update summary cards
+      setSummaryCards([
+        { label: "Today payin", value: formatCurrency(todayPayin) },
+        { label: "Last payin", value: formatCurrency(lastPayinAmount) },
+        { label: "Today payout", value: `${todayPayoutCount} items` },
+      ]);
+
+      setChartData({
+        payin: processedPayin,
+        settlement: processedSettlement,
+        loading: false,
+      });
+
+      console.log("✅ QuickAnalytics: Chart data processed", {
+        payin: processedPayin.length,
+        settlement: processedSettlement.length,
+      });
+    } catch (error) {
+      console.error("❌ QuickAnalytics: Chart data fetch error", error);
+      setChartData((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
+  // Fetch data on mount and when dateRange changes
+  useEffect(() => {
+    fetchChartData();
+  }, [dateRange]);
 
   // Handle view change - only updates the graph, no navigation
   const handleViewClick = (view) => {
-    setSelectedView(view);
+    // Only allow payin or settlement views
+    if (view === "payin" || view === "settlement") {
+      setSelectedView(view);
+    }
   };
 
   // Chart configuration
@@ -298,10 +522,6 @@ const QuickAnalytics = ({
     payin: {
       label: "Payin",
       color: "#10b981", // Green
-    },
-    payout: {
-      label: "Payout",
-      color: "#f59e0b", // Amber
     },
     settlement: {
       label: "Settlement",
@@ -317,9 +537,9 @@ const QuickAnalytics = ({
           Quick Analytics
         </h2>
 
-        {/* Badge Buttons */}
+        {/* Badge Buttons - Only Payin and Settlement */}
         <div className="flex items-center gap-2 bg-bg-tertiary border border-white/10 rounded-lg p-1">
-          {["payin", "payout", "settlement"].map((view) => (
+          {["payin", "settlement"].map((view) => (
             <button
               key={view}
               onClick={() => handleViewClick(view)}
@@ -336,7 +556,7 @@ const QuickAnalytics = ({
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
+      {/* <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
         {summaryCards.map((card, index) => (
           <div
             key={index}
@@ -350,7 +570,7 @@ const QuickAnalytics = ({
             </div>
           </div>
         ))}
-      </div>
+      </div> */}
 
       {/* Chart */}
       <div className="bg-bg-tertiary border border-white/10 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6 h-48 sm:h-64">
@@ -363,8 +583,12 @@ const QuickAnalytics = ({
         ) : (
           <AnalyticsChart
             data={chartData[selectedView] || []}
-            type={selectedView}
-            color={chartConfig[selectedView].color}
+            type={
+              selectedView === "payin" || selectedView === "settlement"
+                ? selectedView
+                : "payin"
+            }
+            color={chartConfig[selectedView]?.color || chartConfig.payin.color}
           />
         )}
       </div>

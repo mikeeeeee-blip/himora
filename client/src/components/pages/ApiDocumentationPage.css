@@ -8,6 +8,7 @@
   padding: 0;
   width: 100%;
   box-sizing: border-box;
+  animation: fadeIn 0.4s ease;
 }
 
 .docs-section {
@@ -26,11 +27,11 @@
 }
 
 .docs-section h2 {
-  font-size: 32px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 600;
   color: #ffffff;
-  margin: 0 0 16px 0;
-  padding-bottom: 16px;
+  margin: 0 0 20px 0;
+  padding-bottom: 12px;
   border-bottom: 2px solid rgba(255, 255, 255, 0.1);
   font-family: 'Albert Sans', sans-serif;
 }
@@ -44,13 +45,21 @@
 }
 
 .info-card {
-  background: rgba(18, 45, 50, 0.8);
+  background: rgba(18, 45, 50, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  padding: 28px;
-  margin-bottom: 28px;
+  padding: 20px;
+  margin-bottom: 20px;
   width: 100%;
   box-sizing: border-box;
+  transition: all 0.3s ease;
+}
+
+.info-card:hover {
+  background: rgba(18, 45, 50, 0.8);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .info-card > p {
@@ -69,13 +78,21 @@
 }
 
 .info-card h3 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: #ffffff;
-  margin: 0 0 16px 0;
+  margin: 0 0 12px 0;
   display: flex;
   align-items: center;
   gap: 8px;
+  font-family: 'Albert Sans', sans-serif;
+}
+
+.info-card h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 12px 0;
   font-family: 'Albert Sans', sans-serif;
 }
 
@@ -106,12 +123,18 @@
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 24px;
+  padding: 20px;
+  margin-bottom: 20px;
   width: 100%;
   box-sizing: border-box;
   display: block;
   clear: both;
+  transition: all 0.3s ease;
+}
+
+.warning-card:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
 }
 
 .warning-card h3 {
@@ -148,6 +171,13 @@
   display: block;
   box-sizing: border-box;
   flex-shrink: 0;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.code-block-wrapper:hover {
+  border-color: #475569;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .code-blocks-container {
@@ -176,6 +206,7 @@
   min-width: 0;
   box-sizing: border-box;
   flex-shrink: 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 .code-block pre {
@@ -189,6 +220,7 @@
   overflow-x: auto;
   white-space: pre;
   word-wrap: normal;
+  -webkit-overflow-scrolling: touch;
 }
 
 .copy-code-btn {
@@ -207,11 +239,14 @@
   gap: 6px;
   transition: all 0.2s ease;
   z-index: 10;
+  font-family: 'Albert Sans', sans-serif;
+  font-weight: 500;
 }
 
 .copy-code-btn:hover {
   background: rgba(102, 126, 234, 0.3);
   border-color: rgba(102, 126, 234, 0.6);
+  transform: scale(1.05);
 }
 
 
@@ -222,12 +257,20 @@
 
 /* API Endpoints */
 .api-endpoint {
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: rgba(18, 45, 50, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 32px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+}
+
+.api-endpoint:hover {
+  background: rgba(18, 45, 50, 0.8);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 .endpoint-header {
@@ -308,14 +351,24 @@
   font-size: 16px;
   font-weight: 600;
   color: #ffffff;
-  margin: 0 0 16px 0;
+  margin: 0 0 12px 0;
   font-family: 'Albert Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.params-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 16px 0;
 }
 
 .params-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  min-width: 600px;
 }
 
 .params-table thead {
@@ -363,17 +416,18 @@
 .api-key-display {
   margin-top: 20px;
   padding: 20px;
-  background: white;
+  background: rgba(18, 45, 50, 0.8);
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .api-key-display label {
   display: block;
   font-weight: 600;
-  color: #374151;
+  color: #ffffff;
   margin-bottom: 8px;
   font-size: 14px;
+  font-family: 'Albert Sans', sans-serif;
 }
 
 .api-key-box {
@@ -406,10 +460,13 @@
   align-items: center;
   gap: 6px;
   transition: all 0.2s ease;
+  font-family: 'Albert Sans', sans-serif;
+  font-weight: 500;
 }
 
 .copy-btn:hover {
   background: rgba(102, 126, 234, 0.3);
+  transform: scale(1.05);
 }
 
 .warning-text {
@@ -432,75 +489,317 @@
 .example-section h3 {
   font-size: 20px;
   font-weight: 600;
-  color: #1f2937;
+  color: #ffffff;
   margin: 0 0 16px 0;
+  font-family: 'Albert Sans', sans-serif;
+}
+
+/* Fixed Sidebar Styles */
+@media (min-width: 1024px) {
+  aside[class*="lg:fixed"] {
+    position: fixed !important;
+  }
+  
+  aside[class*="lg:fixed"] > div {
+    max-height: calc(100vh - 5rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  
+  /* Smooth scrolling for sidebar */
+  aside[class*="lg:fixed"] > div {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+  
+  aside[class*="lg:fixed"] > div::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  aside[class*="lg:fixed"] > div::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  aside[class*="lg:fixed"] > div::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+  }
+  
+  aside[class*="lg:fixed"] > div::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+}
+
+/* Content area responsive adjustments */
+@media (min-width: 1024px) {
+  .docs-content {
+    min-height: calc(100vh - 6rem);
+  }
 }
 
 /* Responsive Design */
 @media (max-width: 1024px) {
-  .api-docs-container {
-    flex-direction: column;
-  }
-
-  .docs-sidebar {
-    width: 100%;
-    position: relative;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid #e5e7eb;
-  }
-
-  .docs-nav {
-    flex-direction: row;
-    overflow-x: auto;
-    padding: 12px;
-  }
-
-  .nav-item {
-    white-space: nowrap;
-    min-width: fit-content;
-  }
-
   .docs-content {
-    margin: 12px;
-    padding: 24px;
+    padding: 20px;
+  }
+
+  .info-card {
+    padding: 20px;
+  }
+
+  .warning-card {
+    padding: 20px;
+  }
+
+  .api-endpoint {
+    padding: 16px;
   }
 }
 
 @media (max-width: 768px) {
-  .api-docs-header {
-    padding: 24px 20px;
-  }
-
-  .api-docs-header h1 {
-    font-size: 24px;
-  }
-
   .docs-content {
-    padding: 20px;
-    margin: 12px;
+    padding: 16px;
   }
 
   .docs-section h2 {
-    font-size: 24px;
+    font-size: 22px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+  }
+
+  .docs-section p {
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+
+  .info-card {
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+
+  .info-card h3 {
+    font-size: 16px;
+    margin-bottom: 10px;
+  }
+
+  .info-card h4 {
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+
+  .warning-card {
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+
+  .warning-card h3 {
+    font-size: 18px;
+    margin-bottom: 12px;
+  }
+
+  .api-endpoint {
+    padding: 16px;
+    margin-bottom: 20px;
   }
 
   .endpoint-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 8px;
   }
 
   .endpoint-path {
     width: 100%;
+    min-width: 100%;
+    font-size: 12px;
+    word-break: break-all;
+    overflow-wrap: break-word;
   }
 
+  .endpoint-description {
+    font-size: 14px;
+  }
+
+  .endpoint-section {
+    margin-top: 16px;
+    padding-top: 16px;
+  }
+
+  .endpoint-section h4 {
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+
+  /* Table Responsive */
   .params-table {
+    font-size: 12px;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .params-table thead,
+  .params-table tbody,
+  .params-table tr {
+    display: block;
+  }
+
+  .params-table thead {
+    display: none;
+  }
+
+  .params-table tr {
+    margin-bottom: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+    background: rgba(18, 45, 50, 0.4);
+  }
+
+  .params-table td {
+    display: block;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: left;
+  }
+
+  .params-table td:before {
+    content: attr(data-label) ": ";
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    display: inline-block;
+    min-width: 100px;
+    margin-right: 8px;
+  }
+
+  .params-table td:last-child {
+    border-bottom: none;
+  }
+
+  /* Code Blocks */
+  .code-block {
+    padding: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .code-block pre {
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .code-block-header {
+    padding: 10px 12px;
     font-size: 12px;
   }
 
-  .params-table th,
+  .copy-code-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    top: 8px;
+    right: 8px;
+  }
+
+  /* API Key Display */
+  .api-key-display {
+    padding: 16px;
+  }
+
+  .api-key-box {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .api-key-box code {
+    font-size: 11px;
+    word-break: break-all;
+  }
+
+  .copy-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Example Section */
+  .example-section {
+    margin-bottom: 24px;
+  }
+
+  .example-section h3 {
+    font-size: 18px;
+    margin-bottom: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .docs-content {
+    padding: 12px;
+  }
+
+  .docs-section h2 {
+    font-size: 20px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+  }
+
+  .info-card,
+  .warning-card,
+  .api-endpoint {
+    padding: 12px;
+  }
+
+  .method-badge {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
+  .auth-badge {
+    font-size: 10px;
+    padding: 3px 8px;
+  }
+}
+
+/* Table Mobile View - Better approach */
+@media (max-width: 768px) {
+  .params-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 16px -16px;
+    padding: 0 16px;
+  }
+
+  .params-table {
+    min-width: 600px;
+    display: table;
+  }
+
+  .params-table thead {
+    display: table-header-group;
+  }
+
+  .params-table tbody {
+    display: table-row-group;
+  }
+
+  .params-table tr {
+    display: table-row;
+    margin-bottom: 0;
+    border: none;
+    padding: 0;
+    background: transparent;
+  }
+
   .params-table td {
+    display: table-cell;
     padding: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .params-table td:before {
+    display: none;
   }
 }
 

@@ -19,7 +19,6 @@ import {
 } from 'react-icons/fi';
 import { RiMoneyDollarCircleLine } from 'react-icons/ri';
 import superadminPaymentService from '../../services/superadminPaymentService';
-import Navbar from '../../components/Navbar';
 import ExportCSV from '../../components/ExportCSV';
 import Toast from '../../components/ui/Toast';
 import "./PayoutManagement.css";
@@ -221,388 +220,339 @@ const PayoutsManagement = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#001D22] relative">
-      {/* Background Image */}
-      <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0">
+    <div className="min-h-screen bg-[#001D22]">
+      {/* Fixed X Graphic - Background Layer */}
+      <div
+        className="fixed inset-0 flex items-center justify-center pointer-events-none z-0"
+        style={{ top: "4rem" }}
+      >
         <img
-          src="/bgdashboard.png"
-          alt="Background"
-          className="object-cover w-full h-full opacity-10"
+          src="/X.png"
+          alt="X graphic"
+          className="object-contain hidden sm:block"
           style={{
+            filter: "drop-shadow(0 0 40px rgba(94, 234, 212, 0.5))",
+            width: "120%",
+            height: "85%",
+            maxWidth: "none",
+            maxHeight: "none",
+          }}
+        />
+        <img
+          src="/X.png"
+          alt="X graphic"
+          className="object-contain sm:hidden"
+          style={{
+            filter: "drop-shadow(0 0 20px rgba(94, 234, 212, 0.5))",
+            width: "100%",
+            height: "70%",
             maxWidth: "none",
             maxHeight: "none",
           }}
         />
       </div>
 
-      <Navbar />
-      
-      {/* Scrollable Content Section */}
+      {/* Scrollable Content Section - Overlays on top */}
       <section className="relative z-10 min-h-screen bg-transparent">
-        <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+        {/* Spacer to show 70% of image initially */}
+        <div className="h-[calc(50vh-4rem)] sm:h-[calc(55vh-4rem)]"></div>
+
+        {/* Cards Section - Scrolls over image */}
+        <div className="bg-transparent pt-2 pb-8 px-4 sm:px-6 lg:px-8">
           <div className="max-w-[1400px] mx-auto">
-            <main className="space-y-6 sm:space-y-8">
+            {/* Rounded Container with #122D32 background */}
+            <div className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6">
               {/* Header */}
-              <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8 mb-6 sm:mb-8">
-                <div className="flex justify-between items-start gap-5 flex-wrap">
+              <div className="mb-4">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
+                  {/* Left Section - Title */}
                   <div>
-                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white mb-3 font-['Albert_Sans'] flex items-center gap-3">
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-2 font-['Albert_Sans'] flex items-center gap-3">
                       <RiMoneyDollarCircleLine className="text-accent" />
                       Payout Management
                     </h1>
-                    <p className="text-white/70 text-base sm:text-lg font-['Albert_Sans']">
+                    <p className="text-white/70 text-xs sm:text-sm font-['Albert_Sans']">
                       Approve, reject, and process merchant payout requests
                     </p>
                   </div>
-                  <div className="flex gap-3 flex-wrap">
+
+                  {/* Right Section - Actions */}
+                  <div className="flex gap-2 sm:gap-3 flex-wrap">
                     <button
                       onClick={fetchPayouts}
                       disabled={loading}
-                      className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <FiRefreshCw className={loading ? 'animate-spin' : ''} />
-                      {loading ? 'Loading...' : 'Refresh'}
+                      <span>{loading ? 'Loading...' : 'Refresh'}</span>
                     </button>
                     {payouts.length > 0 && (
                       <ExportCSV
                         data={formatForExport()}
                         filename={`all_payouts_${new Date().toISOString().split('T')[0]}.csv`}
-                        className="bg-[#122D32] border border-white/10 hover:border-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5"
+                        className="flex items-center justify-center gap-2 bg-[#263F43] border border-white/10 hover:border-accent text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5"
                       />
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-6">
-                {error && (
-                  <div className="text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
-                    <FiAlertCircle />
-                    <span>{error}</span>
-                  </div>
-                )}
-
-                {/* Summary Cards */}
-                {payoutsSummary && (
-                  <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 mb-6">
-                    <h3 className="text-xl font-medium text-white mb-4 font-['Albert_Sans'] flex items-center gap-2">
-                      <FiDollarSign className="text-accent" />
-                      Summary Statistics
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="bg-[#001D22] border border-white/10 rounded-lg p-4">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="text-2xl text-purple-400"><RiMoneyDollarCircleLine /></div>
-                          <div className="text-2xl font-bold text-white font-['Albert_Sans']">{payoutsSummary.total_payout_requests || 0}</div>
-                        </div>
-                        <div className="text-white/70 text-sm font-['Albert_Sans']">Total Requests</div>
-                      </div>
-
-                      <div className="bg-[#001D22] border border-yellow-500/30 rounded-lg p-4">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="text-2xl text-yellow-400"><FiClock /></div>
-                          <div className="text-2xl font-bold text-white font-['Albert_Sans']">{payoutsSummary.requested_payouts || 0}</div>
-                        </div>
-                        <div className="text-white/70 text-sm font-['Albert_Sans'] mb-1">Pending Approval</div>
-                        <div className="text-yellow-400 font-medium text-sm font-['Albert_Sans']">{formatCurrency(payoutsSummary.total_pending)}</div>
-                      </div>
-
-                      <div className="bg-[#001D22] border border-green-500/30 rounded-lg p-4">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="text-2xl text-green-400"><FiCheck /></div>
-                          <div className="text-2xl font-bold text-white font-['Albert_Sans']">{payoutsSummary.completed_payouts || 0}</div>
-                        </div>
-                        <div className="text-white/70 text-sm font-['Albert_Sans'] mb-1">Completed</div>
-                        <div className="text-green-400 font-medium text-sm font-['Albert_Sans']">{formatCurrency(payoutsSummary.total_completed)}</div>
-                      </div>
-
-                      <div className="bg-[#001D22] border border-red-500/30 rounded-lg p-4">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="text-2xl text-red-400"><FiXCircle /></div>
-                          <div className="text-2xl font-bold text-white font-['Albert_Sans']">{(payoutsSummary.rejected_payouts || 0) + (payoutsSummary.failed_payouts || 0)}</div>
-                        </div>
-                        <div className="text-white/70 text-sm font-['Albert_Sans']">Rejected/Failed</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Filters */}
-                <div className="bg-[#122D32] border border-white/10 rounded-xl p-4">
-                  <select
-                    value={filters.status}
-                    onChange={(e) => setFilters({ ...filters, status: e.target.value, page: 1 })}
-                    className="bg-[#001D22] border border-white/10 text-white rounded-lg px-4 py-2.5 font-['Albert_Sans'] focus:outline-none focus:border-accent transition-colors w-full sm:w-auto"
-                  >
-                    <option value="">All Status</option>
-                    <option value="requested">Requested</option>
-                    <option value="pending">Pending</option>
-                    <option value="processing">Processing</option>
-                    <option value="completed">Completed</option>
-                    <option value="rejected">Rejected</option>
-                    <option value="failed">Failed</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
+              {/* Error Message */}
+              {error && (
+                <div className="mb-4 text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
+                  <FiAlertCircle />
+                  <span>{error}</span>
                 </div>
+              )}
 
-                {/* Payouts Table */}
-                {loading ? (
-                  <div className="flex flex-col items-center justify-center py-20 px-5 bg-[#122D32] border border-white/10 rounded-xl">
-                    <div className="w-10 h-10 border-4 border-white/30 border-t-accent rounded-full animate-spin mb-5"></div>
-                    <p className="text-white/80 font-['Albert_Sans']">Loading payout requests...</p>
+              {/* Summary Cards */}
+              {payoutsSummary && (
+                <div className="mb-6">
+                  <h3 className="text-lg sm:text-xl font-medium text-white mb-4 font-['Albert_Sans'] flex items-center gap-2">
+                    <FiDollarSign className="text-accent" />
+                    Summary Statistics
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+                    <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2 flex-1">
+                          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                            <RiMoneyDollarCircleLine />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                              Total Requests
+                            </h3>
+                            <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                              {payoutsSummary.total_payout_requests || 0}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2 flex-1">
+                          <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 flex-shrink-0">
+                            <FiClock />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                              Pending Approval
+                            </h3>
+                            <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                              {payoutsSummary.requested_payouts || 0}
+                            </div>
+                            <div className="text-xs text-yellow-400 mt-1 font-['Albert_Sans']">
+                              {formatCurrency(payoutsSummary.total_pending)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2 flex-1">
+                          <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
+                            <FiCheck />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                              Completed
+                            </h3>
+                            <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                              {payoutsSummary.completed_payouts || 0}
+                            </div>
+                            <div className="text-xs text-green-400 mt-1 font-['Albert_Sans']">
+                              {formatCurrency(payoutsSummary.total_completed)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2 flex-1">
+                          <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 flex-shrink-0">
+                            <FiXCircle />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                              Rejected/Failed
+                            </h3>
+                            <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                              {(payoutsSummary.rejected_payouts || 0) + (payoutsSummary.failed_payouts || 0)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                ) : payouts.length > 0 ? (
-                  <div className="bg-[#122D32] border border-white/10 rounded-xl overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead className="bg-[#001D22] border-b border-white/10">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '140px' }}>Payout ID</th>
-                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '160px' }}>Merchant</th>
-                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '100px' }}>Amount</th>
-                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '100px' }}>Net</th>
-                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '90px' }}>Mode</th>
-                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '120px' }}>Status</th>
-                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '110px' }}>Requested</th>
-                            <th className="px-4 py-3 text-left text-white/70 text-sm font-medium font-['Albert_Sans']" style={{ width: '280px' }}>Actions</th>
+                </div>
+              )}
+
+              {/* Filters */}
+              <div className="mb-6">
+                <select
+                  value={filters.status}
+                  onChange={(e) => setFilters({ ...filters, status: e.target.value, page: 1 })}
+                  className="bg-[#263F43] border border-white/10 text-white rounded-lg px-4 py-2.5 font-['Albert_Sans'] focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors w-full sm:w-auto"
+                >
+                  <option value="">All Status</option>
+                  <option value="requested">Requested</option>
+                  <option value="pending">Pending</option>
+                  <option value="processing">Processing</option>
+                  <option value="completed">Completed</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="failed">Failed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+
+              {/* Payouts Table */}
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-20 px-5">
+                  <div className="w-10 h-10 border-4 border-white/30 border-t-accent rounded-full animate-spin mb-5"></div>
+                  <p className="text-white/80 font-['Albert_Sans']">Loading payout requests...</p>
+                </div>
+              ) : payouts.length > 0 ? (
+                <div className="bg-[#263F43] border border-white/10 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-[#001D22] border-b border-white/10">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Payout ID</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell">Merchant</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Amount</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">Net</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell">Mode</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Status</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">Requested</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payouts.map((payout) => (
+                          <tr key={payout.payoutId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white text-xs sm:text-sm font-['Albert_Sans'] font-mono" title={payout.payoutId}>
+                                  {payout.payoutId.slice(-12)}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(payout.payoutId);
+                                    setToast({ message: 'Copied!', type: 'success' });
+                                  }}
+                                  className="p-1 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors"
+                                  title="Copy full ID"
+                                >
+                                  <FiCopy size={12} />
+                                </button>
+                              </div>
+                            </td>
+
+                            <td className="px-4 py-3 hidden md:table-cell">
+                              <div className="text-white font-medium text-xs sm:text-sm font-['Albert_Sans']" title={payout.merchantName}>
+                                {payout.merchantName}
+                              </div>
+                              <div className="text-white/60 text-xs font-['Albert_Sans']" title={payout.requestedByName}>
+                                {payout.requestedByName}
+                              </div>
+                            </td>
+
+                            <td className="px-4 py-3 text-white font-medium text-xs sm:text-sm font-['Albert_Sans']">
+                              ₹{payout.amount.toLocaleString('en-IN')}
+                            </td>
+
+                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
+                              ₹{payout.netAmount.toLocaleString('en-IN')}
+                            </td>
+
+                            <td className="px-4 py-3 hidden md:table-cell">
+                              <span className="text-lg">
+                                {payout.transferMode === 'upi' ? '📱' : '🏦'}
+                              </span>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium font-['Albert_Sans'] ${
+                                getStatusBadgeClass(payout.status) === 'badge-success' ? 'bg-green-500/20 text-green-400' :
+                                getStatusBadgeClass(payout.status) === 'badge-error' ? 'bg-red-500/20 text-red-400' :
+                                getStatusBadgeClass(payout.status) === 'badge-warning' ? 'bg-yellow-500/20 text-yellow-400' :
+                                'bg-white/10 text-white/70'
+                              }`}>
+                                {getStatusIcon(payout.status)}
+                                <span>{payout.status}</span>
+                              </span>
+                            </td>
+
+                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
+                              <div>{new Date(payout.requestedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</div>
+                              <div className="text-white/50 text-xs">{new Date(payout.requestedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</div>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                                <button
+                                  onClick={() => openModal('view', payout)}
+                                  className="flex items-center gap-1 px-2 py-1 bg-accent/20 hover:bg-accent/30 text-accent rounded-lg text-xs font-medium font-['Albert_Sans'] transition-colors"
+                                  title="View Details"
+                                >
+                                  <FiEye size={12} />
+                                  <span className="hidden sm:inline">View</span>
+                                </button>
+
+                                {payout.status === 'requested' && (
+                                  <>
+                                    <button
+                                      onClick={() => openModal('approve', payout)}
+                                      className="flex items-center gap-1 px-2 py-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-colors"
+                                      title="Approve"
+                                    >
+                                      <FiCheck size={12} />
+                                      <span className="hidden sm:inline">Approve</span>
+                                    </button>
+                                    <button
+                                      onClick={() => openModal('reject', payout)}
+                                      className="flex items-center gap-1 px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-colors"
+                                      title="Reject"
+                                    >
+                                      <FiX size={12} />
+                                      <span className="hidden sm:inline">Reject</span>
+                                    </button>
+                                  </>
+                                )}
+
+                                {(payout.status === 'pending' || payout.status === 'processing') && (
+                                  <button
+                                    onClick={() => openModal('process', payout)}
+                                    className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-colors"
+                                    title="Process & Complete"
+                                  >
+                                    <FiSend size={12} />
+                                    <span className="hidden sm:inline">Complete</span>
+                                  </button>
+                                )}
+                              </div>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {payouts.map((payout) => (
-                            <tr key={payout.payoutId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                      <td>
-                        <div className="payout-id-compact">
-                          <div className="id-short" title={payout.payoutId}>
-                            {payout.payoutId.slice(-12)}
-                          </div>
-                          <button
-                            className="copy-btn-tiny"
-                            onClick={() => {
-                              navigator.clipboard.writeText(payout.payoutId);
-                              setToast({ message: 'Copied!', type: 'success' });
-                            }}
-                            title="Copy full ID"
-                          >
-                            <FiCopy size={12} />
-                          </button>
-                        </div>
-                      </td>
-
-                      <td>
-                        <div className="merchant-compact">
-                          <div className="merchant-name-short" title={payout.merchantName}>
-                            {payout.merchantName}
-                          </div>
-                          <div className="merchant-email-short" title={payout.requestedByName}>
-                            {payout.requestedByName}
-                          </div>
-                        </div>
-                      </td>
-
-                      <td>
-                        <div className="amount-compact">
-                          ₹{payout.amount.toLocaleString('en-IN')}
-                        </div>
-                      </td>
-
-                      <td>
-                        <div className="amount-net-compact">
-                          ₹{payout.netAmount.toLocaleString('en-IN')}
-                        </div>
-                      </td>
-
-                      <td>
-                        <span className={`mode-badge-compact ${payout.transferMode === 'upi' ? 'mode-upi' : 'mode-bank'}`}>
-                          {payout.transferMode === 'upi' ? '📱' : '🏦'}
-                        </span>
-                      </td>
-
-                      <td>
-                        <span className={`status-badge-compact ${getStatusBadgeClass(payout.status)}`}>
-                          {getStatusIcon(payout.status)}
-                          <span>{payout.status}</span>
-                        </span>
-                      </td>
-
-                      <td>
-                        <div className="date-compact">
-                          <div className="date-line">
-                            {new Date(payout.requestedAt).toLocaleDateString('en-GB', {
-                              day: '2-digit',
-                              month: 'short'
-                            })}
-                          </div>
-                          <div className="time-line">
-                            {new Date(payout.requestedAt).toLocaleTimeString('en-IN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              hour12: true
-                            })}
-                          </div>
-                        </div>
-                      </td>
-
-                      <td>
-                        <div className="action-buttons-compact">
-                          <button
-                            onClick={() => openModal('view', payout)}
-                            className="action-btn-compact view"
-                            title="View Details"
-                          >
-                            <FiEye size={14} />
-                            View
-                          </button>
-
-                          {payout.status === 'requested' && (
-                            <>
-                              <button
-                                onClick={() => openModal('approve', payout)}
-                                className="action-btn-compact approve"
-                                title="Approve"
-                              >
-                                <FiCheck size={14} />
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => openModal('reject', payout)}
-                                className="action-btn-compact reject"
-                                title="Reject"
-                              >
-                                <FiX size={14} />
-                                Reject
-                              </button>
-                            </>
-                          )}
-
-                          {(payout.status === 'pending' || payout.status === 'processing') && (
-                            <button
-                              onClick={() => openModal('process', payout)}
-                              className="action-btn-compact process"
-                              title="Process & Complete"
-                            >
-                              <FiSend size={14} />
-                              Complete
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="mobile-payout-cards mobile-only">
-                {payouts.map((payout) => (
-                  <div key={payout.payoutId} className="payout-card-mobile">
-                    {/* Card Header */}
-                    <div className="payout-card-header">
-                      <div className="payout-id-mobile">
-                        {payout.payoutId.slice(-12)}
-                        <button
-                          className="copy-btn-tiny"
-                          onClick={() => {
-                            navigator.clipboard.writeText(payout.payoutId);
-                            setToast({ message: 'Copied!', type: 'success' });
-                          }}
-                        >
-                          <FiCopy size={10} />
-                        </button>
-                      </div>
-                      <span className={`status-badge-mobile ${getStatusBadgeClass(payout.status)}`}>
-                        {getStatusIcon(payout.status)}
-                        {payout.status}
-                      </span>
-                    </div>
-
-                    {/* Card Body */}
-                    <div className="payout-card-body">
-                      {/* Merchant Info */}
-                      <div className="merchant-info-mobile">
-                        <div className="merchant-name-mobile">{payout.merchantName}</div>
-                        <div className="merchant-email-mobile">{payout.requestedByName}</div>
-                      </div>
-
-                      {/* Amount */}
-                      <div className="card-info-row">
-                        <span className="card-label">Net Amount</span>
-                        <span className="card-value amount">
-                          ₹{payout.netAmount.toLocaleString('en-IN')}
-                        </span>
-                      </div>
-
-                      {/* Transfer Mode */}
-                      <div className="card-info-row">
-                        <span className="card-label">Transfer Mode</span>
-                        <span className="card-value">
-                          {payout.transferMode === 'upi' ? '📱 UPI' : '🏦 Bank'}
-                        </span>
-                      </div>
-
-                      {/* Requested Date */}
-                      <div className="card-info-row">
-                        <span className="card-label">Requested</span>
-                        <span className="card-value">
-                          {new Date(payout.requestedAt).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric'
-                          })}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Card Footer - Actions */}
-                    <div className="payout-card-footer">
-                      <button
-                        onClick={() => openModal('view', payout)}
-                        className="btn-view-mobile"
-                      >
-                        <FiEye size={14} />
-                        View
-                      </button>
-
-                      {payout.status === 'requested' && (
-                        <>
-                          <button
-                            onClick={() => openModal('approve', payout)}
-                            className="btn-approve-mobile"
-                          >
-                            <FiCheck size={14} />
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => openModal('reject', payout)}
-                            className="btn-reject-mobile"
-                          >
-                            <FiX size={14} />
-                            Reject
-                          </button>
-                        </>
-                      )}
-
-                      {(payout.status === 'pending' || payout.status === 'processing') && (
-                        <button
-                          onClick={() => openModal('process', payout)}
-                          className="btn-process-mobile"
-                        >
-                          <FiSend size={14} />
-                          Complete
-                        </button>
-                      )}
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 px-5">
+                  <RiMoneyDollarCircleLine className="text-6xl text-white/50 mb-4" />
+                  <h3 className="text-xl font-medium text-white mb-2 font-['Albert_Sans']">No Payout Requests</h3>
+                  <p className="text-white/70 text-sm font-['Albert_Sans']">There are no payout requests at the moment.</p>
+                </div>
+              )}
             </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-20 px-5 bg-[#122D32] border border-white/10 rounded-xl">
-                      <RiMoneyDollarCircleLine className="text-6xl text-white/50 mb-4" />
-                      <h3 className="text-xl font-medium text-white mb-2 font-['Albert_Sans']">No Payout Requests</h3>
-                      <p className="text-white/70 text-sm font-['Albert_Sans']">There are no payout requests at the moment.</p>
-                    </div>
-                  )}
-              </div>
-            </main>
           </div>
         </div>
       </section>

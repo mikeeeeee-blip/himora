@@ -43,6 +43,8 @@ class PaymentService {
       if (filters.status) params.append('status', filters.status);
       if (filters.paymentGateway) params.append('paymentGateway', filters.paymentGateway);
       if (filters.paymentMethod) params.append('paymentMethod', filters.paymentMethod);
+      if (filters.settlementStatus) params.append('settlementStatus', filters.settlementStatus);
+      if (filters.payoutStatus) params.append('payoutStatus', filters.payoutStatus);
       if (filters.search) params.append('search', filters.search); // Global search
       if (filters.page) params.append('page', filters.page);
       if (filters.limit) params.append('limit', filters.limit);

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import superadminPaymentService from '../../services/superadminPaymentService';
-import Navbar from '../Navbar';
 import '../pages/PageLayout.css';
 import './SuperadminMerchantsPage.css';
 
@@ -170,43 +169,65 @@ export default function SuperadminMerchantsPage() {
   }, [query.status, query.includeInactive]);
 
   return (
-    <div className="min-h-screen bg-[#001D22] relative">
-      {/* Background Image */}
-      <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0">
+    <div className="min-h-screen bg-[#001D22]">
+      {/* Fixed X Graphic - Background Layer */}
+      <div
+        className="fixed inset-0 flex items-center justify-center pointer-events-none z-0"
+        style={{ top: "4rem" }}
+      >
         <img
-          src="/bgdashboard.png"
-          alt="Background"
-          className="object-cover w-full h-full opacity-10"
+          src="/X.png"
+          alt="X graphic"
+          className="object-contain hidden sm:block"
           style={{
+            filter: "drop-shadow(0 0 40px rgba(94, 234, 212, 0.5))",
+            width: "120%",
+            height: "85%",
+            maxWidth: "none",
+            maxHeight: "none",
+          }}
+        />
+        <img
+          src="/X.png"
+          alt="X graphic"
+          className="object-contain sm:hidden"
+          style={{
+            filter: "drop-shadow(0 0 20px rgba(94, 234, 212, 0.5))",
+            width: "100%",
+            height: "70%",
             maxWidth: "none",
             maxHeight: "none",
           }}
         />
       </div>
 
-      <Navbar />
-      
-      {/* Scrollable Content Section */}
+      {/* Scrollable Content Section - Overlays on top */}
       <section className="relative z-10 min-h-screen bg-transparent">
-        <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+        {/* Spacer to show 70% of image initially */}
+        <div className="h-[calc(50vh-4rem)] sm:h-[calc(55vh-4rem)]"></div>
+
+        {/* Cards Section - Scrolls over image */}
+        <div className="bg-transparent pt-2 pb-8 px-4 sm:px-6 lg:px-8">
           <div className="max-w-[1400px] mx-auto">
-            <main className="space-y-6 sm:space-y-8">
+            {/* Rounded Container with #122D32 background */}
+            <div className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6">
               {/* Header */}
-              <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8 mb-6 sm:mb-8">
-                <div className="flex justify-between items-start gap-5 flex-wrap">
+              <div className="mb-4">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
+                  {/* Left Section - Title */}
                   <div>
-                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white mb-3 font-['Albert_Sans']">
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-2 font-['Albert_Sans']">
                       Merchants
                     </h1>
                     {data.summary && (
-                      <div className="flex gap-4 mt-2">
-                        <span className="text-white/70 text-sm font-['Albert_Sans']">
+                      <div className="flex flex-wrap gap-3 mt-2">
+                        <span className="text-white/70 text-xs sm:text-sm font-['Albert_Sans']">
                           Total: <span className="text-white font-medium">{data.summary.total_merchants}</span>
                         </span>
-                        <span className="text-white/70 text-sm font-['Albert_Sans']">
+                        <span className="text-white/70 text-xs sm:text-sm font-['Albert_Sans']">
                           Active: <span className="text-green-400 font-medium">{data.summary.active_merchants}</span>
                         </span>
-                        <span className="text-white/70 text-sm font-['Albert_Sans']">
+                        <span className="text-white/70 text-xs sm:text-sm font-['Albert_Sans']">
                           Inactive: <span className="text-yellow-400 font-medium">{data.summary.inactive_merchants}</span>
                         </span>
                       </div>
@@ -215,84 +236,103 @@ export default function SuperadminMerchantsPage() {
                 </div>
               </div>
 
-        <div className="toolbar">
-          <input
-            type="text"
-            placeholder="Search by name or email"
-            value={query.search}
-            onChange={(e) => setQuery((s) => ({ ...s, search: e.target.value }))}
-            className="input"
-          />
-          <select
-            value={query.status}
-            onChange={(e) => setQuery((s) => ({ ...s, status: e.target.value }))}
-            className="select"
-          >
-            <option value="active">Active</option>
-            <option value="all">All</option>
-          </select>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={query.includeInactive}
-              onChange={(e) => setQuery((s) => ({ ...s, includeInactive: e.target.checked }))}
-            />
-            Include inactive
-          </label>
-        </div>
+              {/* Filters Toolbar */}
+              <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <input
+                  type="text"
+                  placeholder="Search by name or email"
+                  value={query.search}
+                  onChange={(e) => setQuery((s) => ({ ...s, search: e.target.value }))}
+                  className="flex-1 bg-[#263F43] border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-white/50 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                />
+                <select
+                  value={query.status}
+                  onChange={(e) => setQuery((s) => ({ ...s, status: e.target.value }))}
+                  className="bg-[#263F43] border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                >
+                  <option value="active">Active</option>
+                  <option value="all">All</option>
+                </select>
+                <label className="flex items-center gap-2 text-white/70 text-sm font-['Albert_Sans'] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={query.includeInactive}
+                    onChange={(e) => setQuery((s) => ({ ...s, includeInactive: e.target.checked }))}
+                    className="rounded border-white/20"
+                  />
+                  Include inactive
+                </label>
+              </div>
 
-        {loading && <div className="loading">Loading merchants...</div>}
-        {error && <div className="error">{error}</div>}
+              {loading && (
+                <div className="flex flex-col items-center justify-center py-20 px-5">
+                  <div className="w-10 h-10 border-4 border-white/30 border-t-accent rounded-full animate-spin mb-5"></div>
+                  <p className="text-white/80 font-['Albert_Sans']">Loading merchants...</p>
+                </div>
+              )}
+              {error && (
+                <div className="text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans'] mb-4">
+                  {error}
+                </div>
+              )}
 
-        {!loading && !error && (
-          <div className="merchant-list">
-            {/* Header Row */}
-            <div className="merchant-row head">
-              <div className="merchant-col col-merchant">Merchant</div>
-              <div className="merchant-col">Transactions</div>
-              <div className="merchant-col">Revenue</div>
-              <div className="merchant-col">Payouts</div>
-              <div className="merchant-col">Balance</div>
-            </div>
-
-            {filteredMerchants.map((m) => (
-              <div className="merchant-row" key={m.merchant_id}>
-                <div className="merchant-col col-merchant">
-                  <div className="merchant-title">
-                    <div className="merchant-name">{m.merchant_info?.business_name || m.merchant_info?.name}</div>
-                    <div className="merchant-sub">{m.merchant_info?.email}</div>
+              {!loading && !error && (
+                <div className="bg-[#263F43] border border-white/10 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-[#001D22] border-b border-white/10">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Merchant</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell">Transactions</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">Revenue</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">Payouts</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden xl:table-cell">Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredMerchants.map((m) => (
+                          <tr key={m.merchant_id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td className="px-4 py-3">
+                              <div>
+                                <div className="text-white font-medium text-sm font-['Albert_Sans']">{m.merchant_info?.business_name || m.merchant_info?.name}</div>
+                                <div className="text-white/60 text-xs font-['Albert_Sans']">{m.merchant_info?.email}</div>
+                                <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium font-['Albert_Sans'] ${
+                                  m.merchant_info?.status === 'active' 
+                                    ? 'bg-green-500/20 text-green-400' 
+                                    : 'bg-yellow-500/20 text-yellow-400'
+                                }`}>
+                                  {m.merchant_info?.status || 'active'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden md:table-cell">
+                              <div>Total: {m.transaction_summary?.total_transactions || 0}</div>
+                              <div>Paid: {m.transaction_summary?.by_status?.paid || 0}</div>
+                              <div>Success: {m.transaction_summary?.success_rate || 0}%</div>
+                            </td>
+                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
+                              <div>Total: ₹ {currency(m.revenue_summary?.total_revenue)}</div>
+                              <div>Refunded: ₹ {currency(m.revenue_summary?.total_refunded)}</div>
+                              <div>Net: ₹ {currency(m.revenue_summary?.settled_net_revenue)}</div>
+                            </td>
+                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
+                              <div>Completed: ₹ {currency(m.payout_summary?.total_completed)}</div>
+                              <div>Pending: ₹ {currency(m.payout_summary?.total_pending)}</div>
+                              <div># Requests: {m.payout_summary?.total_payouts || 0}</div>
+                            </td>
+                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden xl:table-cell">
+                              <div>Available: ₹ {currency(m.balance_information?.available_balance)}</div>
+                              <div>Paid Out: ₹ {currency(m.balance_information?.total_paid_out)}</div>
+                              <div>Pending: ₹ {currency(m.balance_information?.pending_payouts)}</div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <span className={`badge ${m.merchant_info?.status === 'active' ? 'success' : 'warning'}`}>{m.merchant_info?.status || 'active'}</span>
                 </div>
-
-                <div className="merchant-col">
-                  <div className="mini">Total: {m.transaction_summary?.total_transactions || 0}</div>
-                  <div className="mini">Paid: {m.transaction_summary?.by_status?.paid || 0}</div>
-                  <div className="mini">Succ %: {m.transaction_summary?.success_rate || 0}%</div>
-                </div>
-
-                <div className="merchant-col">
-                  <div className="mini">Total: ₹ {currency(m.revenue_summary?.total_revenue)}</div>
-                  <div className="mini">Refunded: ₹ {currency(m.revenue_summary?.total_refunded)}</div>
-                  <div className="mini">Net: ₹ {currency(m.revenue_summary?.settled_net_revenue)}</div>
-                </div>
-
-                <div className="merchant-col">
-                  <div className="mini">Completed: ₹ {currency(m.payout_summary?.total_completed)}</div>
-                  <div className="mini">Pending: ₹ {currency(m.payout_summary?.total_pending)}</div>
-                  <div className="mini"># Requests: {m.payout_summary?.total_payouts || 0}</div>
-                </div>
-
-                <div className="merchant-col">
-                  <div className="mini">Available: ₹ {currency(m.balance_information?.available_balance)}</div>
-                  <div className="mini">Paid Out: ₹ {currency(m.balance_information?.total_paid_out)}</div>
-                  <div className="mini">Pending: ₹ {currency(m.balance_information?.pending_payouts)}</div>
-                </div>
-              </div>
-            ))}
-              </div>
-            )}
-            </main>
+              )}
+            </div>
           </div>
         </div>
       </section>

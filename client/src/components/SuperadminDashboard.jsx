@@ -20,7 +20,6 @@ import { TbArrowsTransferDown } from "react-icons/tb";
 import { RiMoneyDollarCircleLine } from "react-icons/ri";
 import { useNavigate } from "react-router-dom";
 import superadminPaymentService from "../services/superadminPaymentService";
-import Navbar from "./Navbar";
 
 const SuperadminDashboard = () => {
   const navigate = useNavigate();
@@ -75,17 +74,63 @@ const SuperadminDashboard = () => {
     try {
       const data = await superadminPaymentService.getDashboardStats();
       console.log("Dashboard stats:", data);
-      
+
       // Validate that we have the required data structure
-      if (data && typeof data === 'object') {
+      if (data && typeof data === "object") {
         // Ensure all required sections exist with default values
         const validatedStats = {
-          merchants: data.merchants || { total: 0, active: 0, inactive: 0, new_this_week: 0 },
-          transactions: data.transactions || { total: 0, paid: 0, pending: 0, failed: 0, settled: 0, unsettled: 0, today: 0, this_week: 0, success_rate: 0 },
-          revenue: data.revenue || { total: 0, commission_earned: 0, net_revenue: 0, refunded: 0, today: 0, this_week: 0, average_transaction: 0 },
-          payouts: data.payouts || { total_requests: 0, requested: 0, pending: 0, completed: 0, rejected: 0, failed: 0, total_amount_requested: 0, total_completed: 0, total_pending: 0, commission_earned: 0, today: 0 },
-          settlement: data.settlement || { settled_transactions: 0, unsettled_transactions: 0, available_for_payout: 0, in_payouts: 0, available_balance: 0 },
-          platform: data.platform || { total_commission_earned: 0, payin_commission: 0, payout_commission: 0, net_platform_revenue: 0 }
+          merchants: data.merchants || {
+            total: 0,
+            active: 0,
+            inactive: 0,
+            new_this_week: 0,
+          },
+          transactions: data.transactions || {
+            total: 0,
+            paid: 0,
+            pending: 0,
+            failed: 0,
+            settled: 0,
+            unsettled: 0,
+            today: 0,
+            this_week: 0,
+            success_rate: 0,
+          },
+          revenue: data.revenue || {
+            total: 0,
+            commission_earned: 0,
+            net_revenue: 0,
+            refunded: 0,
+            today: 0,
+            this_week: 0,
+            average_transaction: 0,
+          },
+          payouts: data.payouts || {
+            total_requests: 0,
+            requested: 0,
+            pending: 0,
+            completed: 0,
+            rejected: 0,
+            failed: 0,
+            total_amount_requested: 0,
+            total_completed: 0,
+            total_pending: 0,
+            commission_earned: 0,
+            today: 0,
+          },
+          settlement: data.settlement || {
+            settled_transactions: 0,
+            unsettled_transactions: 0,
+            available_for_payout: 0,
+            in_payouts: 0,
+            available_balance: 0,
+          },
+          platform: data.platform || {
+            total_commission_earned: 0,
+            payin_commission: 0,
+            payout_commission: 0,
+            net_platform_revenue: 0,
+          },
         };
         setStats(validatedStats);
       } else {
@@ -93,7 +138,9 @@ const SuperadminDashboard = () => {
       }
     } catch (err) {
       console.error("Error fetching stats:", err);
-      setError(err.message || "Failed to load dashboard statistics. Please try again.");
+      setError(
+        err.message || "Failed to load dashboard statistics. Please try again."
+      );
       // Set empty stats on error so UI doesn't break
       setStats(null);
     } finally {
@@ -114,26 +161,36 @@ const SuperadminDashboard = () => {
 
   if (loading && !stats) {
     return (
-      <div className="min-h-screen bg-[#001D22] relative">
-        {/* Background Image */}
-        <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0">
+      <div className="min-h-screen bg-[#001D22]">
+        {/* Fixed X Graphic - Background Layer */}
+        <div
+          className="fixed inset-0 flex items-center justify-center pointer-events-none z-0"
+          style={{ top: "4rem" }}
+        >
           <img
-            src="/bgdashboard.png"
-            alt="Background"
-            className="object-cover w-full h-full opacity-10"
+            src="/X.png"
+            alt="X graphic"
+            className="object-contain hidden sm:block"
             style={{
+              filter: "drop-shadow(0 0 40px rgba(94, 234, 212, 0.5))",
+              width: "120%",
+              height: "85%",
               maxWidth: "none",
               maxHeight: "none",
             }}
           />
         </div>
-        <Navbar />
         <section className="relative z-10 min-h-screen bg-transparent">
-          <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+          <div className="h-[calc(50vh-4rem)] sm:h-[calc(55vh-4rem)]"></div>
+          <div className="bg-transparent pt-2 pb-8 px-4 sm:px-6 lg:px-8">
             <div className="max-w-[1400px] mx-auto">
-              <div className="flex flex-col items-center justify-center py-20 px-5 bg-[#122D32] border border-white/10 rounded-xl">
-                <div className="w-10 h-10 border-4 border-white/30 border-t-accent rounded-full animate-spin mb-5"></div>
-                <p className="text-white/80 font-['Albert_Sans']">Loading dashboard...</p>
+              <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8">
+                <div className="flex flex-col items-center justify-center py-20 px-5">
+                  <div className="w-10 h-10 border-4 border-white/30 border-t-accent rounded-full animate-spin mb-5"></div>
+                  <p className="text-white/80 font-['Albert_Sans']">
+                    Loading dashboard...
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -143,561 +200,771 @@ const SuperadminDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#001D22] relative">
-      {/* Background Image */}
-      <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0">
+    <div className="min-h-screen bg-[#001D22]">
+      {/* Fixed X Graphic - Background Layer */}
+      <div
+        className="fixed inset-0 flex items-center justify-center pointer-events-none z-0"
+        style={{ top: "4rem" }}
+      >
         <img
-          src="/bgdashboard.png"
-          alt="Background"
-          className="object-cover w-full h-full opacity-10"
+          src="/X.png"
+          alt="X graphic"
+          className="object-contain hidden sm:block"
           style={{
+            filter: "drop-shadow(0 0 40px rgba(94, 234, 212, 0.5))",
+            width: "120%",
+            height: "85%",
+            maxWidth: "none",
+            maxHeight: "none",
+          }}
+        />
+        <img
+          src="/X.png"
+          alt="X graphic"
+          className="object-contain sm:hidden"
+          style={{
+            filter: "drop-shadow(0 0 20px rgba(94, 234, 212, 0.5))",
+            width: "100%",
+            height: "70%",
             maxWidth: "none",
             maxHeight: "none",
           }}
         />
       </div>
 
-      <Navbar />
-      
-      {/* Scrollable Content Section */}
+      {/* Scrollable Content Section - Overlays on top */}
       <section className="relative z-10 min-h-screen bg-transparent">
-        <div className="bg-transparent pt-24 pb-8 px-4 sm:px-6 lg:px-8">
+        {/* Spacer to show 70% of image initially */}
+        <div className="h-[calc(50vh-4rem)] sm:h-[calc(55vh-4rem)]"></div>
+
+        {/* Cards Section - Scrolls over image */}
+        <div className="bg-transparent pt-2 pb-8 px-4 sm:px-6 lg:px-8">
           <div className="max-w-[1400px] mx-auto">
-            <main className="space-y-6 sm:space-y-8">
+            {/* Rounded Container with #122D32 background */}
+            <div className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6">
               {/* Header */}
-              <div className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8 mb-6 sm:mb-8">
-                <div className="flex justify-between items-start gap-5 flex-wrap">
+              <div className="mb-4">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
+                  {/* Left Section - Title */}
                   <div>
-                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white mb-3 font-['Albert_Sans']">
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-2 font-['Albert_Sans']">
                       SuperAdmin Dashboard
                     </h1>
-                    <p className="text-white/70 text-base sm:text-lg font-['Albert_Sans']">
+                    <p className="text-white/70 text-xs sm:text-sm font-['Albert_Sans']">
                       Complete overview of platform operations and statistics
                     </p>
                   </div>
+
+                  {/* Right Section - Refresh Button */}
                   <button
                     onClick={fetchStats}
                     disabled={loading}
-                    className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 sm:px-5 py-2 rounded-full text-sm sm:text-base font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none w-full sm:w-auto whitespace-nowrap"
                   >
                     <FiRefreshCw className={loading ? "animate-spin" : ""} />
-                    Refresh
+                    <span>{loading ? "Loading..." : "Refresh"}</span>
                   </button>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-8">
-                {error && (
-                  <div className="text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
-                    <FiAlertCircle /> {error}
-                  </div>
-                )}
-
-                {stats && (
-                  <>
-                    {/* Merchants Section */}
-                    <div className="mb-10">
-                <div className="section-header-base">
-                  <h2>
-                    <FiUsers /> Merchants
-                  </h2>
-                  <span className="text-sm font-medium text-white/80 bg-bg-tertiary px-4 py-1.5 rounded-full font-['Albert_Sans']">
-                    {stats.merchants.total} Total
-                  </span>
+              {/* Error Message */}
+              {error && (
+                <div className="mb-4 text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
+                  <FiAlertCircle /> {error}
                 </div>
-                <div className="stats-grid-base">
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-accent to-bg-tertiary text-white">
-                      <FiUsers />
+              )}
+
+              {stats && (
+                <div className="space-y-6">
+                  {/* Merchants Section */}
+                  <div>
+                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
+                      <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
+                        <FiUsers /> Merchants
+                      </h2>
+                      <span className="text-sm font-medium text-white/80 bg-bg-tertiary px-4 py-1.5 rounded-full font-['Albert_Sans']">
+                        {stats.merchants.total} Total
+                      </span>
                     </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Total Merchants</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.merchants.total)}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiUsers />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Total Merchants
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.merchants.total)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
+                              <FiCheckCircle />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Active
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.merchants.active)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 flex-shrink-0">
+                              <FiClock />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Inactive
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.merchants.inactive)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiTrendingUp />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                New This Week
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.merchants.new_this_week)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-green-400 to-green-600 text-white">
-                      <FiCheckCircle />
+                  {/* Transactions Section */}
+                  <div>
+                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
+                      <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
+                        <HiOutlineChartBar /> Transactions
+                      </h2>
+                      <span className="text-sm font-medium text-white/80 bg-bg-tertiary px-4 py-1.5 rounded-full font-['Albert_Sans']">
+                        {stats.transactions.total} Total
+                      </span>
                     </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Active</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.merchants.active)}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-5">
+                      <div
+                        className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 cursor-pointer hover:border-accent"
+                        onClick={() => navigate("/superadmin/transactions")}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <HiOutlineChartBar />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Total Transactions
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.transactions.total)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                Success Rate: {stats.transactions.success_rate}%
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
+                              <FiCheckCircle />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Paid
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.transactions.paid)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 flex-shrink-0">
+                              <FiClock />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Pending
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.transactions.pending)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 flex-shrink-0">
+                              <FiXCircle />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Failed
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.transactions.failed)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiCheckCircle />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Settled
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.transactions.settled)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiClock />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Unsettled
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.transactions.unsettled)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Today & Week Stats */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                      <div className="bg-[#263F43] border-l-4 border-accent border border-white/10 rounded-xl p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="text-xs text-white/80 font-medium mb-2 font-['Albert_Sans']">
+                          Today
+                        </div>
+                        <div className="text-2xl font-medium text-white font-['Albert_Sans']">
+                          {formatNumber(stats.transactions.today)}
+                        </div>
+                      </div>
+                      <div className="bg-[#263F43] border-l-4 border-accent border border-white/10 rounded-xl p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="text-xs text-white/80 font-medium mb-2 font-['Albert_Sans']">
+                          This Week
+                        </div>
+                        <div className="text-2xl font-medium text-white font-['Albert_Sans']">
+                          {formatNumber(stats.transactions.this_week)}
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-yellow-400 to-yellow-600 text-white">
-                      <FiClock />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Inactive</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.merchants.inactive)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-bg-tertiary to-accent text-white">
-                      <FiTrendingUp />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">New This Week</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.merchants.new_this_week)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Transactions Section */}
-              <div className="mb-10">
-                <div className="section-header-base">
-                  <h2>
-                    <HiOutlineChartBar /> Transactions
-                  </h2>
-                  <span className="text-sm font-medium text-white/80 bg-bg-tertiary px-4 py-1.5 rounded-full font-['Albert_Sans']">
-                    {stats.transactions.total} Total
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5 mb-4">
-                  <div
-                    className="stat-card-base cursor-pointer hover:border-accent"
-                    onClick={() => navigate("/superadmin/transactions")}
-                  >
-                    <div className="stat-icon-base bg-gradient-to-br from-accent to-bg-tertiary text-white">
-                      <HiOutlineChartBar />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Total Transactions</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.transactions.total)}
-                      </div>
-                      <div className="stat-meta-base">
-                        Success Rate: {stats.transactions.success_rate}%
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-green-400 to-green-600 text-white">
-                      <FiCheckCircle />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Paid</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.transactions.paid)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-yellow-400 to-yellow-600 text-white">
-                      <FiClock />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Pending</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.transactions.pending)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-red-400 to-red-600 text-white">
-                      <FiXCircle />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Failed</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.transactions.failed)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-bg-tertiary to-accent text-white">
-                      <FiCheckCircle />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Settled</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.transactions.settled)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-bg-tertiary to-accent text-white">
-                      <FiClock />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Unsettled</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.transactions.unsettled)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Today & Week Stats */}
-                <div className="flex gap-4 mt-4">
-                  <div className="flex-1 bg-bg-secondary border-l-4 border-accent px-4 py-3 rounded-lg transition-all duration-200 hover:bg-bg-tertiary hover:translate-x-1">
-                    <div className="stat-label-base">Today</div>
-                    <div className="stat-value-base text-xl">
-                      {formatNumber(stats.transactions.today)}
-                    </div>
-                  </div>
-                  <div className="flex-1 bg-bg-secondary border-l-4 border-accent px-4 py-3 rounded-lg transition-all duration-200 hover:bg-bg-tertiary hover:translate-x-1">
-                    <div className="stat-label-base">This Week</div>
-                    <div className="stat-value-base text-xl">
-                      {formatNumber(stats.transactions.this_week)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Revenue Section */}
-              <div className="mb-10">
-                <div className="section-header-base">
-                  <h2>
-                    <FiDollarSign /> Revenue
-                  </h2>
-                  <span className="text-lg font-medium text-green-400 font-['Albert_Sans']">
-                    {formatCurrency(stats.revenue.total)}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-4">
-                  <div className="stat-card-base md:col-span-2">
-                    <div className="stat-icon-base bg-gradient-to-br from-accent to-bg-tertiary text-white">
-                      <FiDollarSign />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Total Revenue</div>
-                      <div className="stat-value-base">
+                  {/* Revenue Section */}
+                  <div>
+                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
+                      <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
+                        <FiDollarSign /> Revenue
+                      </h2>
+                      <span className="text-lg font-medium text-green-400 font-['Albert_Sans']">
                         {formatCurrency(stats.revenue.total)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 sm:col-span-2">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiDollarSign />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Total Revenue
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.revenue.total)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                Avg:{" "}
+                                {formatCurrency(
+                                  stats.revenue.average_transaction
+                                )}{" "}
+                                per txn
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="stat-meta-base">
-                        Avg: {formatCurrency(stats.revenue.average_transaction)}{" "}
-                        per txn
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
+                              <FiTrendingUp />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Commission (3.8%)
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(
+                                  stats.revenue.commission_earned
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiCreditCard />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Net Revenue
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.revenue.net_revenue)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 flex-shrink-0">
+                              <FiArrowDown />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Refunded
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.revenue.refunded)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Today & Week Revenue Stats */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                      <div className="bg-[#263F43] border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="text-xs text-white/80 font-medium mb-2 font-['Albert_Sans']">
+                          Today's Revenue
+                        </div>
+                        <div className="text-2xl font-medium text-white font-['Albert_Sans']">
+                          {formatCurrency(stats.revenue.today)}
+                        </div>
+                      </div>
+                      <div className="bg-[#263F43] border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="text-xs text-white/80 font-medium mb-2 font-['Albert_Sans']">
+                          This Week
+                        </div>
+                        <div className="text-2xl font-medium text-white font-['Albert_Sans']">
+                          {formatCurrency(stats.revenue.this_week)}
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-green-400 to-green-600 text-white">
-                      <FiTrendingUp />
+                  {/* Payouts Section */}
+                  <div>
+                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
+                      <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
+                        <TbArrowsTransferDown /> Payouts
+                      </h2>
+                      <span className="text-sm font-medium text-white/80 bg-bg-tertiary px-4 py-1.5 rounded-full font-['Albert_Sans']">
+                        {stats.payouts.total_requests} Requests
+                      </span>
                     </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">
-                        Commission Earned (3.8%)
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-5">
+                      <div
+                        className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 cursor-pointer hover:border-accent"
+                        onClick={() => navigate("/superadmin/payouts")}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <RiMoneyDollarCircleLine />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Total Requests
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.payouts.total_requests)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                {formatCurrency(
+                                  stats.payouts.total_amount_requested
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="stat-value-base">
-                        {formatCurrency(stats.revenue.commission_earned)}
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 flex-shrink-0">
+                              <FiAlertCircle />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Pending Approval
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.payouts.requested)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiClock />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Processing
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.payouts.pending)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                {formatCurrency(stats.payouts.total_pending)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
+                              <FiCheckCircle />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Completed
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.payouts.completed)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                {formatCurrency(stats.payouts.total_completed)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 flex-shrink-0">
+                              <FiXCircle />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Rejected
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.payouts.rejected)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiDollarSign />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Commission Earned
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(
+                                  stats.payouts.commission_earned
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Today's Requests */}
+                    <div className="mt-4">
+                      <div className="bg-[#263F43] border-l-4 border-accent border border-white/10 rounded-xl p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="text-xs text-white/80 font-medium mb-2 font-['Albert_Sans']">
+                          Today's Requests
+                        </div>
+                        <div className="text-2xl font-medium text-white font-['Albert_Sans']">
+                          {formatNumber(stats.payouts.today)}
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-bg-tertiary to-accent text-white">
-                      <FiCreditCard />
+                  {/* Settlement Section */}
+                  <div>
+                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
+                      <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
+                        <FiPackage /> Settlement Status
+                      </h2>
+                      <button
+                        onClick={handleManualSettlement}
+                        disabled={loadingSettlement}
+                        className="flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2 rounded-full text-sm font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                      >
+                        <FiRefreshCw
+                          className={loadingSettlement ? "animate-spin" : ""}
+                        />
+                        {loadingSettlement ? "Processing..." : "Run Settlement"}
+                      </button>
                     </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Net Revenue</div>
-                      <div className="stat-value-base">
-                        {formatCurrency(stats.revenue.net_revenue)}
+
+                    {settlementMessage && (
+                      <div
+                        className={`mb-4 p-4 rounded-lg flex items-center gap-2 font-['Albert_Sans'] ${
+                          settlementMessage.includes("✅")
+                            ? "bg-green-500/20 border border-green-500/40 text-green-400"
+                            : "bg-red-500/20 border border-red-500/40 text-red-400"
+                        }`}
+                      >
+                        {settlementMessage}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
+                              <FiCheckCircle />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Settled Transactions
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(
+                                  stats.settlement.settled_transactions
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 flex-shrink-0">
+                              <FiClock />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Unsettled
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(
+                                  stats.settlement.unsettled_transactions
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiDollarSign />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Available for Payout
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(
+                                  stats.settlement.available_for_payout
+                                )}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                {formatCurrency(
+                                  stats.settlement.available_balance
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiPackage />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                In Payouts
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatNumber(stats.settlement.in_payouts)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-yellow-400 to-yellow-600 text-white">
-                      <FiArrowDown />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Refunded</div>
-                      <div className="stat-value-base">
-                        {formatCurrency(stats.revenue.refunded)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-4 mt-4">
-                  <div className="flex-1 bg-bg-secondary border-l-4 border-green-400 px-4 py-3 rounded-lg transition-all duration-200 hover:bg-bg-tertiary hover:translate-x-1">
-                    <div className="stat-label-base">Today's Revenue</div>
-                    <div className="stat-value-base text-xl">
-                      {formatCurrency(stats.revenue.today)}
-                    </div>
-                  </div>
-                  <div className="flex-1 bg-bg-secondary border-l-4 border-green-400 px-4 py-3 rounded-lg transition-all duration-200 hover:bg-bg-tertiary hover:translate-x-1">
-                    <div className="stat-label-base">This Week</div>
-                    <div className="stat-value-base text-xl">
-                      {formatCurrency(stats.revenue.this_week)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payouts Section */}
-              <div className="mb-10">
-                <div className="section-header-base">
-                  <h2>
-                    <TbArrowsTransferDown /> Payouts
-                  </h2>
-                  <span className="text-sm font-medium text-white/80 bg-bg-tertiary px-4 py-1.5 rounded-full font-['Albert_Sans']">
-                    {stats.payouts.total_requests} Requests
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5 mb-4">
-                  <div
-                    className="stat-card-base cursor-pointer hover:border-accent"
-                    onClick={() => navigate("/superadmin/payouts")}
-                  >
-                    <div className="stat-icon-base bg-gradient-to-br from-accent to-bg-tertiary text-white">
-                      <RiMoneyDollarCircleLine />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Total Requests</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.payouts.total_requests)}
-                      </div>
-                      <div className="stat-meta-base">
-                        {formatCurrency(stats.payouts.total_amount_requested)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-yellow-400 to-yellow-600 text-white">
-                      <FiAlertCircle />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Pending Approval</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.payouts.requested)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-bg-tertiary to-accent text-white">
-                      <FiClock />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Processing</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.payouts.pending)}
-                      </div>
-                      <div className="stat-meta-base">
-                        {formatCurrency(stats.payouts.total_pending)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-green-400 to-green-600 text-white">
-                      <FiCheckCircle />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Completed</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.payouts.completed)}
-                      </div>
-                      <div className="stat-meta-base">
-                        {formatCurrency(stats.payouts.total_completed)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-red-400 to-red-600 text-white">
-                      <FiXCircle />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Rejected</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.payouts.rejected)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-bg-tertiary to-accent text-white">
-                      <FiDollarSign />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Commission Earned</div>
-                      <div className="stat-value-base">
-                        {formatCurrency(stats.payouts.commission_earned)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-4 mt-4">
-                  <div className="flex-1 bg-bg-secondary border-l-4 border-accent px-4 py-3 rounded-lg transition-all duration-200 hover:bg-bg-tertiary hover:translate-x-1">
-                    <div className="stat-label-base">Today's Requests</div>
-                    <div className="stat-value-base text-xl">
-                      {formatNumber(stats.payouts.today)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Settlement Section */}
-              <div className="mb-10">
-                <div className="section-header-base">
-                  <h2>
-                    <FiPackage /> Settlement Status
-                  </h2>
-                  <button
-                    onClick={handleManualSettlement}
-                    disabled={loadingSettlement}
-                    className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                  >
-                    <FiRefreshCw
-                      className={loadingSettlement ? "animate-spin" : ""}
-                    />
-                    {loadingSettlement
-                      ? "Processing..."
-                      : "Run Manual Settlement"}
-                  </button>
-                </div>
-
-                {settlementMessage && (
-                  <div
-                    className={
-                      settlementMessage.includes("✅")
-                        ? "alert-success mb-4"
-                        : "alert-error mb-4"
-                    }
-                  >
-                    {settlementMessage}
-                  </div>
-                )}
-
-                <div className="stats-grid-base">
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-green-400 to-green-600 text-white">
-                      <FiCheckCircle />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">
-                        Settled Transactions
-                      </div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.settlement.settled_transactions)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-yellow-400 to-yellow-600 text-white">
-                      <FiClock />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Unsettled</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.settlement.unsettled_transactions)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-bg-tertiary to-accent text-white">
-                      <FiDollarSign />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">
-                        Available for Payout
-                      </div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.settlement.available_for_payout)}
-                      </div>
-                      <div className="stat-meta-base">
-                        {formatCurrency(stats.settlement.available_balance)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-bg-tertiary to-accent text-white">
-                      <FiPackage />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">In Payouts</div>
-                      <div className="stat-value-base">
-                        {formatNumber(stats.settlement.in_payouts)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Platform Revenue */}
-              <div className="mb-10">
-                <div className="section-header-base">
-                  <h2>
-                    <FiTrendingUp /> Platform Revenue
-                  </h2>
-                  <span className="text-lg font-medium text-green-400 font-['Albert_Sans']">
-                    {formatCurrency(stats.platform.total_commission_earned)}
-                  </span>
-                </div>
-                <div className="stats-grid-base">
-                  <div className="stat-card-base md:col-span-2">
-                    <div className="stat-icon-base bg-gradient-to-br from-accent to-bg-tertiary text-white">
-                      <FiDollarSign />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">Total Commission</div>
-                      <div className="stat-value-base">
+                  {/* Platform Revenue */}
+                  <div>
+                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
+                      <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
+                        <FiTrendingUp /> Platform Revenue
+                      </h2>
+                      <span className="text-lg font-medium text-green-400 font-['Albert_Sans']">
                         {formatCurrency(stats.platform.total_commission_earned)}
-                      </div>
-                      <div className="stat-meta-base">Payin + Payout fees</div>
+                      </span>
                     </div>
-                  </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 sm:col-span-2">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiDollarSign />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Total Commission
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(
+                                  stats.platform.total_commission_earned
+                                )}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                Payin + Payout fees
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-green-400 to-green-600 text-white">
-                      <FiArrowUp />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">
-                        Payin Commission (3.8%)
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
+                              <FiArrowUp />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Payin Commission (3.8%)
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(
+                                  stats.platform.payin_commission
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="stat-value-base">
-                        {formatCurrency(stats.platform.payin_commission)}
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="stat-card-base">
-                    <div className="stat-icon-base bg-gradient-to-br from-bg-tertiary to-accent text-white">
-                      <FiArrowDown />
-                    </div>
-                    <div className="stat-content-base">
-                      <div className="stat-label-base">
-                        Payout Commission (₹30)
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiArrowDown />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Payout Commission (₹30)
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(
+                                  stats.platform.payout_commission
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="stat-value-base">
-                        {formatCurrency(stats.platform.payout_commission)}
-                      </div>
                     </div>
-                  </div>
                   </div>
                 </div>
-                  </>
-                )}
-              </div>
-            </main>
+              )}
+            </div>
           </div>
         </div>
       </section>
