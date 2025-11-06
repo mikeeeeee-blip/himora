@@ -3,6 +3,7 @@ node_modules/
 */node_modules/
 
 # Environment variables
+my-new-key.pem
 .env
 .env.local
 .env.*.local

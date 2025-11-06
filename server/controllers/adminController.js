@@ -260,6 +260,8 @@ exports.searchTransactions = async (req, res) => {
     if (status) query.status = status;
     if (paymentGateway) query.paymentGateway = paymentGateway;
     if (paymentMethod) query.paymentMethod = paymentMethod;
+    if (req.query.settlementStatus) query.settlementStatus = req.query.settlementStatus;
+    if (req.query.payoutStatus) query.payoutStatus = req.query.payoutStatus;
 
     // Amount filter
     if (minAmount || maxAmount) {
@@ -363,11 +365,17 @@ exports.searchPayouts = async (req, res) => {
       if (Object.keys(query.netAmount).length === 0) delete query.netAmount;
     }
 
-    // Date range
+    // Date range - filter by requestedAt (when payout was requested) or createdAt as fallback
+    let dateOrConditions = [];
     if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) query.createdAt.$lte = new Date(endDate);
+      const dateQuery = {};
+      if (startDate) dateQuery.$gte = new Date(startDate);
+      if (endDate) dateQuery.$lte = new Date(endDate);
+      // Use $or to match either requestedAt or createdAt (for backward compatibility)
+      dateOrConditions = [
+        { requestedAt: dateQuery },
+        { createdAt: dateQuery }
+      ];
     }
 
     // Specific attribute search
@@ -376,14 +384,30 @@ exports.searchPayouts = async (req, res) => {
     if (beneficiaryName) query['beneficiaryDetails.accountHolderName'] = { $regex: beneficiaryName, $options: 'i' };
 
     // Global text search
+    let searchOrConditions = [];
     if (search) {
-      query.$or = [
+      searchOrConditions = [
         { payoutId: { $regex: search, $options: 'i' } },
         { merchantName: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
         { adminNotes: { $regex: search, $options: 'i' } },
         { 'beneficiaryDetails.accountHolderName': { $regex: search, $options: 'i' } }
       ];
+    }
+
+    // Combine date and search conditions properly
+    if (dateOrConditions.length > 0 && searchOrConditions.length > 0) {
+      // Both date and search filters: use $and to combine them
+      query.$and = [
+        { $or: dateOrConditions },
+        { $or: searchOrConditions }
+      ];
+    } else if (dateOrConditions.length > 0) {
+      // Only date filter
+      query.$or = dateOrConditions;
+    } else if (searchOrConditions.length > 0) {
+      // Only search filter
+      query.$or = searchOrConditions;
     }
 
     // Sorting and pagination
