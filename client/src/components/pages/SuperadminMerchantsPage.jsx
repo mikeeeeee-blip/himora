@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { FiTrash2, FiKey, FiX } from 'react-icons/fi';
-import superadminPaymentService from '../../services/superadminPaymentService';
-import '../pages/PageLayout.css';
-import './SuperadminMerchantsPage.css';
+import React, { useEffect, useMemo, useState } from "react";
+import { FiTrash2, FiKey, FiX } from "react-icons/fi";
+import superadminPaymentService from "../../services/superadminPaymentService";
+import "../pages/PageLayout.css";
+import "./SuperadminMerchantsPage.css";
 
 function Stat({ label, value }) {
   return (
@@ -13,7 +13,11 @@ function Stat({ label, value }) {
   );
 }
 
-const currency = (n) => (Number(n || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const currency = (n) =>
+  Number(n || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 function MerchantCard({ m }) {
   const info = m.merchant_info || {};
@@ -29,7 +33,13 @@ function MerchantCard({ m }) {
           <div className="merchant-name">{info.business_name || info.name}</div>
           <div className="merchant-sub">{info.email}</div>
         </div>
-        <div className={`badge ${info.status === 'active' ? 'success' : 'warning'}`}>{info.status || 'active'}</div>
+        <div
+          className={`badge ${
+            info.status === "active" ? "success" : "warning"
+          }`}
+        >
+          {info.status || "active"}
+        </div>
       </div>
 
       <div className="grid grid-4">
@@ -42,7 +52,10 @@ function MerchantCard({ m }) {
             <Stat label="Success %" value={`${txn.success_rate || 0}%`} />
             <div className="stat-item">
               <div className="stat-label">Avg Value</div>
-              <div className="stat-value currency"><span className="rs">₹</span>{currency(txn.average_transaction_value)}</div>
+              <div className="stat-value currency">
+                <span className="rs">₹</span>
+                {currency(txn.average_transaction_value)}
+              </div>
             </div>
           </div>
         </div>
@@ -52,19 +65,31 @@ function MerchantCard({ m }) {
           <div className="stats">
             <div className="stat-item">
               <div className="stat-label">Total</div>
-              <div className="stat-value currency"><span className="rs">₹</span>{currency(rev.total_revenue)}</div>
+              <div className="stat-value currency">
+                <span className="rs">₹</span>
+                {currency(rev.total_revenue)}
+              </div>
             </div>
             <div className="stat-item">
               <div className="stat-label">Refunded</div>
-              <div className="stat-value currency"><span className="rs">₹</span>{currency(rev.total_refunded)}</div>
+              <div className="stat-value currency">
+                <span className="rs">₹</span>
+                {currency(rev.total_refunded)}
+              </div>
             </div>
             <div className="stat-item">
               <div className="stat-label">Commission</div>
-              <div className="stat-value currency"><span className="rs">₹</span>{currency(rev.total_commission_paid)}</div>
+              <div className="stat-value currency">
+                <span className="rs">₹</span>
+                {currency(rev.total_commission_paid)}
+              </div>
             </div>
             <div className="stat-item">
               <div className="stat-label">Net (settled)</div>
-              <div className="stat-value currency"><span className="rs">₹</span>{currency(rev.settled_net_revenue)}</div>
+              <div className="stat-value currency">
+                <span className="rs">₹</span>
+                {currency(rev.settled_net_revenue)}
+              </div>
             </div>
           </div>
         </div>
@@ -74,11 +99,17 @@ function MerchantCard({ m }) {
           <div className="stats">
             <div className="stat-item">
               <div className="stat-label">Completed</div>
-              <div className="stat-value currency"><span className="rs">₹</span>{currency(payout.total_completed)}</div>
+              <div className="stat-value currency">
+                <span className="rs">₹</span>
+                {currency(payout.total_completed)}
+              </div>
             </div>
             <div className="stat-item">
               <div className="stat-label">Pending</div>
-              <div className="stat-value currency"><span className="rs">₹</span>{currency(payout.total_pending)}</div>
+              <div className="stat-value currency">
+                <span className="rs">₹</span>
+                {currency(payout.total_pending)}
+              </div>
             </div>
             <Stat label="# Requests" value={payout.total_payouts || 0} />
           </div>
@@ -89,15 +120,24 @@ function MerchantCard({ m }) {
           <div className="stats">
             <div className="stat-item">
               <div className="stat-label">Available</div>
-              <div className="stat-value currency"><span className="rs">₹</span>{currency(bal.available_balance)}</div>
+              <div className="stat-value currency">
+                <span className="rs">₹</span>
+                {currency(bal.available_balance)}
+              </div>
             </div>
             <div className="stat-item">
               <div className="stat-label">Paid Out</div>
-              <div className="stat-value currency"><span className="rs">₹</span>{currency(bal.total_paid_out)}</div>
+              <div className="stat-value currency">
+                <span className="rs">₹</span>
+                {currency(bal.total_paid_out)}
+              </div>
             </div>
             <div className="stat-item">
               <div className="stat-label">Pending Payouts</div>
-              <div className="stat-value currency"><span className="rs">₹</span>{currency(bal.pending_payouts)}</div>
+              <div className="stat-value currency">
+                <span className="rs">₹</span>
+                {currency(bal.pending_payouts)}
+              </div>
             </div>
           </div>
         </div>
@@ -108,18 +148,30 @@ function MerchantCard({ m }) {
         <div className="grid grid-3">
           <div>
             <div className="sub">Today</div>
-            <div className="mini">Txn: {m.time_based_stats?.today?.transactions || 0}</div>
-            <div className="mini">Rev: ₹ {currency(m.time_based_stats?.today?.revenue)}</div>
+            <div className="mini">
+              Txn: {m.time_based_stats?.today?.transactions || 0}
+            </div>
+            <div className="mini">
+              Rev: ₹ {currency(m.time_based_stats?.today?.revenue)}
+            </div>
           </div>
           <div>
             <div className="sub">Week</div>
-            <div className="mini">Txn: {m.time_based_stats?.this_week?.transactions || 0}</div>
-            <div className="mini">Rev: ₹ {currency(m.time_based_stats?.this_week?.revenue)}</div>
+            <div className="mini">
+              Txn: {m.time_based_stats?.this_week?.transactions || 0}
+            </div>
+            <div className="mini">
+              Rev: ₹ {currency(m.time_based_stats?.this_week?.revenue)}
+            </div>
           </div>
           <div>
             <div className="sub">Month</div>
-            <div className="mini">Txn: {m.time_based_stats?.this_month?.transactions || 0}</div>
-            <div className="mini">Rev: ₹ {currency(m.time_based_stats?.this_month?.revenue)}</div>
+            <div className="mini">
+              Txn: {m.time_based_stats?.this_month?.transactions || 0}
+            </div>
+            <div className="mini">
+              Rev: ₹ {currency(m.time_based_stats?.this_month?.revenue)}
+            </div>
           </div>
         </div>
       </div>
@@ -131,27 +183,31 @@ export default function SuperadminMerchantsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState({ merchants: [], summary: null });
-  const [query, setQuery] = useState({ search: '', status: 'active', includeInactive: false });
-  
+  const [query, setQuery] = useState({
+    search: "",
+    status: "active",
+    includeInactive: false,
+  });
+
   // Modal states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedMerchant, setSelectedMerchant] = useState(null);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
-  const [actionError, setActionError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+  const [actionError, setActionError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const filteredMerchants = useMemo(() => {
-    const q = (query.search || '').toLowerCase().trim();
+    const q = (query.search || "").toLowerCase().trim();
     return (data.merchants || []).filter((m) => {
       if (!q) return true;
       const info = m.merchant_info || {};
       return (
-        (info.business_name || '').toLowerCase().includes(q) ||
-        (info.name || '').toLowerCase().includes(q) ||
-        (info.email || '').toLowerCase().includes(q)
+        (info.business_name || "").toLowerCase().includes(q) ||
+        (info.name || "").toLowerCase().includes(q) ||
+        (info.email || "").toLowerCase().includes(q)
       );
     });
   }, [data.merchants, query.search]);
@@ -161,12 +217,12 @@ export default function SuperadminMerchantsPage() {
       setLoading(true);
       setError(null);
       const res = await superadminPaymentService.getAllMerchantsData({
-        status: query.status === 'all' ? undefined : query.status,
+        status: query.status === "all" ? undefined : query.status,
         includeInactive: query.includeInactive,
       });
       setData(res || { merchants: [], summary: null });
     } catch (e) {
-      setError(e.message || 'Failed to load');
+      setError(e.message || "Failed to load");
     } finally {
       setLoading(false);
     }
@@ -178,32 +234,36 @@ export default function SuperadminMerchantsPage() {
       await loadMerchants();
     }
     load();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [query.status, query.includeInactive]);
 
   // Handle delete user
   const handleDeleteClick = (merchant) => {
     setSelectedMerchant(merchant);
     setShowDeleteModal(true);
-    setActionError('');
+    setActionError("");
   };
 
   const handleDeleteConfirm = async () => {
     if (!selectedMerchant?.merchant_id) return;
 
     setActionLoading(true);
-    setActionError('');
+    setActionError("");
     try {
       await superadminPaymentService.deleteUser(selectedMerchant.merchant_id);
-      setSuccessMessage(`User ${selectedMerchant.merchant_info?.email} deleted successfully`);
+      setSuccessMessage(
+        `User ${selectedMerchant.merchant_info?.email} deleted successfully`
+      );
       setShowDeleteModal(false);
       setSelectedMerchant(null);
       // Reload merchants list
       await loadMerchants();
       // Clear success message after 3 seconds
-      setTimeout(() => setSuccessMessage(''), 3000);
+      setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
-      setActionError(err.message || 'Failed to delete user');
+      setActionError(err.message || "Failed to delete user");
     } finally {
       setActionLoading(false);
     }
@@ -212,9 +272,9 @@ export default function SuperadminMerchantsPage() {
   // Handle change password
   const handlePasswordClick = (merchant) => {
     setSelectedMerchant(merchant);
-    setNewPassword('');
-    setConfirmPassword('');
-    setActionError('');
+    setNewPassword("");
+    setConfirmPassword("");
+    setActionError("");
     setShowPasswordModal(true);
   };
 
@@ -223,28 +283,33 @@ export default function SuperadminMerchantsPage() {
 
     // Validation
     if (!newPassword || newPassword.length < 6) {
-      setActionError('Password must be at least 6 characters long');
+      setActionError("Password must be at least 6 characters long");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setActionError('Passwords do not match');
+      setActionError("Passwords do not match");
       return;
     }
 
     setActionLoading(true);
-    setActionError('');
+    setActionError("");
     try {
-      await superadminPaymentService.changeUserPassword(selectedMerchant.merchant_id, newPassword);
-      setSuccessMessage(`Password changed successfully for ${selectedMerchant.merchant_info?.email}`);
+      await superadminPaymentService.changeUserPassword(
+        selectedMerchant.merchant_id,
+        newPassword
+      );
+      setSuccessMessage(
+        `Password changed successfully for ${selectedMerchant.merchant_info?.email}`
+      );
       setShowPasswordModal(false);
       setSelectedMerchant(null);
-      setNewPassword('');
-      setConfirmPassword('');
+      setNewPassword("");
+      setConfirmPassword("");
       // Clear success message after 3 seconds
-      setTimeout(() => setSuccessMessage(''), 3000);
+      setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
-      setActionError(err.message || 'Failed to change password');
+      setActionError(err.message || "Failed to change password");
     } finally {
       setActionLoading(false);
     }
@@ -287,7 +352,7 @@ export default function SuperadminMerchantsPage() {
       <section className="relative z-10 min-h-screen bg-transparent">
         {/* Spacer to show 70% of image initially */}
         <div className="h-[calc(50vh-4rem)] sm:h-[calc(55vh-4rem)]"></div>
-      
+
         {/* Cards Section - Scrolls over image */}
         <div className="bg-transparent pt-2 pb-8 px-4 sm:px-6 lg:px-8">
           <div className="max-w-[1400px] mx-auto">
@@ -304,13 +369,22 @@ export default function SuperadminMerchantsPage() {
                     {data.summary && (
                       <div className="flex flex-wrap gap-3 mt-2">
                         <span className="text-white/70 text-xs sm:text-sm font-['Albert_Sans']">
-                          Total: <span className="text-white font-medium">{data.summary.total_merchants}</span>
+                          Total:{" "}
+                          <span className="text-white font-medium">
+                            {data.summary.total_merchants}
+                          </span>
                         </span>
                         <span className="text-white/70 text-xs sm:text-sm font-['Albert_Sans']">
-                          Active: <span className="text-green-400 font-medium">{data.summary.active_merchants}</span>
+                          Active:{" "}
+                          <span className="text-green-400 font-medium">
+                            {data.summary.active_merchants}
+                          </span>
                         </span>
                         <span className="text-white/70 text-xs sm:text-sm font-['Albert_Sans']">
-                          Inactive: <span className="text-yellow-400 font-medium">{data.summary.inactive_merchants}</span>
+                          Inactive:{" "}
+                          <span className="text-yellow-400 font-medium">
+                            {data.summary.inactive_merchants}
+                          </span>
                         </span>
                       </div>
                     )}
@@ -320,36 +394,47 @@ export default function SuperadminMerchantsPage() {
 
               {/* Filters Toolbar */}
               <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <input
-            type="text"
-            placeholder="Search by name or email"
-            value={query.search}
-            onChange={(e) => setQuery((s) => ({ ...s, search: e.target.value }))}
+                <input
+                  type="text"
+                  placeholder="Search by name or email"
+                  value={query.search}
+                  onChange={(e) =>
+                    setQuery((s) => ({ ...s, search: e.target.value }))
+                  }
                   className="flex-1 bg-[#263F43] border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-white/50 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
-          />
-          <select
-            value={query.status}
-            onChange={(e) => setQuery((s) => ({ ...s, status: e.target.value }))}
+                />
+                <select
+                  value={query.status}
+                  onChange={(e) =>
+                    setQuery((s) => ({ ...s, status: e.target.value }))
+                  }
                   className="bg-[#263F43] border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
-          >
-            <option value="active">Active</option>
-            <option value="all">All</option>
-          </select>
+                >
+                  <option value="active">Active</option>
+                  <option value="all">All</option>
+                </select>
                 <label className="flex items-center gap-2 text-white/70 text-sm font-['Albert_Sans'] cursor-pointer">
-            <input
-              type="checkbox"
-              checked={query.includeInactive}
-              onChange={(e) => setQuery((s) => ({ ...s, includeInactive: e.target.checked }))}
+                  <input
+                    type="checkbox"
+                    checked={query.includeInactive}
+                    onChange={(e) =>
+                      setQuery((s) => ({
+                        ...s,
+                        includeInactive: e.target.checked,
+                      }))
+                    }
                     className="rounded border-white/20"
-            />
-            Include inactive
-          </label>
-        </div>
+                  />
+                  Include inactive
+                </label>
+              </div>
 
               {loading && (
                 <div className="flex flex-col items-center justify-center py-20 px-5">
                   <div className="w-10 h-10 border-4 border-white/30 border-t-accent rounded-full animate-spin mb-5"></div>
-                  <p className="text-white/80 font-['Albert_Sans']">Loading merchants...</p>
+                  <p className="text-white/80 font-['Albert_Sans']">
+                    Loading merchants...
+                  </p>
                 </div>
               )}
               {error && (
@@ -358,55 +443,121 @@ export default function SuperadminMerchantsPage() {
                 </div>
               )}
 
-        {!loading && !error && (
+              {!loading && !error && (
                 <div className="bg-[#263F43] border border-white/10 rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead className="bg-[#001D22] border-b border-white/10">
                         <tr>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Merchant</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell">Transactions</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">Revenue</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">Payouts</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden xl:table-cell">Balance</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Actions</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">
+                            Merchant
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell">
+                            Transactions
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">
+                            Revenue
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">
+                            Payouts
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden xl:table-cell">
+                            Balance
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">
+                            Actions
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
-            {filteredMerchants.map((m) => (
-                          <tr key={m.merchant_id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        {filteredMerchants.map((m) => (
+                          <tr
+                            key={m.merchant_id}
+                            className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                          >
                             <td className="px-4 py-3">
                               <div>
-                                <div className="text-white font-medium text-sm font-['Albert_Sans']">{m.merchant_info?.business_name || m.merchant_info?.name}</div>
-                                <div className="text-white/60 text-xs font-['Albert_Sans']">{m.merchant_info?.email}</div>
-                                <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium font-['Albert_Sans'] ${
-                                  m.merchant_info?.status === 'active' 
-                                    ? 'bg-green-500/20 text-green-400' 
-                                    : 'bg-yellow-500/20 text-yellow-400'
-                                }`}>
-                                  {m.merchant_info?.status || 'active'}
+                                <div className="text-white font-medium text-sm font-['Albert_Sans']">
+                                  {m.merchant_info?.business_name ||
+                                    m.merchant_info?.name}
+                                </div>
+                                <div className="text-white/60 text-xs font-['Albert_Sans']">
+                                  {m.merchant_info?.email}
+                                </div>
+                                <span
+                                  className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium font-['Albert_Sans'] ${
+                                    m.merchant_info?.status === "active"
+                                      ? "bg-green-500/20 text-green-400"
+                                      : "bg-yellow-500/20 text-yellow-400"
+                                  }`}
+                                >
+                                  {m.merchant_info?.status || "active"}
                                 </span>
-                  </div>
+                              </div>
                             </td>
                             <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden md:table-cell">
-                              <div>Total: {m.transaction_summary?.total_transactions || 0}</div>
-                              <div>Paid: {m.transaction_summary?.by_status?.paid || 0}</div>
-                              <div>Success: {m.transaction_summary?.success_rate || 0}%</div>
+                              <div>
+                                Total:{" "}
+                                {m.transaction_summary?.total_transactions || 0}
+                              </div>
+                              <div>
+                                Paid:{" "}
+                                {m.transaction_summary?.by_status?.paid || 0}
+                              </div>
+                              <div>
+                                Success:{" "}
+                                {m.transaction_summary?.success_rate || 0}%
+                              </div>
                             </td>
                             <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
-                              <div>Total: ₹ {currency(m.revenue_summary?.total_revenue)}</div>
-                              <div>Refunded: ₹ {currency(m.revenue_summary?.total_refunded)}</div>
-                              <div>Net: ₹ {currency(m.revenue_summary?.settled_net_revenue)}</div>
+                              <div>
+                                Total: ₹{" "}
+                                {currency(m.revenue_summary?.total_revenue)}
+                              </div>
+                              <div>
+                                Refunded: ₹{" "}
+                                {currency(m.revenue_summary?.total_refunded)}
+                              </div>
+                              <div>
+                                Net: ₹{" "}
+                                {currency(
+                                  m.revenue_summary?.settled_net_revenue
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
-                              <div>Completed: ₹ {currency(m.payout_summary?.total_completed)}</div>
-                              <div>Pending: ₹ {currency(m.payout_summary?.total_pending)}</div>
-                              <div># Requests: {m.payout_summary?.total_payouts || 0}</div>
+                              <div>
+                                Completed: ₹{" "}
+                                {currency(m.payout_summary?.total_completed)}
+                              </div>
+                              <div>
+                                Pending: ₹{" "}
+                                {currency(m.payout_summary?.total_pending)}
+                              </div>
+                              <div>
+                                # Requests:{" "}
+                                {m.payout_summary?.total_payouts || 0}
+                              </div>
                             </td>
                             <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden xl:table-cell">
-                              <div>Available: ₹ {currency(m.balance_information?.available_balance)}</div>
-                              <div>Paid Out: ₹ {currency(m.balance_information?.total_paid_out)}</div>
-                              <div>Pending: ₹ {currency(m.balance_information?.pending_payouts)}</div>
+                              <div>
+                                Available: ₹{" "}
+                                {currency(
+                                  m.balance_information?.available_balance
+                                )}
+                              </div>
+                              <div>
+                                Paid Out: ₹{" "}
+                                {currency(
+                                  m.balance_information?.total_paid_out
+                                )}
+                              </div>
+                              <div>
+                                Pending: ₹{" "}
+                                {currency(
+                                  m.balance_information?.pending_payouts
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
@@ -430,8 +581,8 @@ export default function SuperadminMerchantsPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
                 </div>
-              </div>
               )}
 
               {/* Success Message */}
@@ -453,7 +604,7 @@ export default function SuperadminMerchantsPage() {
                         onClick={() => {
                           setShowDeleteModal(false);
                           setSelectedMerchant(null);
-                          setActionError('');
+                          setActionError("");
                         }}
                         className="text-white/60 hover:text-white transition-colors"
                       >
@@ -462,10 +613,11 @@ export default function SuperadminMerchantsPage() {
                     </div>
                     <div className="p-6">
                       <p className="text-white/80 font-['Albert_Sans'] mb-4">
-                        Are you sure you want to delete the user{' '}
+                        Are you sure you want to delete the user{" "}
                         <span className="font-semibold text-white">
                           {selectedMerchant.merchant_info?.email}
-                        </span>?
+                        </span>
+                        ?
                       </p>
                       <p className="text-red-400 text-sm font-['Albert_Sans'] mb-4">
                         This action cannot be undone.
@@ -481,13 +633,13 @@ export default function SuperadminMerchantsPage() {
                           disabled={actionLoading}
                           className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {actionLoading ? 'Deleting...' : 'Delete'}
+                          {actionLoading ? "Deleting..." : "Delete"}
                         </button>
                         <button
                           onClick={() => {
                             setShowDeleteModal(false);
                             setSelectedMerchant(null);
-                            setActionError('');
+                            setActionError("");
                           }}
                           disabled={actionLoading}
                           className="flex-1 bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -512,9 +664,9 @@ export default function SuperadminMerchantsPage() {
                         onClick={() => {
                           setShowPasswordModal(false);
                           setSelectedMerchant(null);
-                          setNewPassword('');
-                          setConfirmPassword('');
-                          setActionError('');
+                          setNewPassword("");
+                          setConfirmPassword("");
+                          setActionError("");
                         }}
                         className="text-white/60 hover:text-white transition-colors"
                       >
@@ -523,7 +675,7 @@ export default function SuperadminMerchantsPage() {
                     </div>
                     <div className="p-6">
                       <p className="text-white/80 font-['Albert_Sans'] mb-4">
-                        Change password for{' '}
+                        Change password for{" "}
                         <span className="font-semibold text-white">
                           {selectedMerchant.merchant_info?.email}
                         </span>
@@ -564,18 +716,20 @@ export default function SuperadminMerchantsPage() {
                       <div className="flex gap-3 mt-6">
                         <button
                           onClick={handlePasswordChange}
-                          disabled={actionLoading || !newPassword || !confirmPassword}
+                          disabled={
+                            actionLoading || !newPassword || !confirmPassword
+                          }
                           className="flex-1 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2.5 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {actionLoading ? 'Changing...' : 'Change Password'}
+                          {actionLoading ? "Changing..." : "Change Password"}
                         </button>
                         <button
                           onClick={() => {
                             setShowPasswordModal(false);
                             setSelectedMerchant(null);
-                            setNewPassword('');
-                            setConfirmPassword('');
-                            setActionError('');
+                            setNewPassword("");
+                            setConfirmPassword("");
+                            setActionError("");
                           }}
                           disabled={actionLoading}
                           className="flex-1 bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -587,12 +741,10 @@ export default function SuperadminMerchantsPage() {
                   </div>
                 </div>
               )}
-              </div>
+            </div>
           </div>
         </div>
       </section>
     </div>
   );
 }
-
-
