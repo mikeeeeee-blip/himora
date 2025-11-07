@@ -48,7 +48,11 @@ const PayoutsPage = () => {
       ifscCode: '',
       accountHolderName: '',
       bankName: '',
-      branchName: ''
+      branchName: '',
+      // Crypto fields
+      cryptoWalletAddress: '',
+      cryptoNetwork: '',
+      cryptoCurrency: ''
     },
     notes: ''
   });
@@ -436,18 +440,57 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
 
         
       // Build payout payload — include commission fields so backend can persist them
+        let beneficiaryDetails = {};
+        
+        if (requestData.transferMode === 'upi') {
+          if (!requestData.beneficiaryDetails.upiId || requestData.beneficiaryDetails.upiId.trim().length === 0) {
+            throw new Error('UPI ID is required');
+          }
+          beneficiaryDetails = { upiId: requestData.beneficiaryDetails.upiId.trim() };
+        } else if (requestData.transferMode === 'crypto') {
+          // ✅ Validate crypto fields before sending
+          const cryptoWalletAddress = requestData.beneficiaryDetails.cryptoWalletAddress?.trim() || '';
+          const cryptoNetwork = requestData.beneficiaryDetails.cryptoNetwork?.trim() || '';
+          const cryptoCurrency = requestData.beneficiaryDetails.cryptoCurrency?.trim() || '';
+
+          if (!cryptoWalletAddress) {
+            throw new Error('Crypto wallet address is required');
+          }
+          if (!cryptoNetwork) {
+            throw new Error('Crypto network is required');
+          }
+          if (!cryptoCurrency) {
+            throw new Error('Crypto currency is required');
+          }
+
+          beneficiaryDetails = {
+            cryptoWalletAddress: cryptoWalletAddress,
+            cryptoNetwork: cryptoNetwork,
+            cryptoCurrency: cryptoCurrency
+          };
+        } else {
+          if (!requestData.beneficiaryDetails.accountNumber || requestData.beneficiaryDetails.accountNumber.trim().length === 0) {
+            throw new Error('Account number is required');
+          }
+          if (!requestData.beneficiaryDetails.ifscCode || requestData.beneficiaryDetails.ifscCode.trim().length === 0) {
+            throw new Error('IFSC code is required');
+          }
+          if (!requestData.beneficiaryDetails.accountHolderName || requestData.beneficiaryDetails.accountHolderName.trim().length === 0) {
+            throw new Error('Account holder name is required');
+          }
+          beneficiaryDetails = {
+            accountNumber: requestData.beneficiaryDetails.accountNumber.trim(),
+            ifscCode: requestData.beneficiaryDetails.ifscCode.trim(),
+            accountHolderName: requestData.beneficiaryDetails.accountHolderName.trim(),
+            bankName: requestData.beneficiaryDetails.bankName?.trim() || '',
+            branchName: requestData.beneficiaryDetails.branchName?.trim() || ''
+          };
+        }
+
         const payoutData = {
-          amount: payoutAmount , // todo : remove the commition if you are calculating int the backed 
+          amount: payoutAmount,
           transferMode: requestData.transferMode,
-          beneficiaryDetails: requestData.transferMode === 'upi'
-            ? { upiId: requestData.beneficiaryDetails.upiId }
-            : {
-                accountNumber: requestData.beneficiaryDetails.accountNumber,
-                ifscCode: requestData.beneficiaryDetails.ifscCode,
-                accountHolderName: requestData.beneficiaryDetails.accountHolderName,
-                bankName: requestData.beneficiaryDetails.bankName,
-                branchName: requestData.beneficiaryDetails.branchName
-              },
+          beneficiaryDetails: beneficiaryDetails,
           notes: requestData.notes
         };
 
@@ -477,7 +520,11 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
         ifscCode: '',
         accountHolderName: '',
         bankName: '',
-        branchName: ''
+        branchName: '',
+        // Crypto fields
+        cryptoWalletAddress: '',
+        cryptoNetwork: '',
+        cryptoCurrency: ''
       },
       notes: ''
     });
@@ -1011,6 +1058,7 @@ const handleInputChange = (field, value) => {
                     >
                       <option value="upi">UPI</option>
                       <option value="bank_transfer">Bank Transfer</option>
+                      <option value="crypto">Crypto</option>
                     </select>
                 </div>
 
@@ -1037,6 +1085,129 @@ const handleInputChange = (field, value) => {
                       Example: merchant@paytm, user@ybl
                     </small>
                   </div>
+                ) : requestData.transferMode === 'crypto' ? (
+                  <>
+                    <div className="bg-yellow-500/20 border border-yellow-500/50 text-yellow-400 px-4 py-3 rounded-lg mb-4 font-['Albert_Sans'] text-sm">
+                      <strong>⚠️ Warning:</strong> Crypto transactions are irreversible. Please double-check the wallet address before submitting.
+                    </div>
+
+                    <div>
+                      <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                        Crypto Wallet Address *
+                      </label>
+                      <input
+                        type="text"
+                        value={requestData.beneficiaryDetails.cryptoWalletAddress}
+                        onChange={(e) =>
+                          handleInputChange(
+                            'beneficiaryDetails.cryptoWalletAddress',
+                            e.target.value
+                          )
+                        }
+                        required
+                        placeholder="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                        className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans'] font-mono text-sm"
+                      />
+                      <small className="text-white/60 text-xs mt-1 block font-['Albert_Sans']">
+                        Enter the blockchain wallet address (e.g., Ethereum, Polygon, Bitcoin)
+                      </small>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                          Crypto Network *
+                        </label>
+                        <select
+                          value={requestData.beneficiaryDetails.cryptoNetwork}
+                          onChange={(e) => {
+                            handleInputChange('beneficiaryDetails.cryptoNetwork', e.target.value);
+                            // Reset currency when network changes
+                            handleInputChange('beneficiaryDetails.cryptoCurrency', '');
+                          }}
+                          required
+                          className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
+                        >
+                          <option value="">Select Network</option>
+                          <option value="ethereum">Ethereum</option>
+                          <option value="polygon">Polygon</option>
+                          <option value="bitcoin">Bitcoin</option>
+                          <option value="bsc">Binance Smart Chain</option>
+                          <option value="arbitrum">Arbitrum</option>
+                          <option value="optimism">Optimism</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                          Crypto Currency *
+                        </label>
+                        <select
+                          value={requestData.beneficiaryDetails.cryptoCurrency}
+                          onChange={(e) =>
+                            handleInputChange(
+                              'beneficiaryDetails.cryptoCurrency',
+                              e.target.value
+                            )
+                          }
+                          required
+                          disabled={!requestData.beneficiaryDetails.cryptoNetwork}
+                          className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans'] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <option value="">
+                            {requestData.beneficiaryDetails.cryptoNetwork
+                              ? 'Select Currency'
+                              : 'Select Network First'}
+                          </option>
+                          {requestData.beneficiaryDetails.cryptoNetwork === 'ethereum' && (
+                            <>
+                              <option value="ETH">ETH</option>
+                              <option value="USDT">USDT</option>
+                              <option value="USDC">USDC</option>
+                              <option value="DAI">DAI</option>
+                              <option value="WBTC">WBTC</option>
+                            </>
+                          )}
+                          {requestData.beneficiaryDetails.cryptoNetwork === 'polygon' && (
+                            <>
+                              <option value="MATIC">MATIC</option>
+                              <option value="USDT">USDT</option>
+                              <option value="USDC">USDC</option>
+                              <option value="DAI">DAI</option>
+                            </>
+                          )}
+                          {requestData.beneficiaryDetails.cryptoNetwork === 'bitcoin' && (
+                            <option value="BTC">BTC</option>
+                          )}
+                          {requestData.beneficiaryDetails.cryptoNetwork === 'bsc' && (
+                            <>
+                              <option value="BNB">BNB</option>
+                              <option value="USDT">USDT</option>
+                              <option value="USDC">USDC</option>
+                              <option value="BUSD">BUSD</option>
+                            </>
+                          )}
+                          {requestData.beneficiaryDetails.cryptoNetwork === 'arbitrum' && (
+                            <>
+                              <option value="ETH">ETH</option>
+                              <option value="USDT">USDT</option>
+                              <option value="USDC">USDC</option>
+                            </>
+                          )}
+                          {requestData.beneficiaryDetails.cryptoNetwork === 'optimism' && (
+                            <>
+                              <option value="ETH">ETH</option>
+                              <option value="USDT">USDT</option>
+                              <option value="USDC">USDC</option>
+                            </>
+                          )}
+                        </select>
+                        <small className="text-white/60 text-xs mt-1 block font-['Albert_Sans']">
+                          Select currency available on {requestData.beneficiaryDetails.cryptoNetwork || 'selected network'}
+                        </small>
+                      </div>
+                    </div>
+                  </>
                 ) : (
                   <>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1275,8 +1446,15 @@ const handleInputChange = (field, value) => {
                             </td>
                             <td className="px-4 py-3 text-sm text-white border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
                               {payout.transferMode === 'bank_transfer'
-                                ? 'Bank Transfer'
-                                : 'UPI'}
+                                ? '🏦 Bank Transfer'
+                                : payout.transferMode === 'crypto'
+                                ? '🪙 Crypto'
+                                : '📱 UPI'}
+                              {payout.transferMode === 'crypto' && payout.beneficiaryDetails?.cryptoNetwork && (
+                                <span className="ml-2 text-xs text-white/60">
+                                  ({payout.beneficiaryDetails.cryptoNetwork} - {payout.beneficiaryDetails.cryptoCurrency})
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-sm text-white/90 border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
                               {formatDate(payout.requestedAt)}

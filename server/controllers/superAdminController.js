@@ -4,6 +4,8 @@ const Transaction = require('../models/Transaction');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
 const { sendMerchantWebhook, sendPayoutWebhook } = require('./merchantWebhookController');
 const mongoose = require('mongoose');
+const { validateTransactionHash } = require('../utils/cryptoValidator');
+const { getNetworkInfo, getExplorerUrl } = require('../config/cryptoConfig');
 const COMMISSION_RATE = 0.038; // 3.8%
 
 // ============ GET ALL PAYOUTS (SuperAdmin) ============
@@ -268,16 +270,9 @@ exports.rejectPayout = async (req, res) => {
 exports.processPayout = async (req, res) => {
     try {
         const { payoutId } = req.params;
-        const { utr, notes } = req.body;
+        const { utr, cryptoTransactionHash, cryptoExplorerUrl, notes } = req.body;
 
-        if (!utr || utr.trim().length === 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'UTR/Transaction reference is required'
-            });
-        }
-
-        console.log(`💰 SuperAdmin ${req.user.name} processing payout: ${payoutId} with UTR: ${utr}`);
+        console.log(`💰 SuperAdmin ${req.user.name} processing payout: ${payoutId}`);
 
         const payout = await Payout.findOne({ payoutId });
 
@@ -296,6 +291,72 @@ exports.processPayout = async (req, res) => {
                 currentStatus: payout.status,
                 hint: payout.status === 'requested' ? 'Please approve the payout first' : null
             });
+        }
+
+        // ✅ Handle different transfer modes
+        let transactionReference = null;
+        let referenceLabel = '';
+
+        if (payout.transferMode === 'crypto') {
+            // ✅ For crypto: require transaction hash
+            if (!cryptoTransactionHash || cryptoTransactionHash.trim().length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Crypto transaction hash is required for crypto payouts'
+                });
+            }
+
+            // ✅ Validate transaction hash format
+            const hashValidation = validateTransactionHash(
+                cryptoTransactionHash.trim(),
+                payout.beneficiaryDetails?.cryptoNetwork
+            );
+
+            if (!hashValidation.valid) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Invalid transaction hash: ${hashValidation.error}`
+                });
+            }
+
+            transactionReference = cryptoTransactionHash.trim();
+            referenceLabel = 'Transaction Hash';
+
+            console.log(`💰 Processing CRYPTO payout with hash: ${transactionReference}`);
+
+            // ✅ Generate explorer URL if not provided
+            if (!cryptoExplorerUrl && payout.beneficiaryDetails?.cryptoNetwork) {
+                const explorerUrl = getExplorerUrl(
+                    payout.beneficiaryDetails.cryptoNetwork,
+                    transactionReference
+                );
+                if (explorerUrl) {
+                    payout.cryptoExplorerUrl = explorerUrl;
+                }
+            } else if (cryptoExplorerUrl) {
+                payout.cryptoExplorerUrl = cryptoExplorerUrl;
+            }
+
+            // ✅ Store network ID if available
+            if (payout.beneficiaryDetails?.cryptoNetwork) {
+                const networkInfo = getNetworkInfo(payout.beneficiaryDetails.cryptoNetwork);
+                if (networkInfo) {
+                    payout.cryptoNetworkId = networkInfo.id;
+                }
+            }
+        } else {
+            // ✅ For bank/UPI: require UTR
+            if (!utr || utr.trim().length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'UTR/Transaction reference is required for bank/UPI payouts'
+                });
+            }
+
+            transactionReference = utr.trim();
+            referenceLabel = 'UTR';
+
+            console.log(`💰 Processing payout with UTR: ${transactionReference}`);
         }
 
         // ✅ Check for duplicate UTR
@@ -319,7 +380,13 @@ exports.processPayout = async (req, res) => {
         payout.processedByName = req.user.name;
         payout.processedAt = new Date();
         payout.completedAt = new Date();
-        payout.utr = utr.trim();
+        payout.utr = transactionReference; // ✅ Store hash as UTR (or UTR for bank/UPI)
+        
+        // ✅ Store crypto transaction hash separately if crypto
+        if (payout.transferMode === 'crypto') {
+            payout.cryptoTransactionHash = transactionReference;
+        }
+        
         if (notes) {
             payout.adminNotes = notes;
         }
@@ -358,7 +425,16 @@ exports.processPayout = async (req, res) => {
                 transfer_mode: updatedPayout.transferMode,
                 utr: updatedPayout.utr,
                 processed_at: updatedPayout.processedAt,
-                completed_at: updatedPayout.completedAt
+                completed_at: updatedPayout.completedAt,
+                // ✅ Add crypto-specific fields if crypto payout
+                ...(updatedPayout.transferMode === 'crypto' && {
+                    crypto_transaction_hash: updatedPayout.cryptoTransactionHash || updatedPayout.utr,
+                    crypto_network: updatedPayout.beneficiaryDetails?.cryptoNetwork,
+                    crypto_currency: updatedPayout.beneficiaryDetails?.cryptoCurrency,
+                    crypto_wallet_address: updatedPayout.beneficiaryDetails?.cryptoWalletAddress,
+                    crypto_explorer_url: updatedPayout.cryptoExplorerUrl,
+                    crypto_network_id: updatedPayout.cryptoNetworkId
+                })
             }
         }
 
@@ -369,20 +445,39 @@ exports.processPayout = async (req, res) => {
             await sendPayoutWebhook(merchant, webhookPayload);
         }
 
+        // ✅ Send webhook to 3rd party crypto service if crypto payout
+        if (updatedPayout.transferMode === 'crypto') {
+            const { sendCryptoPayoutWebhook } = require('./cryptoWebhookController');
+            try {
+                await sendCryptoPayoutWebhook(updatedPayout, 'payout.completed');
+                console.log('✅ Crypto webhook sent to 3rd party service');
+            } catch (cryptoWebhookError) {
+                console.error('⚠️ Failed to send crypto webhook to 3rd party:', cryptoWebhookError.message);
+                // Don't fail the payout processing if webhook fails
+            }
+        }
+
 
 
         res.json({
             success: true,
-            message: 'Payout processed and completed successfully. Funds transferred to merchant.',
+            message: `Payout processed and completed successfully. ${referenceLabel}: ${transactionReference}`,
             payout: {
                 payoutId: payout.payoutId,
                 status: payout.status,
                 amount: payout.amount,
                 netAmount: payout.netAmount,
                 utr: payout.utr,
+                transferMode: payout.transferMode,
                 processedBy: payout.processedByName,
                 completedAt: payout.completedAt,
-                transferMode: payout.transferMode
+                // ✅ Include crypto fields if crypto payout
+                ...(payout.transferMode === 'crypto' && {
+                    cryptoTransactionHash: payout.cryptoTransactionHash,
+                    cryptoExplorerUrl: payout.cryptoExplorerUrl,
+                    cryptoNetwork: payout.beneficiaryDetails?.cryptoNetwork,
+                    cryptoCurrency: payout.beneficiaryDetails?.cryptoCurrency
+                })
             },
             transactions_updated: updateResult.modifiedCount
         });

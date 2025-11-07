@@ -332,22 +332,34 @@ async triggerManualSettlement() {
     }
   }
 
-  async processPayout(payoutId, utr, notes = '') {
+  async processPayout(payoutId, utr, notes = '', cryptoTransactionHash = '', cryptoExplorerUrl = '') {
     try {
       const token = authService.getToken();
       if (!token) {
         throw new Error('No authentication token found');
       }
 
-      if (!utr || !utr.trim()) {
-        throw new Error('UTR/Transaction reference is required');
+      // ✅ Build request body based on provided parameters
+      const requestBody = { notes };
+      
+      if (cryptoTransactionHash && cryptoTransactionHash.trim()) {
+        // Crypto payout
+        requestBody.cryptoTransactionHash = cryptoTransactionHash.trim();
+        if (cryptoExplorerUrl && cryptoExplorerUrl.trim()) {
+          requestBody.cryptoExplorerUrl = cryptoExplorerUrl.trim();
+        }
+      } else if (utr && utr.trim()) {
+        // Bank/UPI payout
+        requestBody.utr = utr.trim();
+      } else {
+        throw new Error('Either UTR or crypto transaction hash is required');
       }
 
-      console.log('Processing payout:', payoutId);
+      console.log('Processing payout:', payoutId, requestBody);
 
       const response = await axios.post(
         API_ENDPOINTS.ADMIN_PAYOUT_PROCESS(payoutId),
-        { utr, notes },
+        requestBody,
         {
           headers: {
             'x-auth-token': token,

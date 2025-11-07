@@ -237,6 +237,42 @@ class WebhookService {
       { id: 'payout.failed', label: 'Payout Failed', description: 'Payout processing failed' }
     ];
   }
+
+  // ============ CRYPTO WEBHOOK SECRET CONFIGURATION ============
+  
+  /**
+   * Get crypto webhook secret configuration
+   */
+  async getCryptoWebhookSecret() {
+    try {
+      const token = await this.getAuthToken();
+      const response = await axios.get(API_ENDPOINTS.CRYPTO_WEBHOOK_SECRET, {
+        headers: {
+          'x-auth-token': token,
+        },
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(this.getApiErrorMessage(error, 'Failed to get crypto webhook secret'));
+    }
+  }
+
+  /**
+   * Generate new crypto webhook secret
+   */
+  async generateCryptoWebhookSecret() {
+    try {
+      const token = await this.getAuthToken();
+      const response = await axios.post(API_ENDPOINTS.CRYPTO_WEBHOOK_SECRET_GENERATE, {}, {
+        headers: {
+          'x-auth-token': token,
+        },
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(this.getApiErrorMessage(error, 'Failed to generate crypto webhook secret'));
+    }
+  }
 }
 
 export default new WebhookService();
