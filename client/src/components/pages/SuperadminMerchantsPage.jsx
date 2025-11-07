@@ -134,10 +134,14 @@ export default function SuperadminMerchantsPage() {
   const [query, setQuery] = useState({ search: '', status: 'active', includeInactive: false });
   
   // Modal states
-  const [deleteModal, setDeleteModal] = useState({ open: false, merchant: null });
-  const [passwordModal, setPasswordModal] = useState({ open: false, merchant: null, newPassword: '', loading: false });
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [selectedMerchant, setSelectedMerchant] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
-  const [actionSuccess, setActionSuccess] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const filteredMerchants = useMemo(() => {
     const q = (query.search || '').toLowerCase().trim();
@@ -177,67 +181,72 @@ export default function SuperadminMerchantsPage() {
     return () => { mounted = false; };
   }, [query.status, query.includeInactive]);
 
+  // Handle delete user
   const handleDeleteClick = (merchant) => {
-    setDeleteModal({ open: true, merchant });
+    setSelectedMerchant(merchant);
+    setShowDeleteModal(true);
     setActionError('');
-    setActionSuccess('');
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deleteModal.merchant) return;
-    
-    const userId = deleteModal.merchant.merchant_id || deleteModal.merchant.merchant_info?._id || deleteModal.merchant.merchant_info?.id;
-    if (!userId) {
-      setActionError('User ID not found');
-      return;
-    }
+    if (!selectedMerchant?.merchant_id) return;
 
+    setActionLoading(true);
+    setActionError('');
     try {
-      setActionError('');
-      await superadminPaymentService.deleteUser(userId);
-      setActionSuccess('User deleted successfully');
-      setDeleteModal({ open: false, merchant: null });
-      setTimeout(() => {
-        setActionSuccess('');
-        loadMerchants();
-      }, 1500);
-    } catch (e) {
-      setActionError(e.message || 'Failed to delete user');
+      await superadminPaymentService.deleteUser(selectedMerchant.merchant_id);
+      setSuccessMessage(`User ${selectedMerchant.merchant_info?.email} deleted successfully`);
+      setShowDeleteModal(false);
+      setSelectedMerchant(null);
+      // Reload merchants list
+      await loadMerchants();
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      setActionError(err.message || 'Failed to delete user');
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const handlePasswordChangeClick = (merchant) => {
-    setPasswordModal({ open: true, merchant, newPassword: '', loading: false });
+  // Handle change password
+  const handlePasswordClick = (merchant) => {
+    setSelectedMerchant(merchant);
+    setNewPassword('');
+    setConfirmPassword('');
     setActionError('');
-    setActionSuccess('');
+    setShowPasswordModal(true);
   };
 
   const handlePasswordChange = async () => {
-    if (!passwordModal.merchant) return;
-    
-    const userId = passwordModal.merchant.merchant_id || passwordModal.merchant.merchant_info?._id || passwordModal.merchant.merchant_info?.id;
-    if (!userId) {
-      setActionError('User ID not found');
-      return;
-    }
+    if (!selectedMerchant?.merchant_id) return;
 
-    if (!passwordModal.newPassword || passwordModal.newPassword.length < 6) {
+    // Validation
+    if (!newPassword || newPassword.length < 6) {
       setActionError('Password must be at least 6 characters long');
       return;
     }
 
+    if (newPassword !== confirmPassword) {
+      setActionError('Passwords do not match');
+      return;
+    }
+
+    setActionLoading(true);
+    setActionError('');
     try {
-      setActionError('');
-      setPasswordModal(prev => ({ ...prev, loading: true }));
-      await superadminPaymentService.changeUserPassword(userId, passwordModal.newPassword);
-      setActionSuccess('Password changed successfully');
-      setPasswordModal({ open: false, merchant: null, newPassword: '', loading: false });
-      setTimeout(() => {
-        setActionSuccess('');
-      }, 1500);
-    } catch (e) {
-      setActionError(e.message || 'Failed to change password');
-      setPasswordModal(prev => ({ ...prev, loading: false }));
+      await superadminPaymentService.changeUserPassword(selectedMerchant.merchant_id, newPassword);
+      setSuccessMessage(`Password changed successfully for ${selectedMerchant.merchant_info?.email}`);
+      setShowPasswordModal(false);
+      setSelectedMerchant(null);
+      setNewPassword('');
+      setConfirmPassword('');
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      setActionError(err.message || 'Failed to change password');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -278,7 +287,7 @@ export default function SuperadminMerchantsPage() {
       <section className="relative z-10 min-h-screen bg-transparent">
         {/* Spacer to show 70% of image initially */}
         <div className="h-[calc(50vh-4rem)] sm:h-[calc(55vh-4rem)]"></div>
-
+      
         {/* Cards Section - Scrolls over image */}
         <div className="bg-transparent pt-2 pb-8 px-4 sm:px-6 lg:px-8">
           <div className="max-w-[1400px] mx-auto">
@@ -311,31 +320,31 @@ export default function SuperadminMerchantsPage() {
 
               {/* Filters Toolbar */}
               <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4">
-                <input
-                  type="text"
-                  placeholder="Search by name or email"
-                  value={query.search}
-                  onChange={(e) => setQuery((s) => ({ ...s, search: e.target.value }))}
+          <input
+            type="text"
+            placeholder="Search by name or email"
+            value={query.search}
+            onChange={(e) => setQuery((s) => ({ ...s, search: e.target.value }))}
                   className="flex-1 bg-[#263F43] border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-white/50 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
-                />
-                <select
-                  value={query.status}
-                  onChange={(e) => setQuery((s) => ({ ...s, status: e.target.value }))}
+          />
+          <select
+            value={query.status}
+            onChange={(e) => setQuery((s) => ({ ...s, status: e.target.value }))}
                   className="bg-[#263F43] border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
-                >
-                  <option value="active">Active</option>
-                  <option value="all">All</option>
-                </select>
+          >
+            <option value="active">Active</option>
+            <option value="all">All</option>
+          </select>
                 <label className="flex items-center gap-2 text-white/70 text-sm font-['Albert_Sans'] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={query.includeInactive}
-                    onChange={(e) => setQuery((s) => ({ ...s, includeInactive: e.target.checked }))}
+            <input
+              type="checkbox"
+              checked={query.includeInactive}
+              onChange={(e) => setQuery((s) => ({ ...s, includeInactive: e.target.checked }))}
                     className="rounded border-white/20"
-                  />
-                  Include inactive
-                </label>
-              </div>
+            />
+            Include inactive
+          </label>
+        </div>
 
               {loading && (
                 <div className="flex flex-col items-center justify-center py-20 px-5">
@@ -349,7 +358,7 @@ export default function SuperadminMerchantsPage() {
                 </div>
               )}
 
-              {!loading && !error && (
+        {!loading && !error && (
                 <div className="bg-[#263F43] border border-white/10 rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full">
@@ -364,7 +373,7 @@ export default function SuperadminMerchantsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredMerchants.map((m) => (
+            {filteredMerchants.map((m) => (
                           <tr key={m.merchant_id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                             <td className="px-4 py-3">
                               <div>
@@ -377,7 +386,7 @@ export default function SuperadminMerchantsPage() {
                                 }`}>
                                   {m.merchant_info?.status || 'active'}
                                 </span>
-                              </div>
+                  </div>
                             </td>
                             <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden md:table-cell">
                               <div>Total: {m.transaction_summary?.total_transactions || 0}</div>
@@ -402,7 +411,7 @@ export default function SuperadminMerchantsPage() {
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() => handlePasswordChangeClick(m)}
+                                  onClick={() => handlePasswordClick(m)}
                                   className="p-2 bg-accent/20 hover:bg-accent/30 border border-accent/30 rounded-lg text-accent transition-all duration-200"
                                   title="Change Password"
                                 >
@@ -421,122 +430,167 @@ export default function SuperadminMerchantsPage() {
                         ))}
                       </tbody>
                     </table>
+                </div>
+              </div>
+              )}
+
+              {/* Success Message */}
+              {successMessage && (
+                <div className="mt-4 text-green-400 bg-green-500/20 border border-green-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
+                  {successMessage}
+                </div>
+              )}
+
+              {/* Delete Confirmation Modal */}
+              {showDeleteModal && selectedMerchant && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                  <div className="bg-[#122D32] border border-white/10 rounded-xl shadow-2xl max-w-md w-full">
+                    <div className="flex items-center justify-between p-6 border-b border-white/10">
+                      <h3 className="text-xl font-semibold text-white font-['Albert_Sans']">
+                        Delete User
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setShowDeleteModal(false);
+                          setSelectedMerchant(null);
+                          setActionError('');
+                        }}
+                        className="text-white/60 hover:text-white transition-colors"
+                      >
+                        <FiX className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="p-6">
+                      <p className="text-white/80 font-['Albert_Sans'] mb-4">
+                        Are you sure you want to delete the user{' '}
+                        <span className="font-semibold text-white">
+                          {selectedMerchant.merchant_info?.email}
+                        </span>?
+                      </p>
+                      <p className="text-red-400 text-sm font-['Albert_Sans'] mb-4">
+                        This action cannot be undone.
+                      </p>
+                      {actionError && (
+                        <div className="mb-4 text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-3 text-sm font-['Albert_Sans']">
+                          {actionError}
+                        </div>
+                      )}
+                      <div className="flex gap-3">
+                        <button
+                          onClick={handleDeleteConfirm}
+                          disabled={actionLoading}
+                          className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {actionLoading ? 'Deleting...' : 'Delete'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowDeleteModal(false);
+                            setSelectedMerchant(null);
+                            setActionError('');
+                          }}
+                          disabled={actionLoading}
+                          className="flex-1 bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Success/Error Messages */}
-              {actionSuccess && (
-                <div className="mt-4 text-green-400 bg-green-500/20 border border-green-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
-                  {actionSuccess}
+              {/* Change Password Modal */}
+              {showPasswordModal && selectedMerchant && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                  <div className="bg-[#122D32] border border-white/10 rounded-xl shadow-2xl max-w-md w-full">
+                    <div className="flex items-center justify-between p-6 border-b border-white/10">
+                      <h3 className="text-xl font-semibold text-white font-['Albert_Sans']">
+                        Change Password
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setShowPasswordModal(false);
+                          setSelectedMerchant(null);
+                          setNewPassword('');
+                          setConfirmPassword('');
+                          setActionError('');
+                        }}
+                        className="text-white/60 hover:text-white transition-colors"
+                      >
+                        <FiX className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="p-6">
+                      <p className="text-white/80 font-['Albert_Sans'] mb-4">
+                        Change password for{' '}
+                        <span className="font-semibold text-white">
+                          {selectedMerchant.merchant_info?.email}
+                        </span>
+                      </p>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-white/70 mb-2 font-['Albert_Sans']">
+                            New Password
+                          </label>
+                          <input
+                            type="password"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="Enter new password (min 6 characters)"
+                            className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                            disabled={actionLoading}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-white/70 mb-2 font-['Albert_Sans']">
+                            Confirm Password
+                          </label>
+                          <input
+                            type="password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="Confirm new password"
+                            className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                            disabled={actionLoading}
+                          />
+                        </div>
+                        {actionError && (
+                          <div className="text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-3 text-sm font-['Albert_Sans']">
+                            {actionError}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-3 mt-6">
+                        <button
+                          onClick={handlePasswordChange}
+                          disabled={actionLoading || !newPassword || !confirmPassword}
+                          className="flex-1 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2.5 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {actionLoading ? 'Changing...' : 'Change Password'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowPasswordModal(false);
+                            setSelectedMerchant(null);
+                            setNewPassword('');
+                            setConfirmPassword('');
+                            setActionError('');
+                          }}
+                          disabled={actionLoading}
+                          className="flex-1 bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
-              {actionError && (
-                <div className="mt-4 text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
-                  {actionError}
-                </div>
-              )}
-            </div>
+              </div>
           </div>
         </div>
       </section>
-
-      {/* Delete Confirmation Modal */}
-      {deleteModal.open && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#122D32] border border-white/10 rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold text-white font-['Albert_Sans']">Delete User</h3>
-                <button
-                  onClick={() => setDeleteModal({ open: false, merchant: null })}
-                  className="text-white/60 hover:text-white transition-colors"
-                >
-                  <FiX className="w-5 h-5" />
-                </button>
-              </div>
-              <p className="text-white/80 font-['Albert_Sans'] mb-6">
-                Are you sure you want to delete the user{' '}
-                <span className="font-semibold text-white">
-                  {deleteModal.merchant?.merchant_info?.business_name || deleteModal.merchant?.merchant_info?.name || deleteModal.merchant?.merchant_info?.email}
-                </span>?
-                <br />
-                <span className="text-red-400 text-sm mt-2 block">This action cannot be undone.</span>
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setDeleteModal({ open: false, merchant: null })}
-                  className="flex-1 px-4 py-2.5 bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteConfirm}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Change Password Modal */}
-      {passwordModal.open && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#122D32] border border-white/10 rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold text-white font-['Albert_Sans']">Change Password</h3>
-                <button
-                  onClick={() => setPasswordModal({ open: false, merchant: null, newPassword: '', loading: false })}
-                  className="text-white/60 hover:text-white transition-colors"
-                >
-                  <FiX className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="mb-4">
-                <p className="text-white/80 font-['Albert_Sans'] mb-2">
-                  User: <span className="font-semibold text-white">
-                    {passwordModal.merchant?.merchant_info?.business_name || passwordModal.merchant?.merchant_info?.name || passwordModal.merchant?.merchant_info?.email}
-                  </span>
-                </p>
-                <label className="block text-sm font-medium text-white/70 font-['Albert_Sans'] mb-2">
-                  New Password
-                </label>
-                <input
-                  type="password"
-                  value={passwordModal.newPassword}
-                  onChange={(e) => setPasswordModal(prev => ({ ...prev, newPassword: e.target.value }))}
-                  placeholder="Enter new password (min 6 characters)"
-                  className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
-                  disabled={passwordModal.loading}
-                />
-                <p className="text-xs text-white/50 mt-1 font-['Albert_Sans']">
-                  Password must be at least 6 characters long
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setPasswordModal({ open: false, merchant: null, newPassword: '', loading: false })}
-                  disabled={passwordModal.loading}
-                  className="flex-1 px-4 py-2.5 bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handlePasswordChange}
-                  disabled={passwordModal.loading || !passwordModal.newPassword || passwordModal.newPassword.length < 6}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                >
-                  {passwordModal.loading ? 'Changing...' : 'Change Password'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
