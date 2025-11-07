@@ -78,7 +78,8 @@ const PayoutsManagement = () => {
       'Commission': payout.commission ? `₹${payout.commission}` : 'N/A',
       'Net Amount': payout.netAmount ? `₹${payout.netAmount}` : 'N/A',
       'Status': payout.status || 'N/A',
-      'Transfer Mode': payout.transferMode === 'bank_transfer' ? 'Bank Transfer' : 'UPI',
+      'Transfer Mode': payout.transferMode === 'bank_transfer' ? 'Bank Transfer' : 
+                       payout.transferMode === 'crypto' ? 'Crypto' : 'UPI',
       'Requested By': payout.requestedByName || 'N/A',
       'Requested At': formatDate(payout.requestedAt),
       'Approved By': payout.approvedByName || 'N/A',
@@ -126,13 +127,19 @@ const PayoutsManagement = () => {
 
   const handleProcessPayout = async () => {
     if (!processUtr.trim()) {
-      setToast({ message: 'UTR/Transaction reference is required', type: 'error' });
+      const fieldName = selectedPayout?.transferMode === 'crypto' ? 'Transaction Hash' : 'UTR/Transaction reference';
+      setToast({ message: `${fieldName} is required`, type: 'error' });
       return;
     }
 
     setActionLoading(true);
     try {
-      await superadminPaymentService.processPayout(selectedPayout.payoutId, processUtr, processNotes); // ✅ CHANGED
+      await superadminPaymentService.processPayout(
+        selectedPayout.payoutId, 
+        processUtr, 
+        processNotes,
+        selectedPayout.transferMode === 'crypto' ? processUtr : undefined
+      );
       setToast({ message: 'Payout processed successfully!', type: 'success' });
       setShowModal(false);
       setProcessUtr('');
@@ -474,7 +481,8 @@ const PayoutsManagement = () => {
 
                             <td className="px-4 py-3 hidden md:table-cell">
                               <span className="text-lg">
-                          {payout.transferMode === 'upi' ? '📱' : '🏦'}
+                          {payout.transferMode === 'upi' ? '📱' : 
+                           payout.transferMode === 'crypto' ? '₿' : '🏦'}
                         </span>
                       </td>
 
@@ -643,6 +651,8 @@ const PayoutsManagement = () => {
                         <span className="transfer-mode-badge-large">
                           {selectedPayout.transferMode === 'bank_transfer' ? (
                             <>🏦 Bank Transfer</>
+                          ) : selectedPayout.transferMode === 'crypto' ? (
+                            <>₿ Crypto</>
                           ) : (
                             <>📱 UPI</>
                           )}
@@ -654,6 +664,23 @@ const PayoutsManagement = () => {
                           <span className="info-label">UPI ID</span>
                           <span className="info-value mono highlight">{selectedPayout.beneficiaryDetails.upiId}</span>
                         </div>
+                      )}
+
+                      {selectedPayout.beneficiaryDetails?.walletAddress && (
+                        <>
+                          <div className="info-item full-width">
+                            <span className="info-label">Wallet Address</span>
+                            <span className="info-value mono highlight">{selectedPayout.beneficiaryDetails.walletAddress}</span>
+                          </div>
+                          <div className="info-item">
+                            <span className="info-label">Network</span>
+                            <span className="info-value">{selectedPayout.beneficiaryDetails.networkName}</span>
+                          </div>
+                          <div className="info-item">
+                            <span className="info-label">Currency</span>
+                            <span className="info-value">{selectedPayout.beneficiaryDetails.currencyName}</span>
+                          </div>
+                        </>
                       )}
 
                       {selectedPayout.beneficiaryDetails?.accountNumber && (
@@ -689,10 +716,12 @@ const PayoutsManagement = () => {
                         Transaction Details
                       </div>
                       <div className="info-grid">
-                        <div className="info-item full-width">
-                          <span className="info-label">UTR / Reference Number</span>
-                          <span className="info-value mono highlight-success">{selectedPayout.utr}</span>
-                        </div>
+                      <div className="info-item full-width">
+                        <span className="info-label">
+                          {selectedPayout.transferMode === 'crypto' ? 'Transaction Hash' : 'UTR / Reference Number'}
+                        </span>
+                        <span className="info-value mono highlight-success">{selectedPayout.utr}</span>
+                      </div>
                         {selectedPayout.completedAt && (
                           <div className="info-item">
                             <span className="info-label">Completed Date</span>
@@ -869,7 +898,8 @@ const PayoutsManagement = () => {
                             <div className="info-row">
                               <span className="info-label">Transfer Mode</span>
                               <span className="info-value">
-                                {selectedPayout.transferMode === 'bank_transfer' ? '🏦 Bank Transfer' : '📱 UPI'}
+                                {selectedPayout.transferMode === 'bank_transfer' ? '🏦 Bank Transfer' : 
+                                 selectedPayout.transferMode === 'crypto' ? '₿ Crypto' : '📱 UPI'}
                               </span>
                             </div>
 
@@ -880,6 +910,25 @@ const PayoutsManagement = () => {
                                   {selectedPayout.beneficiaryDetails.upiId}
                                 </span>
                               </div>
+                            )}
+
+                            {selectedPayout.beneficiaryDetails?.walletAddress && (
+                              <>
+                                <div className="info-row">
+                                  <span className="info-label">Wallet Address</span>
+                                  <span className="info-value" style={{ fontFamily: 'monospace', fontSize: 14 }}>
+                                    {selectedPayout.beneficiaryDetails.walletAddress}
+                                  </span>
+                                </div>
+                                <div className="info-row">
+                                  <span className="info-label">Network</span>
+                                  <span className="info-value">{selectedPayout.beneficiaryDetails.networkName}</span>
+                                </div>
+                                <div className="info-row">
+                                  <span className="info-label">Currency</span>
+                                  <span className="info-value">{selectedPayout.beneficiaryDetails.currencyName}</span>
+                                </div>
+                              </>
                             )}
 
                             {selectedPayout.beneficiaryDetails?.accountNumber && (
@@ -910,14 +959,16 @@ const PayoutsManagement = () => {
                             )}
                           </div>
 
-                          {/* UTR if completed */}
+                          {/* UTR/Transaction Hash if completed */}
                           {selectedPayout.utr && (
                             <div className="info-box success">
                               <h4 style={{ marginTop: 0, marginBottom: 16, fontSize: 16, color: '#065f46' }}>
                                 ✅ Transaction Completed
                               </h4>
                               <div className="info-row">
-                                <span className="info-label">UTR / Reference</span>
+                                <span className="info-label">
+                                  {selectedPayout.transferMode === 'crypto' ? 'Transaction Hash' : 'UTR / Reference'}
+                                </span>
                                 <span className="info-value" style={{ fontFamily: 'monospace', fontSize: 14 }}>
                                   {selectedPayout.utr}
                                 </span>
@@ -1027,14 +1078,27 @@ const PayoutsManagement = () => {
                           </div>
 
                           <div className="form-group">
-                            <label>UTR / Transaction Reference *</label>
+                            <label>
+                              {selectedPayout.transferMode === 'crypto' 
+                                ? 'Transaction Hash *' 
+                                : 'UTR / Transaction Reference *'}
+                            </label>
                             <input
                               type="text"
                               value={processUtr}
                               onChange={(e) => setProcessUtr(e.target.value)}
-                              placeholder="Enter UTR or transaction reference"
+                              placeholder={
+                                selectedPayout.transferMode === 'crypto' 
+                                  ? 'Enter blockchain transaction hash (e.g., 0x...)' 
+                                  : 'Enter UTR or transaction reference'
+                              }
                               required
                             />
+                            {selectedPayout.transferMode === 'crypto' && (
+                              <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                                Enter the transaction hash from the blockchain explorer
+                              </small>
+                            )}
                           </div>
 
                           <div className="form-group">

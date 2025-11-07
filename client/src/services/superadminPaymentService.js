@@ -332,7 +332,7 @@ async triggerManualSettlement() {
     }
   }
 
-  async processPayout(payoutId, utr, notes = '') {
+  async processPayout(payoutId, utr, notes = '', transactionHash = null) {
     try {
       const token = authService.getToken();
       if (!token) {
@@ -345,9 +345,14 @@ async triggerManualSettlement() {
 
       console.log('Processing payout:', payoutId);
 
+      const payload = { utr, notes };
+      if (transactionHash) {
+        payload.transactionHash = transactionHash;
+      }
+
       const response = await axios.post(
         API_ENDPOINTS.ADMIN_PAYOUT_PROCESS(payoutId),
-        { utr, notes },
+        payload,
         {
           headers: {
             'x-auth-token': token,

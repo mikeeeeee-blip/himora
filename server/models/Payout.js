@@ -12,14 +12,18 @@ const PayoutSchema = new mongoose.Schema({
     netAmount: { type: Number, required: true },
     currency: { type: String, default: 'INR' },
 
-    transferMode: { type: String, enum: ['bank_transfer', 'upi'], required: true },
+    transferMode: { type: String, enum: ['bank_transfer', 'upi', 'crypto'], required: true },
     beneficiaryDetails: {
         accountNumber: String,
         ifscCode: String,
         accountHolderName: String,
         bankName: String,
         branchName: String,
-        upiId: String
+        upiId: String,
+        // Crypto payout details
+        walletAddress: String,
+        networkName: String, // e.g., 'Ethereum', 'Bitcoin', 'Polygon', 'BSC'
+        currencyName: String  // e.g., 'USDT', 'USDC', 'BTC', 'ETH'
     },
 
     status: {

@@ -29,7 +29,11 @@ const PayoutSection = () => {
       ifscCode: '',
       accountHolderName: '',
       bankName: '',
-      branchName: ''
+      branchName: '',
+      // Crypto fields
+      walletAddress: '',
+      networkName: '',
+      currencyName: ''
     },
     notes: ''
   });
@@ -97,20 +101,32 @@ const PayoutSection = () => {
             throw new Error(`The requested amount exceeds your available balance of ${formatCurrency(eligibility.maximum_payout_amount)}.`);
         }
 
+      let beneficiaryDetails = {};
+      
+      if (requestData.transferMode === 'upi') {
+        beneficiaryDetails = {
+          upiId: requestData.beneficiaryDetails.upiId
+        };
+      } else if (requestData.transferMode === 'crypto') {
+        beneficiaryDetails = {
+          walletAddress: requestData.beneficiaryDetails.walletAddress,
+          networkName: requestData.beneficiaryDetails.networkName,
+          currencyName: requestData.beneficiaryDetails.currencyName
+        };
+      } else {
+        beneficiaryDetails = {
+          accountNumber: requestData.beneficiaryDetails.accountNumber,
+          ifscCode: requestData.beneficiaryDetails.ifscCode,
+          accountHolderName: requestData.beneficiaryDetails.accountHolderName,
+          bankName: requestData.beneficiaryDetails.bankName,
+          branchName: requestData.beneficiaryDetails.branchName
+        };
+      }
+
       const payoutData = {
         amount: amount,
         transferMode: requestData.transferMode,
-        beneficiaryDetails: requestData.transferMode === 'upi' 
-          ? {
-              upiId: requestData.beneficiaryDetails.upiId
-            }
-          : {
-              accountNumber: requestData.beneficiaryDetails.accountNumber,
-              ifscCode: requestData.beneficiaryDetails.ifscCode,
-              accountHolderName: requestData.beneficiaryDetails.accountHolderName,
-              bankName: requestData.beneficiaryDetails.bankName,
-              branchName: requestData.beneficiaryDetails.branchName
-            },
+        beneficiaryDetails,
         notes: requestData.notes
       };
       
@@ -140,7 +156,10 @@ const PayoutSection = () => {
         ifscCode: '',
         accountHolderName: '',
         bankName: '',
-        branchName: ''
+        branchName: '',
+        walletAddress: '',
+        networkName: '',
+        currencyName: ''
       },
       notes: ''
     });
@@ -323,6 +342,7 @@ const PayoutSection = () => {
                 >
                   <option value="upi">UPI</option>
                   <option value="bank_transfer">Bank Transfer</option>
+                  <option value="crypto">Crypto</option>
                 </select>
               </div>
             </div>
@@ -340,6 +360,60 @@ const PayoutSection = () => {
                 />
                 <small className="form-hint">Example: merchant@paytm, user@ybl</small>
               </div>
+            ) : requestData.transferMode === 'crypto' ? (
+              <>
+                <div className="form-group">
+                  <label>Wallet Address *</label>
+                  <input
+                    type="text"
+                    value={requestData.beneficiaryDetails.walletAddress}
+                    onChange={(e) => handleInputChange('beneficiaryDetails.walletAddress', e.target.value)}
+                    required
+                    placeholder="0x..."
+                    minLength="10"
+                  />
+                  <small className="form-hint">Enter the recipient wallet address</small>
+                </div>
+                
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Network *</label>
+                    <select
+                      value={requestData.beneficiaryDetails.networkName}
+                      onChange={(e) => handleInputChange('beneficiaryDetails.networkName', e.target.value)}
+                      required
+                    >
+                      <option value="">Select Network</option>
+                      <option value="Ethereum">Ethereum</option>
+                      <option value="Polygon">Polygon</option>
+                      <option value="BSC">BSC (Binance Smart Chain)</option>
+                      <option value="Bitcoin">Bitcoin</option>
+                      <option value="Solana">Solana</option>
+                      <option value="Arbitrum">Arbitrum</option>
+                      <option value="Optimism">Optimism</option>
+                      <option value="Avalanche">Avalanche</option>
+                    </select>
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Currency *</label>
+                    <select
+                      value={requestData.beneficiaryDetails.currencyName}
+                      onChange={(e) => handleInputChange('beneficiaryDetails.currencyName', e.target.value)}
+                      required
+                    >
+                      <option value="">Select Currency</option>
+                      <option value="USDT">USDT</option>
+                      <option value="USDC">USDC</option>
+                      <option value="BTC">BTC</option>
+                      <option value="ETH">ETH</option>
+                      <option value="MATIC">MATIC</option>
+                      <option value="BNB">BNB</option>
+                      <option value="SOL">SOL</option>
+                    </select>
+                  </div>
+                </div>
+              </>
             ) : (
               <>
                 <div className="form-row">
@@ -475,7 +549,10 @@ const PayoutSection = () => {
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">Transfer Mode:</span>
-                    <span className="detail-value">{payout.transferMode === 'bank_transfer' ? 'Bank Transfer' : 'UPI'}</span>
+                    <span className="detail-value">
+                      {payout.transferMode === 'bank_transfer' ? 'Bank Transfer' : 
+                       payout.transferMode === 'crypto' ? 'Crypto' : 'UPI'}
+                    </span>
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">Requested:</span>
@@ -501,6 +578,12 @@ const PayoutSection = () => {
                     <strong>Beneficiary Details:</strong>
                     {payout.transferMode === 'upi' ? (
                       <div>UPI ID: {payout.beneficiaryDetails.upiId}</div>
+                    ) : payout.transferMode === 'crypto' ? (
+                      <div>
+                        <div>Wallet: {payout.beneficiaryDetails.walletAddress}</div>
+                        <div>Network: {payout.beneficiaryDetails.networkName}</div>
+                        <div>Currency: {payout.beneficiaryDetails.currencyName}</div>
+                      </div>
                     ) : (
                       <div>
                         <div>Account: {payout.beneficiaryDetails.accountNumber}</div>

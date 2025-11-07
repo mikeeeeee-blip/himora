@@ -268,16 +268,7 @@ exports.rejectPayout = async (req, res) => {
 exports.processPayout = async (req, res) => {
     try {
         const { payoutId } = req.params;
-        const { utr, notes } = req.body;
-
-        if (!utr || utr.trim().length === 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'UTR/Transaction reference is required'
-            });
-        }
-
-        console.log(`💰 SuperAdmin ${req.user.name} processing payout: ${payoutId} with UTR: ${utr}`);
+        const { utr, transactionHash, notes } = req.body;
 
         const payout = await Payout.findOne({ payoutId });
 
@@ -287,6 +278,21 @@ exports.processPayout = async (req, res) => {
                 error: 'Payout request not found'
             });
         }
+
+        // For crypto payouts, accept transactionHash; for others, accept UTR
+        const transactionRef = payout.transferMode === 'crypto' 
+            ? (transactionHash || utr)
+            : utr;
+
+        if (!transactionRef || transactionRef.trim().length === 0) {
+            const fieldName = payout.transferMode === 'crypto' ? 'Transaction Hash' : 'UTR/Transaction reference';
+            return res.status(400).json({
+                success: false,
+                error: `${fieldName} is required`
+            });
+        }
+
+        console.log(`💰 SuperAdmin ${req.user.name} processing payout: ${payoutId} with ${payout.transferMode === 'crypto' ? 'Transaction Hash' : 'UTR'}: ${transactionRef}`);
 
         // ✅ Can only process 'pending' payouts (already approved)
         if (payout.status !== 'pending') {
@@ -319,7 +325,8 @@ exports.processPayout = async (req, res) => {
         payout.processedByName = req.user.name;
         payout.processedAt = new Date();
         payout.completedAt = new Date();
-        payout.utr = utr.trim();
+        // Store transaction hash for crypto, UTR for bank/UPI
+        payout.utr = transactionRef.trim();
         if (notes) {
             payout.adminNotes = notes;
         }
@@ -357,6 +364,8 @@ exports.processPayout = async (req, res) => {
                 commission: updatedPayout.commission,
                 transfer_mode: updatedPayout.transferMode,
                 utr: updatedPayout.utr,
+                transaction_hash: updatedPayout.transferMode === 'crypto' ? updatedPayout.utr : null,
+                beneficiary_details: updatedPayout.beneficiaryDetails,
                 processed_at: updatedPayout.processedAt,
                 completed_at: updatedPayout.completedAt
             }

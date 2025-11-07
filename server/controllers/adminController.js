@@ -1362,6 +1362,16 @@ exports.requestPayout = async (req, res) => {
       return res.status(400).json({ success: false, error: 'transferMode and beneficiaryDetails are required' });
     }
 
+    // Validate crypto payout details
+    if (transferMode === 'crypto') {
+      if (!beneficiaryDetails.walletAddress || !beneficiaryDetails.networkName || !beneficiaryDetails.currencyName) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'For crypto payouts, walletAddress, networkName, and currencyName are required' 
+        });
+      }
+    }
+
     // --- Normalize and validate amount ---
     const parsedAmount = typeof rawAmount === 'string' ? parseFloat(rawAmount) : rawAmount;
     const amountIsValidNumber = typeof parsedAmount === 'number' && !isNaN(parsedAmount) && parsedAmount > 0;

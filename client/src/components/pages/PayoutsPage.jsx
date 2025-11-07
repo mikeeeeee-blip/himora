@@ -48,7 +48,11 @@ const PayoutsPage = () => {
       ifscCode: '',
       accountHolderName: '',
       bankName: '',
-      branchName: ''
+      branchName: '',
+      // Crypto fields
+      walletAddress: '',
+      networkName: '',
+      currencyName: ''
     },
     notes: ''
   });
@@ -181,6 +185,18 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
     }
     if (beneficiary.upiId) {
       doc.text(`UPI ID: ${beneficiary.upiId}`, 14, y);
+      y += 6;
+    }
+    if (beneficiary.walletAddress) {
+      doc.text(`Wallet Address: ${beneficiary.walletAddress}`, 14, y);
+      y += 6;
+    }
+    if (beneficiary.networkName) {
+      doc.text(`Network: ${beneficiary.networkName}`, 14, y);
+      y += 6;
+    }
+    if (beneficiary.currencyName) {
+      doc.text(`Currency: ${beneficiary.currencyName}`, 14, y);
       y += 6;
     }
 
@@ -380,8 +396,13 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
       'Commission': payout.commission ? `₹${payout.commission}` : 'N/A',
       'Net Amount': payout.netAmount ? `₹${payout.netAmount}` : 'N/A',
       'Status': payout.status || 'N/A',
-      'Transfer Mode': payout.transferMode === 'bank_transfer' ? 'Bank Transfer' : payout.transferMode === 'upi' ? 'UPI' : 'N/A',
+      'Transfer Mode': payout.transferMode === 'bank_transfer' ? 'Bank Transfer' : 
+                       payout.transferMode === 'crypto' ? 'Crypto' : 
+                       payout.transferMode === 'upi' ? 'UPI' : 'N/A',
       'UPI ID': payout.beneficiaryDetails?.upiId || 'N/A',
+      'Wallet Address': payout.beneficiaryDetails?.walletAddress || 'N/A',
+      'Network': payout.beneficiaryDetails?.networkName || 'N/A',
+      'Currency': payout.beneficiaryDetails?.currencyName || 'N/A',
       'Account Number': payout.beneficiaryDetails?.accountNumber || 'N/A',
       'IFSC Code': payout.beneficiaryDetails?.ifscCode || 'N/A',
       'Account Holder': payout.beneficiaryDetails?.accountHolderName || 'N/A',
@@ -436,18 +457,32 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
 
         
       // Build payout payload — include commission fields so backend can persist them
+        let beneficiaryDetails = {};
+        
+        if (requestData.transferMode === 'upi') {
+          beneficiaryDetails = {
+            upiId: requestData.beneficiaryDetails.upiId
+          };
+        } else if (requestData.transferMode === 'crypto') {
+          beneficiaryDetails = {
+            walletAddress: requestData.beneficiaryDetails.walletAddress,
+            networkName: requestData.beneficiaryDetails.networkName,
+            currencyName: requestData.beneficiaryDetails.currencyName
+          };
+        } else {
+          beneficiaryDetails = {
+            accountNumber: requestData.beneficiaryDetails.accountNumber,
+            ifscCode: requestData.beneficiaryDetails.ifscCode,
+            accountHolderName: requestData.beneficiaryDetails.accountHolderName,
+            bankName: requestData.beneficiaryDetails.bankName,
+            branchName: requestData.beneficiaryDetails.branchName
+          };
+        }
+
         const payoutData = {
           amount: payoutAmount , // todo : remove the commition if you are calculating int the backed 
           transferMode: requestData.transferMode,
-          beneficiaryDetails: requestData.transferMode === 'upi'
-            ? { upiId: requestData.beneficiaryDetails.upiId }
-            : {
-                accountNumber: requestData.beneficiaryDetails.accountNumber,
-                ifscCode: requestData.beneficiaryDetails.ifscCode,
-                accountHolderName: requestData.beneficiaryDetails.accountHolderName,
-                bankName: requestData.beneficiaryDetails.bankName,
-                branchName: requestData.beneficiaryDetails.branchName
-              },
+          beneficiaryDetails,
           notes: requestData.notes
         };
 
@@ -477,7 +512,10 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
         ifscCode: '',
         accountHolderName: '',
         bankName: '',
-        branchName: ''
+        branchName: '',
+        walletAddress: '',
+        networkName: '',
+        currencyName: ''
       },
       notes: ''
     });
@@ -1011,6 +1049,7 @@ const handleInputChange = (field, value) => {
                     >
                       <option value="upi">UPI</option>
                       <option value="bank_transfer">Bank Transfer</option>
+                      <option value="crypto">Crypto</option>
                     </select>
                 </div>
 
@@ -1037,6 +1076,86 @@ const handleInputChange = (field, value) => {
                       Example: merchant@paytm, user@ybl
                     </small>
                   </div>
+                ) : requestData.transferMode === 'crypto' ? (
+                  <>
+                    <div>
+                      <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                        Wallet Address *
+                      </label>
+                      <input
+                        type="text"
+                        value={requestData.beneficiaryDetails.walletAddress}
+                        onChange={(e) =>
+                          handleInputChange(
+                            'beneficiaryDetails.walletAddress',
+                            e.target.value
+                          )
+                        }
+                        required
+                        placeholder="0x..."
+                        minLength="10"
+                        className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
+                      />
+                      <small className="text-white/60 text-xs mt-1 block font-['Albert_Sans']">
+                        Enter the recipient wallet address
+                      </small>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                          Network *
+                        </label>
+                        <select
+                          value={requestData.beneficiaryDetails.networkName}
+                          onChange={(e) =>
+                            handleInputChange(
+                              'beneficiaryDetails.networkName',
+                              e.target.value
+                            )
+                          }
+                          required
+                          className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
+                        >
+                          <option value="">Select Network</option>
+                          <option value="Ethereum">Ethereum</option>
+                          <option value="Polygon">Polygon</option>
+                          <option value="BSC">BSC (Binance Smart Chain)</option>
+                          <option value="Bitcoin">Bitcoin</option>
+                          <option value="Solana">Solana</option>
+                          <option value="Arbitrum">Arbitrum</option>
+                          <option value="Optimism">Optimism</option>
+                          <option value="Avalanche">Avalanche</option>
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-white text-sm font-medium mb-2 font-['Albert_Sans']">
+                          Currency *
+                        </label>
+                        <select
+                          value={requestData.beneficiaryDetails.currencyName}
+                          onChange={(e) =>
+                            handleInputChange(
+                              'beneficiaryDetails.currencyName',
+                              e.target.value
+                            )
+                          }
+                          required
+                          className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
+                        >
+                          <option value="">Select Currency</option>
+                          <option value="USDT">USDT</option>
+                          <option value="USDC">USDC</option>
+                          <option value="BTC">BTC</option>
+                          <option value="ETH">ETH</option>
+                          <option value="MATIC">MATIC</option>
+                          <option value="BNB">BNB</option>
+                          <option value="SOL">SOL</option>
+                        </select>
+                      </div>
+                    </div>
+                  </>
                 ) : (
                   <>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1276,6 +1395,8 @@ const handleInputChange = (field, value) => {
                             <td className="px-4 py-3 text-sm text-white border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
                               {payout.transferMode === 'bank_transfer'
                                 ? 'Bank Transfer'
+                                : payout.transferMode === 'crypto'
+                                ? 'Crypto'
                                 : 'UPI'}
                             </td>
                             <td className="px-4 py-3 text-sm text-white/90 border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
