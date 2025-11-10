@@ -66,10 +66,10 @@ After deployment, verify:
 
 ```bash
 # Health check
-curl https://api.ninex-group.com/api/health
+curl https://api.himora.art/api/health
 
 # Test authentication
-curl -X POST https://api.ninex-group.com/api/auth/login \
+curl -X POST https://api.himora.art/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"test123"}'
 
@@ -333,7 +333,7 @@ JWT_SECRET=your-jwt-secret-here
 
 # URLs
 FRONTEND_URL=https://app.ninex-group.com
-BACKEND_URL=https://api.ninex-group.com
+BACKEND_URL=https://api.himora.art
 
 # Cashfree
 CASHFREE_BASE_URL=https://sandbox.cashfree.com/pg
@@ -361,7 +361,7 @@ NODE_ENV=production
 Update `client/src/constants/api.js`:
 
 ```javascript
-export const BASE_URL = 'https://api.ninex-group.com/api';
+export const BASE_URL = 'https://api.himora.art/api';
 ```
 
 ## Troubleshooting

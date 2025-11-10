@@ -116,7 +116,7 @@ After deployment, verify:
 
 ```bash
 # Health check
-curl https://api.ninex-group.com/api/health
+curl https://api.himora.art/api/health
 
 # Manual tests:
 # - Login flow
