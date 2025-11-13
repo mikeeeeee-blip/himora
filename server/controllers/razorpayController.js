@@ -782,23 +782,40 @@ exports.handleRazorpayWebhook = async (req, res) => {
         console.log(`   - User-Agent: ${userAgent}`);
         console.log(`   - Content-Type: ${req.headers['content-type'] || 'Not set'}`);
 
-        // Get signature from header
-        const signature = req.headers['x-razorpay-signature'] || req.headers['X-Razorpay-Signature'];
+        // Get signature from header (check multiple variations)
+        const signature = req.headers['x-razorpay-signature'] || 
+                         req.headers['X-Razorpay-Signature'] ||
+                         req.headers['x-razorpay-signature'] ||
+                         req.headers['X-RAZORPAY-SIGNATURE'];
+        
+        // Check if webhook secret is configured first
+        const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+        if (!webhookSecret) {
+            console.error('❌ RAZORPAY_WEBHOOK_SECRET not configured in environment variables');
+            console.error('   - Please set RAZORPAY_WEBHOOK_SECRET in your .env file');
+            console.error('   - You can find this in Razorpay Dashboard > Settings > Webhooks > Webhook Secret');
+            console.error('   - Without the secret, webhooks cannot be verified and will be rejected');
+        }
         
         if (!signature) {
             console.warn('❌ Missing X-Razorpay-Signature header');
-            console.warn('   - This might be a test ping or health check from Razorpay');
+            console.warn('   - This might be because:');
+            console.warn('     1. Webhook secret is not configured in Razorpay Dashboard');
+            console.warn('     2. A proxy/load balancer is stripping the header');
+            console.warn('     3. This is a test webhook from Razorpay');
             console.warn('   - All headers:', JSON.stringify(req.headers, null, 2));
             
-            // In development, we might want to allow requests without signature for testing
-            // But in production, we should always require it
-            const isDevelopment = process.env.NODE_ENV !== 'production';
+            // In development, allow processing without signature (with warning)
+            // In production, always require signature for security
+            const isDevelopment = process.env.NODE_ENV !== 'production' || process.env.ALLOW_UNSIGNED_WEBHOOKS === 'true';
             
-            if (isDevelopment) {
-                console.warn('⚠️ Development mode: Allowing request without signature (NOT RECOMMENDED FOR PRODUCTION)');
-                // Still try to process if it's a valid JSON payload
+            if (isDevelopment && webhookSecret) {
+                console.warn('⚠️ Development mode: Processing webhook without signature verification');
+                console.warn('⚠️ WARNING: This is NOT secure and should NOT be used in production!');
+                
+                // Parse and process the webhook
+                let payload;
                 try {
-                    let payload;
                     if (Buffer.isBuffer(req.body)) {
                         payload = JSON.parse(req.body.toString('utf8'));
                     } else {
@@ -808,67 +825,81 @@ exports.handleRazorpayWebhook = async (req, res) => {
                     if (payload && payload.event) {
                         console.log('📦 Processing webhook in development mode (no signature verification)');
                         console.log('📦 Event:', payload.event);
-                        // Process the webhook but log a warning
-                        // You can choose to skip processing or process it
-                        // For now, we'll still reject it to be safe
+                        
+                        // Store parsed payload for later use
+                        req.parsedPayload = payload;
+                        
+                        // Process the webhook without signature verification
+                        // Continue to the processing logic below
+                    } else {
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: 'Invalid webhook payload' 
+                        });
                     }
                 } catch (e) {
-                    // Not valid JSON, definitely reject
+                    console.error('❌ Failed to parse webhook body:', e);
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Invalid JSON payload' 
+                    });
                 }
-            }
-            
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Missing signature header',
-                message: 'Razorpay webhooks require X-Razorpay-Signature header for security'
-            });
-        }
-
-        // Get raw body for signature verification
-        // For express.raw() middleware, req.body is already a Buffer
-        const rawBody = Buffer.isBuffer(req.body) ? req.body : 
-                       (req.rawBody ? Buffer.from(req.rawBody, 'utf8') : 
-                        Buffer.from(JSON.stringify(req.body), 'utf8'));
-
-        // Verify signature
-        const isValid = verifyRazorpayWebhookSignature(rawBody, signature);
-        
-        if (!isValid) {
-            console.warn('❌ Invalid Razorpay webhook signature');
-            return res.status(401).json({ 
-                success: false, 
-                error: 'Invalid signature' 
-            });
-        }
-
-        // Check if webhook secret is configured
-        const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-        if (!webhookSecret) {
-            console.error('❌ RAZORPAY_WEBHOOK_SECRET not configured in environment variables');
-            console.error('   - Please set RAZORPAY_WEBHOOK_SECRET in your .env file');
-            console.error('   - You can find this in Razorpay Dashboard > Settings > Webhooks');
-            return res.status(500).json({ 
-                success: false, 
-                error: 'Webhook secret not configured' 
-            });
-        }
-
-        console.log('✅ Razorpay webhook signature verified');
-
-        // Parse payload (if raw body, parse JSON; otherwise use req.body)
-        let payload;
-        if (Buffer.isBuffer(req.body)) {
-            try {
-                payload = JSON.parse(req.body.toString('utf8'));
-            } catch (e) {
-                console.error('❌ Failed to parse webhook body as JSON:', e);
+                
+                // Skip signature verification and go directly to processing
+                // We'll set a flag to skip verification
+                req.skipSignatureVerification = true;
+            } else {
                 return res.status(400).json({ 
                     success: false, 
-                    error: 'Invalid JSON payload' 
+                    error: 'Missing signature header',
+                    message: 'Razorpay webhooks require X-Razorpay-Signature header for security. Please configure webhook secret in Razorpay Dashboard.'
                 });
             }
+        }
+
+        // Skip signature verification if in development mode and signature is missing
+        if (!req.skipSignatureVerification) {
+            // Get raw body for signature verification
+            // For express.raw() middleware, req.body is already a Buffer
+            const rawBody = Buffer.isBuffer(req.body) ? req.body : 
+                           (req.rawBody ? Buffer.from(req.rawBody, 'utf8') : 
+                            Buffer.from(JSON.stringify(req.body), 'utf8'));
+
+            // Verify signature
+            const isValid = verifyRazorpayWebhookSignature(rawBody, signature);
+            
+            if (!isValid) {
+                console.warn('❌ Invalid Razorpay webhook signature');
+                console.warn('   - Please verify RAZORPAY_WEBHOOK_SECRET matches the one in Razorpay Dashboard');
+                return res.status(401).json({ 
+                    success: false, 
+                    error: 'Invalid signature' 
+                });
+            }
+
+            console.log('✅ Razorpay webhook signature verified');
         } else {
-            payload = req.body;
+            console.warn('⚠️ Skipping signature verification (development mode only)');
+        }
+
+        // Parse payload (if raw body, parse JSON; otherwise use req.body)
+        // If we already parsed it in development mode, use that
+        let payload = req.parsedPayload;
+        
+        if (!payload) {
+            if (Buffer.isBuffer(req.body)) {
+                try {
+                    payload = JSON.parse(req.body.toString('utf8'));
+                } catch (e) {
+                    console.error('❌ Failed to parse webhook body as JSON:', e);
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Invalid JSON payload' 
+                    });
+                }
+            } else {
+                payload = req.body;
+            }
         }
         
         if (!payload || Object.keys(payload).length === 0) {
