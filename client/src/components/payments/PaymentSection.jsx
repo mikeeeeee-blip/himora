@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { FiExternalLink, FiCopy } from 'react-icons/fi';
+import { FiExternalLink, FiCopy, FiSmartphone, FiZap } from 'react-icons/fi';
+import { SiGooglepay, SiPhonepe } from 'react-icons/si';
 import paymentService from '../../services/paymentService';
 import './PaymentSection.css';
 
@@ -72,6 +73,15 @@ const PaymentSection = () => {
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
     }
+  };
+
+  const openDeepLink = (url, appName) => {
+    if (!url || url === 'Not available' || url === null) {
+      setSuccess(`${appName} deep link not available`);
+      return;
+    }
+    // Try to open the deep link
+    window.location.href = url;
   };
 
   return (
@@ -170,19 +180,19 @@ const PaymentSection = () => {
               <div className="link-container">
                 <input 
                   type="text" 
-                  value={createdLink.paymentLink || createdLink.link || 'Link generated'} 
+                  value={createdLink.paymentLink || createdLink.payment_url || createdLink.link || 'Link generated'} 
                   readOnly 
                   className="link-input"
                 />
                 <button 
-                  onClick={() => copyToClipboard(createdLink.paymentLink || createdLink.link)}
+                  onClick={() => copyToClipboard(createdLink.paymentLink || createdLink.payment_url || createdLink.link)}
                   className="action-btn copy"
                   title="Copy link"
                 >
                   <FiCopy />
                 </button>
                 <button 
-                  onClick={() => openPaymentLink(createdLink.paymentLink || createdLink.link)}
+                  onClick={() => openPaymentLink(createdLink.paymentLink || createdLink.payment_url || createdLink.link)}
                   className="action-btn redirect"
                   title="Open payment link"
                 >
@@ -190,6 +200,118 @@ const PaymentSection = () => {
                 </button>
               </div>
             </div>
+            
+            {/* UPI Deep Links Section */}
+            {(createdLink.phonepe_deep_link || createdLink.gpay_deep_link || createdLink.gpay_intent || createdLink.upi_deep_link) && (
+              <div className="link-item deep-links-section">
+                <label>
+                  <FiSmartphone style={{ display: 'inline', marginRight: '8px' }} />
+                  UPI Deep Links (Quick Pay):
+                </label>
+                <div className="deep-links-grid">
+                  {createdLink.phonepe_deep_link && createdLink.phonepe_deep_link !== 'Not available' && (
+                    <div className="deep-link-card">
+                      <div className="deep-link-header">
+                        <SiPhonepe className="phonepe-icon" />
+                        <span>PhonePe</span>
+                      </div>
+                      <div className="deep-link-actions">
+                        <button
+                          onClick={() => openDeepLink(createdLink.phonepe_deep_link, 'PhonePe')}
+                          className="deep-link-btn open"
+                          title="Open in PhonePe"
+                        >
+                          <FiExternalLink /> Open
+                        </button>
+                        <button
+                          onClick={() => copyToClipboard(createdLink.phonepe_deep_link)}
+                          className="deep-link-btn copy"
+                          title="Copy PhonePe link"
+                        >
+                          <FiCopy />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {createdLink.gpay_deep_link && createdLink.gpay_deep_link !== 'Not available' && (
+                    <div className="deep-link-card">
+                      <div className="deep-link-header">
+                        <SiGooglepay className="gpay-icon" />
+                        <span>Google Pay</span>
+                      </div>
+                      <div className="deep-link-actions">
+                        <button
+                          onClick={() => openDeepLink(createdLink.gpay_deep_link, 'Google Pay')}
+                          className="deep-link-btn open"
+                          title="Open in Google Pay"
+                        >
+                          <FiExternalLink /> Open
+                        </button>
+                        <button
+                          onClick={() => copyToClipboard(createdLink.gpay_deep_link)}
+                          className="deep-link-btn copy"
+                          title="Copy Google Pay link"
+                        >
+                          <FiCopy />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {createdLink.gpay_intent && createdLink.gpay_intent !== 'Not available' && (
+                    <div className="deep-link-card">
+                      <div className="deep-link-header">
+                        <SiGooglepay className="gpay-icon" />
+                        <span>GPay (Android)</span>
+                      </div>
+                      <div className="deep-link-actions">
+                        <button
+                          onClick={() => openDeepLink(createdLink.gpay_intent, 'Google Pay')}
+                          className="deep-link-btn open"
+                          title="Open in Google Pay (Android Intent)"
+                        >
+                          <FiExternalLink /> Open
+                        </button>
+                        <button
+                          onClick={() => copyToClipboard(createdLink.gpay_intent)}
+                          className="deep-link-btn copy"
+                          title="Copy Google Pay Intent"
+                        >
+                          <FiCopy />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {createdLink.upi_deep_link && createdLink.upi_deep_link !== 'Not available' && (
+                    <div className="deep-link-card">
+                      <div className="deep-link-header">
+                        <FiZap className="upi-icon" />
+                        <span>UPI</span>
+                      </div>
+                      <div className="deep-link-actions">
+                        <button
+                          onClick={() => openDeepLink(createdLink.upi_deep_link, 'UPI')}
+                          className="deep-link-btn open"
+                          title="Open in UPI app"
+                        >
+                          <FiExternalLink /> Open
+                        </button>
+                        <button
+                          onClick={() => copyToClipboard(createdLink.upi_deep_link)}
+                          className="deep-link-btn copy"
+                          title="Copy UPI link"
+                        >
+                          <FiCopy />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="link-item">
               <label>Order ID:</label>
               <div className="link-container">

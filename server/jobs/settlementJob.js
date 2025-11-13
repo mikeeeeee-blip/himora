@@ -50,27 +50,22 @@ async function processSettlement() {
     console.log(`✅ Complete: ${settledCount} settled, ${notReadyCount} not ready`);
     return { success: true, settledCount, notReadyCount };
 }
-// ✅ Cron: 
-// Monday–Friday → 02:00 & 16:00 IST
-// Saturday → 16:00 IST only
+// ✅ Cron: Every 15 minutes, Monday–Friday only
 const settlementJob = cron.schedule(
-  '0 2,16 * * 1-5,6', // base pattern (we’ll handle extra filtering below)
+  '*/15 * * * 1-5', // Every 15 minutes, Monday (1) to Friday (5)
   async () => {
     try {
-      const day = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short' });
-      const hour = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false });
+      const now = new Date();
+      const day = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short' });
+      const hour = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false });
+      const minute = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', minute: '2-digit' });
 
-      // Restrict to correct times
-      if (
-        // Monday–Friday: allow 2 or 16
-        ((['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(day)) && (hour === '02' || hour === '16')) ||
-        // Saturday: allow only 16
-        (day === 'Sat' && hour === '16')
-      ) {
-        console.log(`🤖 Auto settlement triggered on ${day} at ${hour}:00`);
+      // Double-check it's a weekday (Monday-Friday)
+      if (['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(day)) {
+        console.log(`🤖 Auto settlement triggered on ${day} at ${hour}:${minute} IST`);
         await processSettlement();
       } else {
-        console.log(`⏸ Skipping auto settlement on ${day} at ${hour}:00`);
+        console.log(`⏸ Skipping auto settlement on ${day} (weekend)`);
       }
     } catch (error) {
       console.error('❌ Auto settlement error:', error);

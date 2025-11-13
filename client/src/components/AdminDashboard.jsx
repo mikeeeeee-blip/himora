@@ -12,6 +12,7 @@ import {
   FiCreditCard,
   FiExternalLink,
   FiX,
+  FiSmartphone,
 } from "react-icons/fi";
 import { TbArrowsTransferDown } from "react-icons/tb";
 import { RiMoneyDollarCircleLine, RiWalletLine } from "react-icons/ri";
@@ -924,6 +925,16 @@ const AdminDashboard = () => {
     if (url) {
       window.open(url, "_blank", "noopener,noreferrer");
     }
+  };
+
+  const openDeepLink = (url, appName) => {
+    if (!url || url === 'Not available' || url === null) {
+      setSuccess(`${appName} deep link not available`);
+      setTimeout(() => setSuccess(""), 3000);
+      return;
+    }
+    // Try to open the deep link
+    window.location.href = url;
   };
 
   const formatCurrency = (amount) => {
@@ -1897,7 +1908,7 @@ const AdminDashboard = () => {
                     </h4>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div>
                       <label className="block text-white/70 text-sm font-medium font-['Albert_Sans'] mb-2">
                         Payment Link:
@@ -1905,7 +1916,7 @@ const AdminDashboard = () => {
                       <div className="relative">
                         <input
                           type="text"
-                          value={createdPaymentLink.paymentLink || ""}
+                          value={createdPaymentLink.paymentLink || createdPaymentLink.payment_url || ""}
                           readOnly
                           className="w-full px-4 py-3 border-2 border-white/10 rounded-lg text-sm font-mono bg-bg-secondary text-green-400 focus:outline-none break-all pr-24"
                         />
@@ -1913,7 +1924,7 @@ const AdminDashboard = () => {
                           <button
                             onClick={() =>
                               copyPaymentLinkToClipboard(
-                                createdPaymentLink.paymentLink
+                                createdPaymentLink.paymentLink || createdPaymentLink.payment_url
                               )
                             }
                             className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-3 py-1.5 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-1.5"
@@ -1924,7 +1935,7 @@ const AdminDashboard = () => {
                           </button>
                           <button
                             onClick={() =>
-                              openPaymentLink(createdPaymentLink.paymentLink)
+                              openPaymentLink(createdPaymentLink.paymentLink || createdPaymentLink.payment_url)
                             }
                             className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-1.5"
                             title="Open link"
@@ -1935,6 +1946,120 @@ const AdminDashboard = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* UPI Deep Links Section */}
+                    {(createdPaymentLink.phonepe_deep_link || createdPaymentLink.gpay_deep_link || createdPaymentLink.gpay_intent || createdPaymentLink.upi_deep_link) && (
+                      <div className="bg-[#263F43] border border-white/10 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <FiSmartphone className="text-accent text-base" />
+                          <label className="block text-white/80 text-sm font-medium font-['Albert_Sans']">
+                            UPI Deep Links (Quick Pay)
+                          </label>
+                        </div>
+                        <p className="text-white/60 text-xs mb-3 font-['Albert_Sans']">
+                          Click to open directly in UPI apps or copy the links to share
+                        </p>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {createdPaymentLink.phonepe_deep_link && createdPaymentLink.phonepe_deep_link !== 'Not available' && (
+                            <div className="bg-bg-secondary border border-white/5 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-purple-400 text-sm font-bold">PhonePe</span>
+                              </div>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => openDeepLink(createdPaymentLink.phonepe_deep_link, 'PhonePe')}
+                                  className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 px-2 py-1 rounded text-xs font-medium transition-all hover:scale-105 flex items-center gap-1"
+                                  title="Open in PhonePe"
+                                >
+                                  <FiExternalLink className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => copyPaymentLinkToClipboard(createdPaymentLink.phonepe_deep_link)}
+                                  className="bg-white/5 hover:bg-white/10 text-white/70 px-2 py-1 rounded text-xs transition-all hover:scale-105"
+                                  title="Copy PhonePe link"
+                                >
+                                  <FiCopy className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {createdPaymentLink.gpay_deep_link && createdPaymentLink.gpay_deep_link !== 'Not available' && (
+                            <div className="bg-bg-secondary border border-white/5 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-green-400 text-sm font-bold">Google Pay</span>
+                              </div>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => openDeepLink(createdPaymentLink.gpay_deep_link, 'Google Pay')}
+                                  className="bg-green-500/20 hover:bg-green-500/30 text-green-400 px-2 py-1 rounded text-xs font-medium transition-all hover:scale-105 flex items-center gap-1"
+                                  title="Open in Google Pay"
+                                >
+                                  <FiExternalLink className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => copyPaymentLinkToClipboard(createdPaymentLink.gpay_deep_link)}
+                                  className="bg-white/5 hover:bg-white/10 text-white/70 px-2 py-1 rounded text-xs transition-all hover:scale-105"
+                                  title="Copy Google Pay link"
+                                >
+                                  <FiCopy className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {createdPaymentLink.gpay_intent && createdPaymentLink.gpay_intent !== 'Not available' && (
+                            <div className="bg-bg-secondary border border-white/5 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-green-400 text-sm font-bold">GPay (Android)</span>
+                              </div>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => openDeepLink(createdPaymentLink.gpay_intent, 'Google Pay')}
+                                  className="bg-green-500/20 hover:bg-green-500/30 text-green-400 px-2 py-1 rounded text-xs font-medium transition-all hover:scale-105 flex items-center gap-1"
+                                  title="Open in Google Pay (Android Intent)"
+                                >
+                                  <FiExternalLink className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => copyPaymentLinkToClipboard(createdPaymentLink.gpay_intent)}
+                                  className="bg-white/5 hover:bg-white/10 text-white/70 px-2 py-1 rounded text-xs transition-all hover:scale-105"
+                                  title="Copy Google Pay Intent"
+                                >
+                                  <FiCopy className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {createdPaymentLink.upi_deep_link && createdPaymentLink.upi_deep_link !== 'Not available' && (
+                            <div className="bg-bg-secondary border border-white/5 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <FiZap className="text-yellow-400 text-base" />
+                                <span className="text-white/80 text-sm font-medium">UPI</span>
+                              </div>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => openDeepLink(createdPaymentLink.upi_deep_link, 'UPI')}
+                                  className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-2 py-1 rounded text-xs font-medium transition-all hover:scale-105 flex items-center gap-1"
+                                  title="Open in UPI app"
+                                >
+                                  <FiExternalLink className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => copyPaymentLinkToClipboard(createdPaymentLink.upi_deep_link)}
+                                  className="bg-white/5 hover:bg-white/10 text-white/70 px-2 py-1 rounded text-xs transition-all hover:scale-105"
+                                  title="Copy UPI link"
+                                >
+                                  <FiCopy className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

@@ -423,6 +423,91 @@
   font-size: 16px;
 }
 
+/* Deep Links Section */
+.deep-links-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e9ecef;
+}
+
+.deep-links-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.deep-link-card {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+
+.deep-link-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.deep-link-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.deep-link-header .phonepe-icon {
+  color: #5f259f;
+  font-size: 20px;
+}
+
+.deep-link-header .gpay-icon {
+  color: #4285f4;
+  font-size: 20px;
+}
+
+.deep-link-header .upi-icon {
+  color: #ffc107;
+  font-size: 20px;
+}
+
+.deep-link-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.deep-link-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.deep-link-btn:hover {
+  background: var(--primary-2);
+  transform: translateY(-1px);
+}
+
+.deep-link-btn.copy {
+  background: #6c757d;
+  padding: 6px 8px;
+}
+
+.deep-link-btn.copy:hover {
+  background: #5a6268;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .section-header {
@@ -455,5 +540,9 @@
   .payout-details {
     flex-direction: column;
     gap: 4px;
+  }
+
+  .deep-links-grid {
+    grid-template-columns: 1fr;
   }
 }
