@@ -914,7 +914,7 @@ const SuperadminDashboard = () => {
                       <h3 className="text-sm text-white/80 font-medium mb-3 font-['Albert_Sans']">
                         Today's Commission (IST)
                       </h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 mb-4">
                         <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
                           <div className="flex items-center gap-3 mb-2">
                             <div className="w-10 h-10 rounded-lg bg-green-500/30 flex items-center justify-center text-green-400 flex-shrink-0">
@@ -967,6 +967,47 @@ const SuperadminDashboard = () => {
                               </div>
                               <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
                                 Payin + Payout
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Total Commission Summary */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                        <div className="bg-[#263F43] border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
+                              <FiArrowUp />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-1">
+                                Total Payin Commission (All Time)
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.commission.total_payin)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                3.8% of all paid transactions
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-[#263F43] border-l-4 border-blue-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0">
+                              <FiArrowDown />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-1">
+                                Total Payout Commission (All Time)
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.commission.total_payout)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                From all payout requests
                               </div>
                             </div>
                           </div>
