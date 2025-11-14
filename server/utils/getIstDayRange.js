@@ -6,7 +6,7 @@
  *  start -> 2025-10-24T18:30:00.000Z
  *  end   -> 2025-10-25T18:29:59.999Z
  */
-export function getIstDayRange(date = new Date()) {
+function getIstDayRange(date = new Date()) {
   const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // +5:30
 
   // Get UTC milliseconds for the given Date
@@ -31,3 +31,5 @@ export function getIstDayRange(date = new Date()) {
     end: new Date(endUtcMs)
   };
 }
+
+module.exports = { getIstDayRange };

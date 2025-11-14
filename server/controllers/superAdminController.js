@@ -599,6 +599,91 @@ exports.settleTransaction = async (req, res) => {
     }
 };
 
+// ============ UPDATE TRANSACTION STATUS (SUPER ADMIN) ============
+/**
+ * Updates a transaction's status (Super Admin only)
+ * Super Admin can update any transaction's status
+ * 
+ * PUT /api/payments/admin/transactions/:transactionId/status
+ * Headers: x-auth-token (JWT token - Super Admin)
+ * Body: { status: 'paid' | 'pending' | 'failed' | 'cancelled' | 'expired' | 'created' }
+ */
+exports.updateTransactionStatus = async (req, res) => {
+    try {
+        const { transactionId } = req.params;
+        const { status } = req.body;
+
+        // Validate status
+        const validStatuses = ['created', 'pending', 'paid', 'failed', 'cancelled', 'refunded', 'partial_refund', 'expired'];
+        if (!status || !validStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+            });
+        }
+
+        // Find the transaction
+        const transaction = await Transaction.findOne({ transactionId }).populate('merchantId');
+
+        if (!transaction) {
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found'
+            });
+        }
+
+        // Prepare update operation
+        const updateOperation = {
+            $set: {
+                status: status,
+                updatedAt: new Date()
+            }
+        };
+
+        // If setting to 'paid', also set paidAt
+        if (status === 'paid' && !transaction.paidAt) {
+            updateOperation.$set.paidAt = new Date();
+        }
+
+        // If changing from 'paid' to another status, remove paidAt
+        if (transaction.status === 'paid' && status !== 'paid') {
+            updateOperation.$unset = { paidAt: "" };
+        }
+
+        const updatedTransaction = await Transaction.findOneAndUpdate(
+            { transactionId: transactionId },
+            updateOperation,
+            { new: true }
+        ).populate('merchantId', 'name email');
+
+        console.log(`✅ Super Admin updated transaction ${transactionId} status from '${transaction.status}' to '${status}'`);
+
+        res.json({
+            success: true,
+            message: `Transaction status updated successfully`,
+            transaction: {
+                transactionId: updatedTransaction.transactionId,
+                orderId: updatedTransaction.orderId,
+                status: updatedTransaction.status,
+                amount: updatedTransaction.amount,
+                currency: updatedTransaction.currency,
+                merchantName: updatedTransaction.merchantName,
+                customerName: updatedTransaction.customerName,
+                paidAt: updatedTransaction.paidAt,
+                updatedAt: updatedTransaction.updatedAt
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Update Transaction Status Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update transaction status',
+            details: error.message
+        });
+    }
+};
+
 
  // controllers/superadminController.js
 
@@ -655,13 +740,32 @@ exports.getDashboardStats = async (req, res) => {
             totalAvailableBalance += (t.amount - commissionInfo.commission);
         });
 
-        // Today's stats
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // Today's stats (using IST)
+        const { getIstDayRange } = require('../utils/getIstDayRange');
+        const { start: todayStart, end: todayEnd } = getIstDayRange();
         
-        const todayTransactions = allTransactions.filter(t => new Date(t.createdAt) >= today);
-        const todayRevenue = todayTransactions.filter(t => t.status === 'paid').reduce((sum, t) => sum + t.amount, 0);
-        const todayPayouts = allPayouts.filter(p => new Date(p.createdAt) >= today);
+        const todayTransactions = allTransactions.filter(t => {
+            const tDate = new Date(t.createdAt);
+            return tDate >= todayStart && tDate <= todayEnd;
+        });
+        const todayPaidTransactions = todayTransactions.filter(t => t.status === 'paid');
+        const todayRevenue = todayPaidTransactions.reduce((sum, t) => sum + t.amount, 0);
+        
+        // Calculate today's payin commission
+        let todayPayinCommission = 0;
+        todayPaidTransactions.forEach(t => {
+            const commissionInfo = calculatePayinCommission(t.amount);
+            todayPayinCommission += commissionInfo.commission;
+        });
+        
+        const todayPayouts = allPayouts.filter(p => {
+            const pDate = new Date(p.createdAt);
+            return pDate >= todayStart && pDate <= todayEnd;
+        });
+        
+        // Calculate today's payout commission
+        const todayPayoutCommission = todayPayouts.reduce((sum, p) => sum + (p.commission || 0), 0);
+        const todayPayoutAmount = todayPayouts.reduce((sum, p) => sum + (p.amount || 0), 0);
 
         // This week stats
         const oneWeekAgo = new Date();
@@ -733,7 +837,19 @@ exports.getDashboardStats = async (req, res) => {
                     total_commission_earned: (totalPayinCommission + totalPayoutCommission).toFixed(2),
                     payin_commission: totalPayinCommission.toFixed(2),
                     payout_commission: totalPayoutCommission.toFixed(2),
-                    net_platform_revenue: (totalPayinCommission + totalPayoutCommission - totalPayoutCompleted).toFixed(2)
+                    net_platform_revenue: (totalPayinCommission + totalPayoutCommission - totalPayoutCompleted).toFixed(2),
+                    today_payin_commission: todayPayinCommission.toFixed(2),
+                    today_payout_commission: todayPayoutCommission.toFixed(2),
+                    today_total_commission: (todayPayinCommission + todayPayoutCommission).toFixed(2)
+                },
+                
+                commission: {
+                    today_payin: todayPayinCommission.toFixed(2),
+                    today_payout: todayPayoutCommission.toFixed(2),
+                    today_total: (todayPayinCommission + todayPayoutCommission).toFixed(2),
+                    total_payin: totalPayinCommission.toFixed(2),
+                    total_payout: totalPayoutCommission.toFixed(2),
+                    total_all: (totalPayinCommission + totalPayoutCommission).toFixed(2)
                 }
             },
             timestamp: new Date()

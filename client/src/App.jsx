@@ -15,6 +15,7 @@ import BalancePage from "./components/pages/BalancePage";
 import PaymentsPage from "./components/pages/PaymentsPage";
 import SuperadminSignupPage from "./components/pages/SuperadminSignupPage";
 import SuperadminTransactionsPage from "./components/pages/SuperadminTransactionsPage";
+import SuperadminUpdateTransactionsPage from "./components/pages/SuperadminUpdateTransactionsPage";
 import SuperadminPayoutsPage from "./components/pages/PayoutsManagement";
 import SuperadminMerchantsPage from "./components/pages/SuperadminMerchantsPage";
 import WebhookPage from "./components/pages/WebhookPage";
@@ -56,6 +57,16 @@ function App() {
             <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
               <SuperadminLayout>
                 <SuperadminTransactionsPage />
+              </SuperadminLayout>
+            </AuthWrapper>
+          }
+        />
+        <Route
+          path="/superadmin/transactions/update"
+          element={
+            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+              <SuperadminLayout>
+                <SuperadminUpdateTransactionsPage />
               </SuperadminLayout>
             </AuthWrapper>
           }

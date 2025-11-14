@@ -209,6 +209,34 @@ async triggerManualSettlement() {
     }
   }
 
+  async updateTransactionStatus(transactionId, status) {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      console.log('Updating transaction status:', transactionId, 'to', status);
+
+      const response = await axios.put(
+        API_ENDPOINTS.ADMIN_UPDATE_TRANSACTION_STATUS(transactionId),
+        { status },
+        {
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('Update transaction status response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Update transaction status error:', error);
+      this.handleError(error, 'Failed to update transaction status');
+    }
+  }
+
   // ============ PAYOUTS ============
   async getAllPayouts(filters = {}) {
     try {
