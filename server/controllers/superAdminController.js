@@ -200,11 +200,11 @@ exports.rejectPayout = async (req, res) => {
             });
         }
 
-        // ✅ Can reject 'requested' or 'pending' payouts, but not completed ones
-        if (!['requested', 'pending'].includes(payout.status)) {
+        // ✅ Can reject 'requested', 'pending', or 'processing' payouts, but not completed ones
+        if (!['requested', 'pending', 'processing'].includes(payout.status)) {
             return res.status(400).json({
                 success: false,
-                error: `Cannot reject payout with status: ${payout.status}. Can only reject 'requested' or 'pending' payouts.`,
+                error: `Cannot reject payout with status: ${payout.status}. Can only reject 'requested', 'pending', or 'processing' payouts.`,
                 currentStatus: payout.status
             });
         }
@@ -219,12 +219,24 @@ exports.rejectPayout = async (req, res) => {
             }
         }
 
+        // Store previous status before updating
+        const previousStatus = payout.status;
+        
         // Update payout
         payout.status = 'rejected';
         payout.rejectedBy = req.user._id;
         payout.rejectedByName = req.user.name;
         payout.rejectedAt = new Date();
         payout.rejectionReason = reason;
+        
+        // If payout was previously approved, clear approval fields
+        if (previousStatus === 'pending' || previousStatus === 'processing') {
+            payout.approvedBy = null;
+            payout.approvedByName = null;
+            payout.approvedAt = null;
+            payout.approvalNotes = null;
+            console.log(`🔄 Clearing approval fields for payout ${payoutId} (was ${previousStatus})`);
+        }
 
         await payout.save();
 

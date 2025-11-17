@@ -536,14 +536,24 @@ const PayoutsManagement = () => {
                           )}
 
                           {(payout.status === 'pending' || payout.status === 'processing') && (
-                            <button
-                              onClick={() => openModal('process', payout)}
+                            <>
+                              <button
+                                onClick={() => openModal('process', payout)}
                                     className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-colors"
                               title="Process & Complete"
                             >
                                     <FiSend size={12} />
                                     <span className="hidden sm:inline">Complete</span>
                             </button>
+                            <button
+                              onClick={() => openModal('reject', payout)}
+                                    className="flex items-center gap-1 px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-colors"
+                              title="Reject (Cancel Approval)"
+                            >
+                                    <FiX size={12} />
+                                    <span className="hidden sm:inline">Reject</span>
+                            </button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -1038,7 +1048,9 @@ const PayoutsManagement = () => {
                               <FiXCircle size={32} />
                             </div>
                             <p className="confirmation-message">
-                              Please provide a reason for rejecting this payout request.
+                              {selectedPayout.status === 'pending' || selectedPayout.status === 'processing'
+                                ? 'This payout has been approved. Rejecting it will cancel the approval and make the transactions available for a new payout request.'
+                                : 'Please provide a reason for rejecting this payout request.'}
                             </p>
                           </div>
 
