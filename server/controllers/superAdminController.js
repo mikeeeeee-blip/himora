@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
 const { sendMerchantWebhook, sendPayoutWebhook } = require('./merchantWebhookController');
+const { selectProductsForInvoice, generateInvoicePDF } = require('../utils/invoiceGenerator');
 const mongoose = require('mongoose');
 const COMMISSION_RATE = 0.038; // 3.8%
 
@@ -608,6 +609,63 @@ exports.settleTransaction = async (req, res) => {
             success: false,
             error: 'Failed to settle transaction'
         });
+    }
+};
+
+// ============ GENERATE TRANSACTION INVOICE (SUPER ADMIN) ============
+/**
+ * Generates and downloads a PDF invoice for a paid transaction
+ * 
+ * GET /api/payments/admin/transactions/:transactionId/invoice
+ * Headers: x-auth-token (JWT token - Super Admin)
+ */
+exports.generateTransactionInvoice = async (req, res) => {
+    try {
+        const { transactionId } = req.params;
+        
+        console.log(`📄 Generating invoice for transaction: ${transactionId}`);
+
+        // Find the transaction
+        const transaction = await Transaction.findOne({ transactionId }).populate('merchantId', 'name email');
+
+        if (!transaction) {
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found'
+            });
+        }
+
+        // Only generate invoice for paid transactions
+        if (transaction.status !== 'paid') {
+            return res.status(400).json({
+                success: false,
+                error: 'Invoice can only be generated for paid transactions'
+            });
+        }
+
+        // Select products for the invoice
+        const invoiceData = selectProductsForInvoice(transaction.amount);
+
+        // Generate PDF
+        const pdfBuffer = await generateInvoicePDF(transaction, invoiceData);
+
+        // Set response headers for PDF download
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="Invoice_${transaction.transactionId}.pdf"`);
+        res.setHeader('Content-Length', pdfBuffer.length);
+
+        // Send PDF
+        res.send(pdfBuffer);
+
+    } catch (error) {
+        console.error('❌ Generate Invoice Error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                error: 'Failed to generate invoice',
+                detail: error.message
+            });
+        }
     }
 };
 

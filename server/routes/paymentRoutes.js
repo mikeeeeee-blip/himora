@@ -16,7 +16,8 @@ const {
     rejectPayout,
     processPayout,
     settleTransaction,
-    updateTransactionStatus
+    updateTransactionStatus,
+    generateTransactionInvoice
 } = require('../controllers/superAdminController.js');
 
 // ✅ MAKE SURE ALL THESE FUNCTIONS EXIST IN THE CONTROLLER
@@ -74,9 +75,14 @@ router.get('/admin/payouts/all', superAdminAuth, getAllPayouts);
 router.post('/admin/payout/:payoutId/approve', superAdminAuth, approvePayout);
 router.post('/admin/payout/:payoutId/reject', superAdminAuth, rejectPayout);
 router.post('/admin/payout/:payoutId/process', superAdminAuth, processPayout);
-router.get('/admin/transactions', superAdminAuth, getAllTransactions);
+
+// ⚠️ IMPORTANT: More specific routes MUST come before general ones
+// Invoice route must be before the general transactions route
+router.get('/admin/transactions/:transactionId/invoice', superAdminAuth, generateTransactionInvoice);
 router.put('/admin/transactions/:transactionId/settle', superAdminAuth, settleTransaction);
 router.put('/admin/transactions/:transactionId/status', superAdminAuth, updateTransactionStatus);
+// General transactions route comes last
+router.get('/admin/transactions', superAdminAuth, getAllTransactions);
 router.get('/merchant/transactions/search', auth, searchTransactions); // For transactions
 
 

@@ -237,6 +237,60 @@ async triggerManualSettlement() {
     }
   }
 
+  // ============ INVOICE GENERATION ============
+  async getInvoiceBlob(transactionId) {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      console.log('Fetching invoice for transaction:', transactionId);
+
+      const response = await axios.get(
+        API_ENDPOINTS.ADMIN_TRANSACTION_INVOICE(transactionId),
+        {
+          headers: {
+            'x-auth-token': token,
+          },
+          responseType: 'blob', // Important for PDF
+        }
+      );
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      return { blob, url, success: true };
+    } catch (error) {
+      console.error('Get invoice error:', error);
+      this.handleError(error, 'Failed to fetch invoice');
+    }
+  }
+
+  async downloadInvoice(transactionId) {
+    try {
+      const result = await this.getInvoiceBlob(transactionId);
+      if (!result || !result.success) {
+        throw new Error('Failed to get invoice');
+      }
+
+      // Trigger download
+      const link = document.createElement('a');
+      link.href = result.url;
+      link.download = `Invoice_${transactionId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(result.url);
+
+      console.log('Invoice downloaded successfully');
+      return { success: true };
+    } catch (error) {
+      console.error('Download invoice error:', error);
+      this.handleError(error, 'Failed to download invoice');
+    }
+  }
+
   // ============ PAYOUTS ============
   async getAllPayouts(filters = {}) {
     try {

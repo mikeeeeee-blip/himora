@@ -22,6 +22,14 @@ app.use(express.json({
     }
 }));
 
+// Request logging middleware (for debugging)
+app.use((req, res, next) => {
+    if (req.path.includes('invoice') || req.path.includes('admin/transactions')) {
+        console.log(`🔍 ${req.method} ${req.originalUrl} - Path: ${req.path}`);
+    }
+    next();
+});
+
 // ✅ Start settlement job (runs daily at 4 PM IST)
 settlementJob.start();
 console.log('✅ Settlement cron job started - runs daily at 4:00 PM IST');
@@ -88,6 +96,31 @@ app.use('/api', require('./routes/apiRoutes'));
 app.use('/api/superadmin', require('./routes/superAdminRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/razorpay', require('./routes/razorpayRoutes')); // ✅ NEW
+
+// 404 Handler - Must be after all routes
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        error: `Route not found: ${req.method} ${req.originalUrl}`,
+        message: 'The requested endpoint does not exist'
+    });
+});
+
+// Error Handling Middleware - Must be last
+app.use((err, req, res, next) => {
+    console.error('❌ Server Error:', err);
+    
+    // Don't send response if headers already sent
+    if (res.headersSent) {
+        return next(err);
+    }
+    
+    res.status(err.status || 500).json({
+        success: false,
+        error: err.message || 'Internal server error',
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    });
+});
 
 const PORT = process.env.PORT || 5000;
 
