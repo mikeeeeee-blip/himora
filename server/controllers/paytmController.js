@@ -8,7 +8,18 @@ const { calculatePayinCommission } = require('../utils/commissionCalculator');
 
 // Paytm Configuration
 const PAYTM_MERCHANT_ID = process.env.PAYTM_MERCHANT_ID;
-const PAYTM_MERCHANT_KEY = process.env.PAYTM_MERCHANT_KEY;
+// Handle merchant key with special characters (like #) - trim whitespace and ensure it's not truncated
+let PAYTM_MERCHANT_KEY = process.env.PAYTM_MERCHANT_KEY;
+if (PAYTM_MERCHANT_KEY) {
+    PAYTM_MERCHANT_KEY = PAYTM_MERCHANT_KEY.trim();
+    // Check if key might be truncated (common issue with # characters in .env)
+    if (PAYTM_MERCHANT_KEY.length < 20) {
+        console.warn('⚠️ WARNING: PAYTM_MERCHANT_KEY appears to be truncated or too short!');
+        console.warn('⚠️ If your key contains # characters, wrap it in quotes in your .env file:');
+        console.warn('⚠️ PAYTM_MERCHANT_KEY="#your_full_key_here"');
+        console.warn('⚠️ Current key length:', PAYTM_MERCHANT_KEY.length, 'characters');
+    }
+}
 const PAYTM_WEBSITE = process.env.PAYTM_WEBSITE || 'DEFAULT'; // Should match Paytm Dashboard
 const PAYTM_INDUSTRY_TYPE = process.env.PAYTM_INDUSTRY_TYPE || 'Retail'; // Should match Paytm Dashboard
 const PAYTM_ENVIRONMENT = process.env.PAYTM_ENVIRONMENT || 'production'; // 'staging' or 'production'
@@ -97,6 +108,11 @@ exports.createPaytmPaymentLink = async (req, res) => {
         console.log('✅ Paytm Credentials Check:');
         console.log('   MID:', PAYTM_MERCHANT_ID);
         console.log('   Merchant Key:', PAYTM_MERCHANT_KEY ? PAYTM_MERCHANT_KEY.substring(0, 10) + '...' + PAYTM_MERCHANT_KEY.substring(PAYTM_MERCHANT_KEY.length - 5) : 'MISSING');
+        console.log('   Merchant Key Length:', PAYTM_MERCHANT_KEY ? PAYTM_MERCHANT_KEY.length : 0, 'characters');
+        if (PAYTM_MERCHANT_KEY && PAYTM_MERCHANT_KEY.length < 20) {
+            console.warn('   ⚠️ WARNING: Merchant key is unusually short! Paytm keys are typically 32+ characters.');
+            console.warn('   ⚠️ Please verify PAYTM_MERCHANT_KEY in your .env matches your Paytm Dashboard exactly.');
+        }
         console.log('   WEBSITE:', PAYTM_WEBSITE);
         console.log('   INDUSTRY_TYPE_ID:', PAYTM_INDUSTRY_TYPE);
 
@@ -850,6 +866,12 @@ function generatePaytmChecksum(params, merchantKey) {
     console.log('   - Merchant Key length:', merchantKey.length);
     console.log('   - Merchant Key (first 10):', merchantKey.substring(0, 10) + '...');
     console.log('   - Merchant Key (last 5):', '...' + merchantKey.substring(merchantKey.length - 5));
+    
+    // Validate merchant key length (Paytm keys are typically 32+ characters)
+    if (merchantKey.length < 16) {
+        console.warn('   ⚠️ WARNING: Merchant key seems unusually short! Paytm keys are typically 32+ characters.');
+        console.warn('   ⚠️ Please verify the merchant key in your Paytm Dashboard matches the one in .env');
+    }
 
     // Remove CHECKSUMHASH if present
     const filteredParams = { ...params };
@@ -890,6 +912,9 @@ function generatePaytmChecksum(params, merchantKey) {
             value = String(value);
         }
         
+        // Special handling for CALLBACK_URL - Paytm might require it as-is or URL-encoded
+        // For now, we'll use it as-is (most Paytm implementations use raw URL)
+        // If this fails, we might need to URL-encode it
         const pair = `${key}=${value}`;
         console.log(`   - ${key} (${originalType}): "${value}" -> "${pair}"`);
         
