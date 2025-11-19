@@ -24,7 +24,7 @@ const PAYTM_WEBSITE = process.env.PAYTM_WEBSITE || 'DEFAULT'; // Should match Pa
 const PAYTM_INDUSTRY_TYPE = process.env.PAYTM_INDUSTRY_TYPE || 'Retail'; // Should match Paytm Dashboard
 const PAYTM_ENVIRONMENT = process.env.PAYTM_ENVIRONMENT || 'production'; // 'staging' or 'production'
 const PAYTM_BASE_URL = PAYTM_ENVIRONMENT === 'staging' 
-    ? 'https://securegw-stage.paytm.in'
+    ? 'https://securegw.paytm.in'
     : 'https://securegw.paytm.in';
 
 // ============ CREATE PAYTM PAYMENT LINK ============
@@ -185,10 +185,16 @@ exports.createPaytmPaymentLink = async (req, res) => {
         console.log(JSON.stringify(paramsForLog, null, 2));
 
         console.log('\n⚠️ CRITICAL: Verify these match your Paytm Dashboard EXACTLY:');
-        console.log('   - WEBSITE:', PAYTM_WEBSITE, '(case-sensitive, must match Dashboard)');
-        console.log('   - INDUSTRY_TYPE_ID:', PAYTM_INDUSTRY_TYPE, '(case-sensitive, must match Dashboard)');
+        console.log('   - WEBSITE:', PAYTM_WEBSITE, '(case-sensitive, must match Dashboard EXACTLY)');
+        console.log('   - INDUSTRY_TYPE_ID:', PAYTM_INDUSTRY_TYPE, '(case-sensitive, must match Dashboard EXACTLY)');
         console.log('   - MID:', PAYTM_MERCHANT_ID, '(must match Dashboard)');
-        console.log('   - Merchant Key:', PAYTM_MERCHANT_KEY ? 'SET (verify it matches Dashboard)' : 'MISSING!');
+        console.log('   - Merchant Key:', PAYTM_MERCHANT_KEY ? `SET (${PAYTM_MERCHANT_KEY.length} chars - verify it matches Dashboard)` : 'MISSING!');
+        console.log('\n💡 TROUBLESHOOTING TIPS:');
+        console.log('   1. Go to Paytm Dashboard → Settings → API Keys');
+        console.log('   2. Check WEBSITE name (might be "DEFAULT", "WEBSTAGING", or custom)');
+        console.log('   3. Check INDUSTRY_TYPE_ID (might be "Retail", "Retail109", "Retail120", etc.)');
+        console.log('   4. These values are CASE-SENSITIVE and must match EXACTLY');
+        console.log('   5. Even a single character difference will cause "Invalid checksum" error');
 
         console.log('\n📤 Payment Link Details:');
         console.log('   Transaction ID:', transactionId);
@@ -912,9 +918,8 @@ function generatePaytmChecksum(params, merchantKey) {
             value = String(value);
         }
         
-        // Special handling for CALLBACK_URL - Paytm might require it as-is or URL-encoded
-        // For now, we'll use it as-is (most Paytm implementations use raw URL)
-        // If this fails, we might need to URL-encode it
+        // Note: Paytm typically expects CALLBACK_URL as-is (not URL-encoded) in checksum
+        // But we'll use it exactly as provided
         const pair = `${key}=${value}`;
         console.log(`   - ${key} (${originalType}): "${value}" -> "${pair}"`);
         
