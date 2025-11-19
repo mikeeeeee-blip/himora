@@ -39,12 +39,12 @@ module.exports = async function (req, res, next) {
         req.merchantId = user._id;  // MongoDB ObjectId
         req.merchantName = user.name || user.businessName;
         
-        console.log('✅ JWT Auth Success:', {
-            userId: user._id.toString(),
-            merchantId: user._id.toString(),
-            merchantName: user.name,
-            role: user.role
-        });
+        // console.log('✅ JWT Auth Success:', {
+        //     userId: user._id.toString(),
+        //     merchantId: user._id.toString(),
+        //     merchantName: user.name,
+        //     role: user.role
+        // });
         
         next();
     } catch (err) {
