@@ -372,8 +372,8 @@ console.log(url);
       const api = response.data || {};
       const normalized = {
         paymentLink: api.payment_url || null,
-        linkId: api.payment_link_id || null,
-        orderId: api.transaction_id || null,
+        linkId: api.payment_link_id || api.order_id || null,
+        orderId: api.order_id || api.transaction_id || null,
         transactionId: api.transaction_id || null,
         amount: api.order_amount || paymentData?.amount || null,
         currency: api.order_currency || 'INR',
@@ -387,6 +387,10 @@ console.log(url);
         expiresAt: api.expires_at ? new Date(api.expires_at * 1000).toISOString() : null,
         message: api.message || 'Payment link created successfully',
         success: api.success || false,
+        // Paytm specific fields
+        paytmParams: api.paytm_params || null,
+        paytmPaymentUrl: api.payment_url || null,
+        // PhonePe fields (for backward compatibility)
         phonepe_deep_link : api.phonepe_deep_link,
         gpay_deep_link :  api.gpay_deep_link,
         gpay_intent : api.gpay_intent,

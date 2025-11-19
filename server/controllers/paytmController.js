@@ -1,0 +1,833 @@
+const crypto = require('crypto');
+const axios = require('axios');
+const Transaction = require('../models/Transaction');
+const { sendMerchantWebhook } = require('./merchantWebhookController');
+const User = require('../models/User');
+const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
+const { calculatePayinCommission } = require('../utils/commissionCalculator');
+
+// Paytm Configuration
+const PAYTM_MERCHANT_ID = process.env.PAYTM_MERCHANT_ID;
+const PAYTM_MERCHANT_KEY = process.env.PAYTM_MERCHANT_KEY;
+const PAYTM_WEBSITE = process.env.PAYTM_WEBSITE || 'DEFAULT'; // Should match Paytm Dashboard
+const PAYTM_INDUSTRY_TYPE = process.env.PAYTM_INDUSTRY_TYPE || 'Retail'; // Should match Paytm Dashboard
+const PAYTM_ENVIRONMENT = process.env.PAYTM_ENVIRONMENT || 'production'; // 'staging' or 'production'
+const PAYTM_BASE_URL = PAYTM_ENVIRONMENT === 'staging' 
+    ? 'https://securegw-stage.paytm.in'
+    : 'https://securegw.paytm.in';
+
+// ============ CREATE PAYTM PAYMENT LINK ============
+exports.createPaytmPaymentLink = async (req, res) => {
+    try {
+        const {
+            amount,
+            customer_name,
+            customer_email,
+            customer_phone,
+            description,
+            callback_url,
+            success_url,
+            failure_url
+        } = req.body;
+
+        // Get merchant info from apiKeyAuth middleware
+        const merchantId = req.merchantId;
+        const merchantName = req.merchantName;
+
+        console.log('📤 Paytm Payment Link request from:', merchantName);
+
+        // Validate input
+        if (!amount || !customer_name || !customer_email || !customer_phone) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: amount, customer_name, customer_email, customer_phone'
+            });
+        }
+
+        // Validate phone
+        if (!/^[0-9]{10}$/.test(customer_phone)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid phone number. Must be 10 digits.'
+            });
+        }
+
+        // Validate email
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer_email)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid email address'
+            });
+        }
+
+        // Validate amount
+        if (parseFloat(amount) < 1) {
+            return res.status(400).json({
+                success: false,
+                error: 'Amount must be at least ₹1'
+            });
+        }
+
+        // Validate Paytm credentials
+        if (!PAYTM_MERCHANT_ID || !PAYTM_MERCHANT_KEY) {
+            return res.status(500).json({
+                success: false,
+                error: 'Paytm credentials not configured. Please set PAYTM_MERCHANT_ID and PAYTM_MERCHANT_KEY in environment variables.'
+            });
+        }
+
+        // Generate unique IDs
+        const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        const orderId = `ORDER_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        const referenceId = `REF_${Date.now()}`;
+
+        // Get merchant's configured URLs or use provided ones
+        const merchant = await User.findById(merchantId);
+
+        // Priority: API provided URL > Merchant configured URL > Default URL
+        const finalCallbackUrl = callback_url ||
+            merchant.successUrl ||
+            `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
+
+        // Paytm callback URL - points to our callback handler
+        const paytmCallbackUrl = `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/paytm/callback?transaction_id=${transactionId}`;
+
+        // Prepare Paytm payment request parameters
+        // Paytm expects TXN_AMOUNT as a string with 2 decimal places (e.g., "100.00" for ₹100)
+        const amountFormatted = parseFloat(amount).toFixed(2);
+
+        // Validate Paytm credentials
+        if (!PAYTM_MERCHANT_ID || !PAYTM_MERCHANT_KEY) {
+            return res.status(500).json({
+                success: false,
+                error: 'Paytm credentials not configured. Please set PAYTM_MERCHANT_ID and PAYTM_MERCHANT_KEY in environment variables.'
+            });
+        }
+
+        // Create checksum for Paytm request (without CHECKSUMHASH first)
+        // Note: Parameter names and values must match exactly what's in Paytm Dashboard
+        const paytmParams = {
+            MID: PAYTM_MERCHANT_ID,
+            ORDER_ID: orderId,
+            CUST_ID: `CUST_${customer_phone}_${Date.now()}`,
+            INDUSTRY_TYPE_ID: PAYTM_INDUSTRY_TYPE,
+            CHANNEL_ID: 'WEB',
+            TXN_AMOUNT: amountFormatted, // Format: "100.00" (not in paise)
+            WEBSITE: PAYTM_WEBSITE, // Must match Paytm Dashboard configuration
+            CALLBACK_URL: paytmCallbackUrl,
+            EMAIL: customer_email,
+            MOBILE_NO: customer_phone
+        };
+
+        console.log('📋 Paytm Parameters (before checksum):', {
+            MID: '***',
+            ORDER_ID: paytmParams.ORDER_ID,
+            CUST_ID: paytmParams.CUST_ID,
+            INDUSTRY_TYPE_ID: paytmParams.INDUSTRY_TYPE_ID,
+            CHANNEL_ID: paytmParams.CHANNEL_ID,
+            TXN_AMOUNT: paytmParams.TXN_AMOUNT,
+            WEBSITE: paytmParams.WEBSITE,
+            CALLBACK_URL: paytmParams.CALLBACK_URL.substring(0, 50) + '...',
+            EMAIL: paytmParams.EMAIL,
+            MOBILE_NO: paytmParams.MOBILE_NO
+        });
+
+        // Generate checksum (don't include CHECKSUMHASH in the params when generating)
+        const checksum = generatePaytmChecksum(paytmParams, PAYTM_MERCHANT_KEY);
+        paytmParams.CHECKSUMHASH = checksum;
+
+        console.log('🔐 Generated Checksum:', checksum);
+        console.log('📦 Paytm Params (without key):', JSON.stringify({ ...paytmParams, MID: '***', CHECKSUMHASH: '***' }, null, 2));
+        console.log('⚠️ IMPORTANT: Verify these match your Paytm Dashboard:');
+        console.log('   - WEBSITE:', PAYTM_WEBSITE, '(must match Dashboard exactly)');
+        console.log('   - INDUSTRY_TYPE_ID:', PAYTM_INDUSTRY_TYPE, '(must match Dashboard exactly)');
+        console.log('   - MID:', PAYTM_MERCHANT_ID, '(must match Dashboard exactly)');
+
+        console.log('📤 Creating Paytm Payment Link...');
+        console.log('🔗 Callback URL:', finalCallbackUrl);
+        console.log('📦 Order ID:', orderId);
+
+        // Save transaction to database first
+        const transaction = new Transaction({
+            transactionId: transactionId,
+            orderId: orderId,
+            merchantId: merchantId,
+            merchantName: merchantName,
+
+            // Customer Details
+            customerId: `CUST_${customer_phone}_${Date.now()}`,
+            customerName: customer_name,
+            customerEmail: customer_email,
+            customerPhone: customer_phone,
+
+            // Payment Details
+            amount: parseFloat(amount),
+            currency: 'INR',
+            description: description || `Payment for ${merchantName}`,
+
+            // Status
+            status: 'created',
+
+            // Paytm Data
+            paymentGateway: 'paytm',
+            paytmOrderId: orderId,
+            paytmReferenceId: referenceId,
+
+            // Store callback URLs
+            callbackUrl: finalCallbackUrl,
+            successUrl: success_url,
+            failureUrl: failure_url,
+
+            // Timestamps
+            createdAt: new Date(),
+            updatedAt: new Date()
+        });
+
+        await transaction.save();
+        console.log('💾 Transaction saved:', transactionId);
+
+        // Return payment form URL (Paytm uses form-based payment)
+        const paymentUrl = `${PAYTM_BASE_URL}/theia/processTransaction`;
+
+        res.json({
+            success: true,
+            transaction_id: transactionId,
+            payment_link_id: orderId,
+            payment_url: paymentUrl,
+            order_id: orderId,
+            order_amount: parseFloat(amount),
+            order_currency: 'INR',
+            merchant_id: merchantId.toString(),
+            merchant_name: merchantName,
+            reference_id: referenceId,
+            callback_url: finalCallbackUrl,
+            paytm_params: paytmParams, // Include params for frontend to submit form
+            message: 'Payment link created successfully. Use payment_url and paytm_params to create payment form.'
+        });
+
+    } catch (error) {
+        console.error('❌ Create Paytm Payment Link Error:', error);
+        console.error('❌ Error details:', {
+            message: error.message,
+            error: error.response?.data || error.error,
+            statusCode: error.response?.status || error.statusCode,
+            stack: error.stack
+        });
+
+        let errorMessage = 'Failed to create payment link';
+        let errorDetails = null;
+
+        if (error.response?.data) {
+            errorMessage = error.response.data.errorMessage || error.response.data.message || errorMessage;
+            errorDetails = error.response.data;
+        } else if (error.message) {
+            errorMessage = error.message;
+            errorDetails = { message: error.message };
+        }
+
+        const statusCode = error.response?.status || error.statusCode || 500;
+
+        res.status(statusCode).json({
+            success: false,
+            error: errorMessage,
+            details: errorDetails
+        });
+    }
+};
+
+// ============ PAYTM CALLBACK HANDLER ============
+/**
+ * Handle Paytm payment callback (POST request after payment)
+ * This is called when user is redirected back from Paytm payment page
+ */
+exports.handlePaytmCallback = async (req, res) => {
+    try {
+        // Paytm can send data via POST (body) or GET (query params)
+        const { transaction_id } = req.query;
+        const paytmResponse = req.method === 'POST' ? req.body : req.query;
+
+        console.log('🔔 Paytm Callback received');
+        console.log('   - Method:', req.method);
+        console.log('   - Transaction ID:', transaction_id);
+        console.log('   - Paytm Response:', JSON.stringify(paytmResponse, null, 2));
+
+        // If transaction_id is in query but not in response, use query
+        const finalTransactionId = transaction_id || paytmResponse.transaction_id;
+        
+        if (!finalTransactionId) {
+            console.warn('❌ Missing transaction_id in callback');
+            const frontendUrl = (process.env.FRONTEND_URL || 'https://payments.ninex-group.com').replace(/:\d+$/, '').replace(/\/$/, '');
+            // if (frontendUrl === 'localhost' || frontendUrl.startsWith('localhost')) {
+            //     return res.redirect(`https://payments.ninex-group.com/payment-failed?error=missing_transaction_id`);
+            // }
+            return res.redirect(`${frontendUrl}/payment-failed?error=missing_transaction_id`);
+        }
+
+        // Find transaction
+        const transaction = await Transaction.findOne({ transactionId: finalTransactionId }).populate('merchantId');
+
+        if (!transaction) {
+            console.warn('⚠️ Transaction not found for transactionId:', finalTransactionId);
+            const frontendUrl = (process.env.FRONTEND_URL || 'https://payments.ninex-group.com').replace(/:\d+$/, '').replace(/\/$/, '');
+            if (frontendUrl === 'localhost' || frontendUrl.startsWith('localhost')) {
+                return res.redirect(`https://payments.ninex-group.com/payment-failed?error=transaction_not_found`);
+            }
+            return res.redirect(`${frontendUrl}/payment-failed?error=transaction_not_found`);
+        }
+
+        // Verify checksum from Paytm response (if present)
+        // Note: Paytm may not always send checksum in callback, so we verify payment status via API instead
+        if (paytmResponse.CHECKSUMHASH) {
+            const isValidChecksum = verifyPaytmChecksum(paytmResponse, PAYTM_MERCHANT_KEY, paytmResponse.CHECKSUMHASH);
+            if (!isValidChecksum) {
+                console.warn('❌ Invalid Paytm checksum in callback');
+                console.warn('   - This might be okay if Paytm callback format differs');
+                console.warn('   - We will verify payment status via Paytm API instead');
+            } else {
+                console.log('✅ Paytm callback checksum verified');
+            }
+        } else {
+            console.log('⚠️ No checksum in Paytm callback, will verify via API');
+        }
+
+        // Check payment status
+        const status = paytmResponse.STATUS || paytmResponse.RESPCODE;
+        const orderId = paytmResponse.ORDERID;
+        const txnId = paytmResponse.TXNID;
+        // Paytm returns TXNAMOUNT as "100.00" (in rupees), not in paise
+        const amount = paytmResponse.TXNAMOUNT ? parseFloat(paytmResponse.TXNAMOUNT) : transaction.amount;
+
+        // If payment was successful, verify with Paytm API
+        if (status === 'TXN_SUCCESS' || paytmResponse.RESPCODE === '01') {
+            try {
+                // Verify payment status with Paytm
+                const verificationResult = await verifyPaytmPayment(orderId);
+
+                if (verificationResult && verificationResult.STATUS === 'TXN_SUCCESS') {
+                    // Payment is successful, update transaction if not already updated
+                    if (transaction.status !== 'paid') {
+                        const paidAt = new Date();
+                        const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+
+                        // Calculate commission if not already set
+                        const commissionData = calculatePayinCommission(amount);
+
+                        const update = {
+                            status: 'paid',
+                            paidAt,
+                            paymentMethod: paytmResponse.PAYMENTMODE || 'UPI',
+                            paytmPaymentId: txnId,
+                            paytmOrderId: orderId,
+                            updatedAt: new Date(),
+                            acquirerData: {
+                                utr: paytmResponse.BANKTXNID || null,
+                                rrn: paytmResponse.RRN || null,
+                                bank_transaction_id: paytmResponse.BANKTXNID || null,
+                                bank_name: paytmResponse.BANKNAME || null,
+                                vpa: paytmResponse.PAYMENTMODE === 'UPI' ? paytmResponse.PAYMENTMODE : null
+                            },
+                            settlementStatus: 'unsettled',
+                            expectedSettlementDate: expectedSettlement,
+                            commission: commissionData.commission,
+                            netAmount: parseFloat((amount - commissionData.commission).toFixed(2)),
+                            webhookData: paytmResponse
+                        };
+
+                        const updatedTransaction = await Transaction.findOneAndUpdate(
+                            { transactionId: finalTransactionId },
+                            update,
+                            { new: true }
+                        ).populate('merchantId');
+
+                        if (updatedTransaction && updatedTransaction.merchantId.webhookEnabled) {
+                            const webhookPayload = {
+                                event: 'payment.success',
+                                timestamp: new Date().toISOString(),
+                                transaction_id: updatedTransaction.transactionId,
+                                order_id: updatedTransaction.orderId,
+                                merchant_id: updatedTransaction.merchantId._id.toString(),
+                                data: {
+                                    transaction_id: updatedTransaction.transactionId,
+                                    order_id: updatedTransaction.orderId,
+                                    paytm_order_id: updatedTransaction.paytmOrderId,
+                                    paytm_payment_id: updatedTransaction.paytmPaymentId,
+                                    paytm_reference_id: updatedTransaction.paytmReferenceId,
+                                    amount: updatedTransaction.amount,
+                                    currency: updatedTransaction.currency,
+                                    status: updatedTransaction.status,
+                                    payment_method: updatedTransaction.paymentMethod,
+                                    paid_at: updatedTransaction.paidAt.toISOString(),
+                                    settlement_status: updatedTransaction.settlementStatus,
+                                    expected_settlement_date: updatedTransaction.expectedSettlementDate.toISOString(),
+                                    acquirer_data: updatedTransaction.acquirerData,
+                                    customer: {
+                                        customer_id: updatedTransaction.customerId,
+                                        name: updatedTransaction.customerName,
+                                        email: updatedTransaction.customerEmail,
+                                        phone: updatedTransaction.customerPhone
+                                    },
+                                    merchant: {
+                                        merchant_id: updatedTransaction.merchantId._id.toString(),
+                                        merchant_name: updatedTransaction.merchantName
+                                    },
+                                    description: updatedTransaction.description,
+                                    created_at: updatedTransaction.createdAt.toISOString(),
+                                    updated_at: updatedTransaction.updatedAt.toISOString()
+                                }
+                            };
+
+                            await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
+                        }
+
+                        console.log('✅ Transaction updated via callback:', transaction_id);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Error verifying payment with Paytm:', error);
+                // Continue to redirect even if verification fails
+            }
+        } else {
+            // Payment failed
+            const failureReason = paytmResponse.RESPMSG || paytmResponse.STATUS || 'Payment failed';
+            
+            if (transaction.status !== 'failed') {
+                await Transaction.findOneAndUpdate(
+                    { transactionId: transaction_id },
+                    {
+                        status: 'failed',
+                        failureReason: failureReason,
+                        paytmPaymentId: txnId,
+                        updatedAt: new Date(),
+                        webhookData: paytmResponse
+                    }
+                );
+            }
+        }
+
+        // Helper function to get clean frontend URL
+        const getFrontendUrl = () => {
+            let frontendUrl = process.env.FRONTEND_URL || 'https://payments.ninex-group.com';
+            // Remove port from URL if it's a devtunnels URL or localhost (they don't need ports)
+            frontendUrl = frontendUrl.replace(/:\d+$/, '').replace(/\/$/, '');
+            // If it's localhost without protocol, add http://
+            if (frontendUrl.startsWith('localhost')) {
+                frontendUrl = `http://${frontendUrl}`;
+            }
+            // If it's just 'localhost', use the default
+            if (frontendUrl === 'http://localhost' || frontendUrl === 'localhost') {
+                frontendUrl = 'https://payments.ninex-group.com';
+            }
+            return frontendUrl;
+        };
+
+        // Redirect to success or failure URL
+        // Note: If Paytm returns "Invalid checksum" (RESPCODE: 330), it means the payment link creation had wrong checksum
+        // In this case, we should still redirect but log the error
+        if (status === 'TXN_SUCCESS' || paytmResponse.RESPCODE === '01') {
+            const cleanFrontendUrl = getFrontendUrl();
+            
+            const redirectUrl = transaction.successUrl ||
+                transaction.callbackUrl ||
+                `${cleanFrontendUrl}/payment-success?transaction_id=${finalTransactionId}`;
+            
+            console.log('🔀 Redirecting to success URL:', redirectUrl);
+            return res.redirect(redirectUrl);
+        } else {
+            // Log the failure reason for debugging
+            console.error('❌ Paytm Payment Failed:', {
+                status: status,
+                respcode: paytmResponse.RESPCODE,
+                respmsg: paytmResponse.RESPMSG,
+                orderId: orderId,
+                transactionId: finalTransactionId
+            });
+            
+            const cleanFrontendUrl = getFrontendUrl();
+            
+            const redirectUrl = transaction.failureUrl ||
+                `${cleanFrontendUrl}/payment-failed?transaction_id=${finalTransactionId}&error=${encodeURIComponent(paytmResponse.RESPMSG || 'Payment failed')}`;
+            
+            console.log('🔀 Redirecting to failure URL:', redirectUrl);
+            console.log('   - FRONTEND_URL env:', process.env.FRONTEND_URL);
+            console.log('   - Cleaned URL:', cleanFrontendUrl);
+            return res.redirect(redirectUrl);
+        }
+
+    } catch (error) {
+        console.error('❌ Paytm Callback Handler Error:', error);
+        const frontendUrl = (process.env.FRONTEND_URL || 'https://payments.ninex-group.com').replace(/:\d+$/, '').replace(/\/$/, '');
+        if (frontendUrl === 'localhost' || frontendUrl.startsWith('localhost')) {
+            return res.redirect(`https://payments.ninex-group.com/payment-failed?error=callback_error`);
+        }
+        return res.redirect(`${frontendUrl}/payment-failed?error=callback_error`);
+    }
+};
+
+// ============ PAYTM WEBHOOK HANDLER ============
+/**
+ * Handle Paytm webhook events
+ */
+exports.handlePaytmWebhook = async (req, res) => {
+    try {
+        console.log('🔔 Paytm Webhook received');
+
+        // Log request details for debugging
+        const userAgent = req.headers['user-agent'] || 'Unknown';
+        const ip = req.ip || req.connection.remoteAddress || 'Unknown';
+        console.log(`   - IP: ${ip}`);
+        console.log(`   - User-Agent: ${userAgent}`);
+        console.log(`   - Content-Type: ${req.headers['content-type'] || 'Not set'}`);
+
+        // Get payload
+        const payload = req.body || {};
+
+        if (!payload || Object.keys(payload).length === 0) {
+            console.warn('❌ Webhook received with empty payload');
+            return res.status(400).json({
+                success: false,
+                error: 'Empty webhook payload'
+            });
+        }
+
+        console.log('📦 Paytm Webhook Payload:', JSON.stringify(payload, null, 2));
+
+        // Verify checksum if present
+        if (payload.CHECKSUMHASH) {
+            const isValidChecksum = verifyPaytmChecksum(payload, PAYTM_MERCHANT_KEY, payload.CHECKSUMHASH);
+            if (!isValidChecksum) {
+                console.warn('❌ Invalid Paytm webhook checksum');
+                return res.status(401).json({
+                    success: false,
+                    error: 'Invalid checksum'
+                });
+            }
+            console.log('✅ Paytm webhook checksum verified');
+        }
+
+        // Extract order ID and transaction ID
+        const orderId = payload.ORDERID || payload.orderId;
+        const txnId = payload.TXNID || payload.txnId;
+        const status = payload.STATUS || payload.status;
+
+        if (!orderId) {
+            console.warn('❌ Missing ORDERID in webhook payload');
+            return res.status(400).json({
+                success: false,
+                error: 'Missing ORDERID in payload'
+            });
+        }
+
+        // Find transaction by order ID
+        const transaction = await Transaction.findOne({
+            $or: [
+                { paytmOrderId: orderId },
+                { orderId: orderId }
+            ]
+        }).populate('merchantId');
+
+        if (!transaction) {
+            console.warn('⚠️ Transaction not found for orderId:', orderId);
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found'
+            });
+        }
+
+        // Handle different statuses
+        if (status === 'TXN_SUCCESS' || payload.RESPCODE === '01') {
+            await handlePaytmPaymentSuccess(transaction, payload);
+        } else {
+            await handlePaytmPaymentFailed(transaction, payload);
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Webhook processed'
+        });
+
+    } catch (error) {
+        console.error('❌ Paytm Webhook Handler Error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Webhook processing failed'
+        });
+    }
+};
+
+// ============ PAYTM WEBHOOK HANDLERS ============
+
+/**
+ * Handle successful Paytm payment
+ */
+async function handlePaytmPaymentSuccess(transaction, payload) {
+    try {
+        console.log('💡 handlePaytmPaymentSuccess triggered');
+        console.log('📦 Transaction ID:', transaction.transactionId);
+
+        // Prevent duplicate updates if already paid
+        if (transaction.status === 'paid') {
+            console.log('⚠️ Transaction already marked as paid, skipping update');
+            return;
+        }
+
+        const amount = payload.TXNAMOUNT ? parseFloat(payload.TXNAMOUNT) / 100 : transaction.amount;
+        const paidAt = new Date(payload.TXNDATE || Date.now());
+        const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+        const commissionData = calculatePayinCommission(amount);
+
+        // Build atomic update object
+        const update = {
+            $set: {
+                status: 'paid',
+                paidAt,
+                paymentMethod: payload.PAYMENTMODE || 'UPI',
+                paytmPaymentId: payload.TXNID || payload.txnId,
+                paytmOrderId: payload.ORDERID || payload.orderId,
+                updatedAt: new Date(),
+                acquirerData: {
+                    utr: payload.BANKTXNID || null,
+                    rrn: payload.RRN || null,
+                    bank_transaction_id: payload.BANKTXNID || null,
+                    bank_name: payload.BANKNAME || null,
+                    vpa: payload.PAYMENTMODE === 'UPI' ? payload.PAYMENTMODE : null
+                },
+                settlementStatus: 'unsettled',
+                expectedSettlementDate: expectedSettlement,
+                webhookData: payload,
+                commission: commissionData.commission,
+                netAmount: parseFloat((amount - commissionData.commission).toFixed(2))
+            }
+        };
+
+        // Update transaction atomically
+        const updatedTransaction = await Transaction.findOneAndUpdate(
+            {
+                _id: transaction._id,
+                status: { $ne: 'paid' } // Only update if not already paid
+            },
+            update,
+            { new: true, upsert: false }
+        ).populate('merchantId');
+
+        if (!updatedTransaction) {
+            console.warn('⚠️ Failed to update transaction');
+            return;
+        }
+
+        console.log(`💾 Transaction updated: ${updatedTransaction.transactionId}`);
+        console.log(`   - Status: ${updatedTransaction.status}`);
+        console.log(`   - Paid at: ${paidAt.toISOString()}`);
+
+        // Send merchant webhook if enabled
+        if (updatedTransaction.merchantId.webhookEnabled) {
+            const webhookPayload = {
+                event: 'payment.success',
+                timestamp: new Date().toISOString(),
+                transaction_id: updatedTransaction.transactionId,
+                order_id: updatedTransaction.orderId,
+                merchant_id: updatedTransaction.merchantId._id.toString(),
+                data: {
+                    transaction_id: updatedTransaction.transactionId,
+                    order_id: updatedTransaction.orderId,
+                    paytm_order_id: updatedTransaction.paytmOrderId,
+                    paytm_payment_id: updatedTransaction.paytmPaymentId,
+                    paytm_reference_id: updatedTransaction.paytmReferenceId,
+                    amount: updatedTransaction.amount,
+                    currency: updatedTransaction.currency,
+                    status: updatedTransaction.status,
+                    payment_method: updatedTransaction.paymentMethod,
+                    paid_at: updatedTransaction.paidAt.toISOString(),
+                    settlement_status: updatedTransaction.settlementStatus,
+                    expected_settlement_date: updatedTransaction.expectedSettlementDate.toISOString(),
+                    acquirer_data: updatedTransaction.acquirerData,
+                    customer: {
+                        customer_id: updatedTransaction.customerId,
+                        name: updatedTransaction.customerName,
+                        email: updatedTransaction.customerEmail,
+                        phone: updatedTransaction.customerPhone
+                    },
+                    merchant: {
+                        merchant_id: updatedTransaction.merchantId._id.toString(),
+                        merchant_name: updatedTransaction.merchantName
+                    },
+                    description: updatedTransaction.description,
+                    created_at: updatedTransaction.createdAt.toISOString(),
+                    updated_at: updatedTransaction.updatedAt.toISOString()
+                }
+            };
+
+            await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
+        }
+
+        console.log('✅ Paytm payment webhook processed successfully');
+
+    } catch (error) {
+        console.error('❌ handlePaytmPaymentSuccess error:', error.stack || error.message);
+    }
+}
+
+/**
+ * Handle failed Paytm payment
+ */
+async function handlePaytmPaymentFailed(transaction, payload) {
+    try {
+        console.log('💡 handlePaytmPaymentFailed triggered');
+
+        const failureReason = payload.RESPMSG || payload.STATUS || 'Payment failed';
+
+        // Update transaction atomically
+        const update = {
+            $set: {
+                status: 'failed',
+                failureReason: failureReason,
+                paytmPaymentId: payload.TXNID || payload.txnId,
+                updatedAt: new Date(),
+                webhookData: payload
+            }
+        };
+
+        const updatedTransaction = await Transaction.findOneAndUpdate(
+            { _id: transaction._id },
+            update,
+            { new: true }
+        ).populate('merchantId');
+
+        if (!updatedTransaction) {
+            console.warn('⚠️ Failed to update transaction');
+            return;
+        }
+
+        console.log('❌ Paytm Transaction marked as FAILED:', updatedTransaction.transactionId);
+
+        // Send merchant webhook if enabled
+        if (updatedTransaction.merchantId.webhookEnabled) {
+            const webhookPayload = {
+                event: 'payment.failed',
+                timestamp: new Date().toISOString(),
+                transaction_id: updatedTransaction.transactionId,
+                order_id: updatedTransaction.orderId,
+                merchant_id: updatedTransaction.merchantId._id.toString(),
+                data: {
+                    transaction_id: updatedTransaction.transactionId,
+                    order_id: updatedTransaction.orderId,
+                    paytm_order_id: updatedTransaction.paytmOrderId,
+                    paytm_payment_id: updatedTransaction.paytmPaymentId,
+                    status: updatedTransaction.status,
+                    failure_reason: updatedTransaction.failureReason,
+                    created_at: updatedTransaction.createdAt.toISOString(),
+                    updated_at: updatedTransaction.updatedAt.toISOString()
+                }
+            };
+
+            await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
+        }
+
+    } catch (error) {
+        console.error('❌ handlePaytmPaymentFailed error:', error.message);
+    }
+}
+
+// ============ PAYTM UTILITY FUNCTIONS ============
+
+/**
+ * Generate Paytm checksum
+ * Paytm uses SHA256 with specific string format: key1=value1&key2=value2&...&key=merchantKey
+ * Important: Only include non-empty values, sort alphabetically, and append &key=merchantKey
+ */
+function generatePaytmChecksum(params, merchantKey) {
+    if (!merchantKey) {
+        throw new Error('Merchant key is required for checksum generation');
+    }
+
+    // Remove CHECKSUMHASH if present
+    const filteredParams = { ...params };
+    delete filteredParams.CHECKSUMHASH;
+
+    // Filter out empty values and convert all values to strings, then sort keys alphabetically
+    const sortedKeys = Object.keys(filteredParams)
+        .filter(key => {
+            const value = filteredParams[key];
+            return value !== null && value !== undefined && value !== '';
+        })
+        .sort();
+
+    // Create string: key1=value1&key2=value2&...
+    // Ensure all values are strings (Paytm is strict about this)
+    // Important: Paytm expects exact values - no trimming, no extra encoding
+    const dataString = sortedKeys
+        .map(key => {
+            let value = filteredParams[key];
+            // Convert to string but preserve exact value
+            if (typeof value !== 'string') {
+                value = String(value);
+            }
+            // Don't trim or modify - use exact value
+            return `${key}=${value}`;
+        })
+        .join('&');
+
+    // Append merchant key: ...&key=merchantKey
+    const finalString = `${dataString}&key=${merchantKey}`;
+
+    // Log full checksum string for debugging (hide merchant key)
+    const maskedString = finalString.replace(new RegExp(merchantKey, 'g'), '***MERCHANT_KEY***');
+    console.log('🔐 Full Checksum String:', maskedString);
+    console.log('🔐 Sorted Keys:', sortedKeys.join(', '));
+    console.log('🔐 Parameter Count:', sortedKeys.length);
+
+    // Generate SHA256 hash and convert to uppercase
+    const hash = crypto
+        .createHash('sha256')
+        .update(finalString, 'utf8')
+        .digest('hex')
+        .toUpperCase();
+
+    console.log('🔐 Generated Checksum (first 20 chars):', hash.substring(0, 20) + '...');
+
+    return hash;
+}
+
+/**
+ * Verify Paytm checksum
+ */
+function verifyPaytmChecksum(params, merchantKey, checksum) {
+    if (!checksum) return false;
+
+    // Generate checksum using same method
+    const calculatedChecksum = generatePaytmChecksum(params, merchantKey);
+
+    // Compare (case-insensitive)
+    return calculatedChecksum.toLowerCase() === checksum.toLowerCase();
+}
+
+/**
+ * Verify Paytm payment status
+ */
+async function verifyPaytmPayment(orderId) {
+    try {
+        const params = {
+            MID: PAYTM_MERCHANT_ID,
+            ORDERID: orderId,
+            CHECKSUMHASH: ''
+        };
+
+        const checksum = generatePaytmChecksum(params, PAYTM_MERCHANT_KEY);
+        params.CHECKSUMHASH = checksum;
+
+        const response = await axios.post(
+            `${PAYTM_BASE_URL}/merchant-status/getTxnStatus`,
+            params,
+            {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        return response.data;
+    } catch (error) {
+        console.error('❌ Error verifying Paytm payment:', error);
+        throw error;
+    }
+}
+

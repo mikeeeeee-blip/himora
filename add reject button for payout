@@ -1,0 +1,12 @@
+add reject button for payout 
+
+provide a option for superadmin to download the invoice of each paid transaction 
+  - make a invoce generator for each paid transaction with each collective information 
+  - there will be some products so based on the amount of the transaction there will be some products in the invoice
+  - so example for 1000rs transaction there will be 10 products in the invoice and each product will have the name and the quantity and the price
+  - it will balance the amount of the transaction and the amount of the products
+  - we will use discount to balance the sheet 
+  - generate the complete pfd 
+
+
+add the page for new signup 

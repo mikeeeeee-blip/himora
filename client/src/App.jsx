@@ -25,6 +25,8 @@ import AuthWrapper from "./components/AuthWrapper";
 import SuperadminLayout from "./components/SuperadminLayout";
 import { USER_ROLES } from "./constants/api";
 import TransactionDetailPage from "./components/pages/TransactionDetailPage";
+import PaymentSuccess from "./components/pages/PaymentSuccess";
+import PaymentFailed from "./components/pages/PaymentFailed";
 
 function App() {
   return (
@@ -163,6 +165,10 @@ function App() {
             </AuthWrapper>
           }
         />
+        {/* Payment Result Pages (Public - No Auth Required) */}
+        <Route path="/payment-success" element={<PaymentSuccess />} />
+        <Route path="/payment-failed" element={<PaymentFailed />} />
+        
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>

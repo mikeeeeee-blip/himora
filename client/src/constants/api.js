@@ -28,8 +28,8 @@ export const API_ENDPOINTS = {
   BALANCE: `${BASE_URL}/payments/merchant/balance`,
   
   // ============ PAYMENT LINK CREATION (API Key Auth) ============
-  CREATE_LINK: `${BASE_URL}/razorpay/create-payment-link`,
-  VERIFY_PAYMENT: `${BASE_URL}/razorpay/verify-payment`,
+  CREATE_LINK: `${BASE_URL}/paytm/create-payment-link`,
+  VERIFY_PAYMENT: `${BASE_URL}/paytm/verify-payment`,
   
   // ============ PAYMENT STATUS (API Key Auth) ============
   PAYMENT_STATUS: (orderId) => `${BASE_URL}/payments/status/${orderId}`,
@@ -74,8 +74,11 @@ export const API_ENDPOINTS = {
   // ============ SUPERADMIN - TRANSACTIONS ============
   ADMIN_TRANSACTIONS: `${BASE_URL}/payments/admin/transactions`,
   ADMIN_SETTLE_TRANSACTION: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}/settle`,
+  ADMIN_UPDATE_TRANSACTION_STATUS: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}/status`,
   
-  // ============ RAZORPAY WEBHOOK (No Auth) ============
+  // ============ PAYTM WEBHOOK (No Auth) ============
+  PAYTM_WEBHOOK: `${BASE_URL}/paytm/webhook`,
+  // ============ RAZORPAY WEBHOOK (No Auth) - Kept for backward compatibility ============
   RAZORPAY_WEBHOOK: `${BASE_URL}/razorpay/webhook`,
 };
 

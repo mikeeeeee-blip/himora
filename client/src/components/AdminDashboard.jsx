@@ -921,9 +921,29 @@ const AdminDashboard = () => {
     }
   };
 
-  const openPaymentLink = (url) => {
-    if (url) {
-      window.open(url, "_blank", "noopener,noreferrer");
+  const openPaymentLink = (url, paytmParams) => {
+    if (paytmParams && url) {
+      // Paytm requires form submission
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = url;
+      form.target = '_blank';
+      
+      // Add all Paytm parameters as hidden inputs
+      Object.keys(paytmParams).forEach(key => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = paytmParams[key];
+        form.appendChild(input);
+      });
+      
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+    } else if (url) {
+      // Regular URL opening for other payment gateways
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -1935,7 +1955,7 @@ const AdminDashboard = () => {
                           </button>
                           <button
                             onClick={() =>
-                              openPaymentLink(createdPaymentLink.paymentLink || createdPaymentLink.payment_url)
+                              openPaymentLink(createdPaymentLink.paymentLink || createdPaymentLink.payment_url || createdPaymentLink.paytmPaymentUrl, createdPaymentLink.paytmParams)
                             }
                             className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-1.5"
                             title="Open link"

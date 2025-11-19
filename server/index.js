@@ -88,6 +88,7 @@ app.use('/api', require('./routes/apiRoutes'));
 app.use('/api/superadmin', require('./routes/superAdminRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/razorpay', require('./routes/razorpayRoutes')); // ✅ NEW
+app.use('/api/paytm', require('./routes/paytmRoutes')); // ✅ NEW
 
 const PORT = process.env.PORT || 5000;
 

@@ -23,10 +23,15 @@ const TransactionSchema = new mongoose.Schema({
     razorpayOrderId: String,
     razorpayReferenceId: String,
     
+    // Paytm Fields
+    paytmOrderId: String,
+    paytmPaymentId: String,
+    paytmReferenceId: String,
+    
  
     
     // Payment Gateway
-    paymentGateway: String, // 'razorpay' or 'cashfree'
+    paymentGateway: String, // 'razorpay', 'paytm', 'phonepe', or 'cashfree'
     
     // URLs
     callbackUrl: String,
@@ -177,6 +182,8 @@ TransactionSchema.index({ transactionId: 1 });
 TransactionSchema.index({ status: 1 });
 TransactionSchema.index({ 'acquirerData.utr': 1 }); // ✅ Index for UTR search
 TransactionSchema.index({ razorpayPaymentId: 1 });
+TransactionSchema.index({ paytmOrderId: 1 });
+TransactionSchema.index({ paytmPaymentId: 1 });
 TransactionSchema.index({ customerEmail: 1 });
 TransactionSchema.index({ customerPhone: 1 });
 
