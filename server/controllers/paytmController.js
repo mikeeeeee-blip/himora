@@ -1,6 +1,14 @@
 const crypto = require('crypto');
 const axios = require('axios');
-const PaytmChecksum = require('paytmchecksum');
+let PaytmChecksum;
+try {
+    PaytmChecksum = require('paytmchecksum');
+    console.log('✅ PaytmChecksum SDK loaded successfully');
+} catch (error) {
+    console.error('❌ Failed to load PaytmChecksum SDK:', error.message);
+    console.error('   Please run: npm install paytmchecksum');
+    throw error;
+}
 const Transaction = require('../models/Transaction');
 const { sendMerchantWebhook } = require('./merchantWebhookController');
 const User = require('../models/User');
@@ -893,9 +901,22 @@ async function generatePaytmChecksum(params, merchantKey) {
         // Use official Paytm SDK to generate checksum
         // The SDK accepts either an object or JSON string - we'll pass the object directly
         console.log('   Step 3: Generate Checksum using Paytm SDK');
-        console.log('   - Passing params object to PaytmChecksum.generateSignature()');
+        console.log('   - SDK Method: PaytmChecksum.generateSignature()');
+        console.log('   - Passing params object (not JSON string) to SDK');
+        console.log('   - Merchant Key length:', merchantKey.length);
+        
+        // Verify SDK is available
+        if (!PaytmChecksum || !PaytmChecksum.generateSignature) {
+            throw new Error('PaytmChecksum SDK not available. Please install: npm install paytmchecksum');
+        }
+        
         const checksum = await PaytmChecksum.generateSignature(paramsForChecksum, merchantKey);
         
+        if (!checksum || typeof checksum !== 'string') {
+            throw new Error(`Invalid checksum returned from SDK: ${typeof checksum}`);
+        }
+        
+        console.log('   ✅ SDK Checksum Generated Successfully');
         console.log('   - Checksum (first 30 chars):', checksum.substring(0, 30) + '...');
         console.log('   - Checksum (last 10 chars):', '...' + checksum.substring(checksum.length - 10));
         console.log('   - Checksum Length:', checksum.length, 'characters');
@@ -906,8 +927,10 @@ async function generatePaytmChecksum(params, merchantKey) {
 
         return checksum;
     } catch (error) {
-        console.error('❌ Error generating checksum with Paytm SDK:', error.message);
-        console.error('   Error details:', error);
+        console.error('❌ Error generating checksum with Paytm SDK:');
+        console.error('   Error Message:', error.message);
+        console.error('   Error Stack:', error.stack);
+        console.error('   Params sent to SDK:', JSON.stringify(paramsForChecksum, null, 2));
         throw new Error(`Failed to generate Paytm checksum: ${error.message}`);
     }
 }
