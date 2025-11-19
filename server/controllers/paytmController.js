@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const axios = require('axios');
+const PaytmChecksum = require('paytmchecksum');
 const Transaction = require('../models/Transaction');
 const { sendMerchantWebhook } = require('./merchantWebhookController');
 const User = require('../models/User');
@@ -169,8 +170,8 @@ exports.createPaytmPaymentLink = async (req, res) => {
         console.log('   Total Parameters:', Object.keys(paytmParams).length);
 
         // Generate checksum (don't include CHECKSUMHASH in the params when generating)
-        console.log('\n🔐 Generating Checksum...');
-        const checksum = generatePaytmChecksum(paytmParams, PAYTM_MERCHANT_KEY);
+        console.log('\n🔐 Generating Checksum using official Paytm SDK...');
+        const checksum = await generatePaytmChecksum(paytmParams, PAYTM_MERCHANT_KEY);
         paytmParams.CHECKSUMHASH = checksum;
 
         console.log('\n✅ Checksum Generated Successfully');
@@ -362,8 +363,8 @@ exports.handlePaytmCallback = async (req, res) => {
         // Verify checksum from Paytm response (if present)
         // Note: Paytm may not always send checksum in callback, so we verify payment status via API instead
         if (paytmResponse.CHECKSUMHASH) {
-            console.log('\n🔍 Verifying Paytm Callback Checksum...');
-            const isValidChecksum = verifyPaytmChecksum(paytmResponse, PAYTM_MERCHANT_KEY, paytmResponse.CHECKSUMHASH);
+            console.log('\n🔍 Verifying Paytm Callback Checksum using official SDK...');
+            const isValidChecksum = await verifyPaytmChecksum(paytmResponse, PAYTM_MERCHANT_KEY, paytmResponse.CHECKSUMHASH);
             if (!isValidChecksum) {
                 console.warn('❌ Invalid Paytm checksum in callback');
                 console.warn('   - Received Checksum:', paytmResponse.CHECKSUMHASH.substring(0, 30) + '...');
@@ -616,7 +617,7 @@ exports.handlePaytmWebhook = async (req, res) => {
 
         // Verify checksum if present
         if (payload.CHECKSUMHASH) {
-            const isValidChecksum = verifyPaytmChecksum(payload, PAYTM_MERCHANT_KEY, payload.CHECKSUMHASH);
+            const isValidChecksum = await verifyPaytmChecksum(payload, PAYTM_MERCHANT_KEY, payload.CHECKSUMHASH);
             if (!isValidChecksum) {
                 console.warn('❌ Invalid Paytm webhook checksum');
                 return res.status(401).json({
@@ -853,13 +854,12 @@ async function handlePaytmPaymentFailed(transaction, payload) {
 // ============ PAYTM UTILITY FUNCTIONS ============
 
 /**
- * Generate Paytm checksum
- * Paytm uses SHA256 with specific string format: key1=value1&key2=value2&...&key=merchantKey
- * Important: Only include non-empty values, sort alphabetically, and append &key=merchantKey
+ * Generate Paytm checksum using official Paytm SDK
+ * This uses the official PaytmChecksum library which handles all edge cases correctly
  */
-function generatePaytmChecksum(params, merchantKey) {
+async function generatePaytmChecksum(params, merchantKey) {
     console.log('\n' + '-'.repeat(80));
-    console.log('🔐 CHECKSUM GENERATION - DETAILED LOG');
+    console.log('🔐 CHECKSUM GENERATION - USING OFFICIAL PAYTM SDK');
     console.log('-'.repeat(80));
 
     if (!merchantKey) {
@@ -873,102 +873,65 @@ function generatePaytmChecksum(params, merchantKey) {
     console.log('   - Merchant Key (first 10):', merchantKey.substring(0, 10) + '...');
     console.log('   - Merchant Key (last 5):', '...' + merchantKey.substring(merchantKey.length - 5));
     
-    // Validate merchant key length (Paytm keys are typically 32+ characters)
+    // Validate merchant key length
     if (merchantKey.length < 16) {
         console.warn('   ⚠️ WARNING: Merchant key seems unusually short! Paytm keys are typically 32+ characters.');
         console.warn('   ⚠️ Please verify the merchant key in your Paytm Dashboard matches the one in .env');
     }
 
-    // Remove CHECKSUMHASH if present
-    const filteredParams = { ...params };
-    const hadChecksum = 'CHECKSUMHASH' in filteredParams;
-    delete filteredParams.CHECKSUMHASH;
+    // Remove CHECKSUMHASH if present (don't include it in checksum generation)
+    const paramsForChecksum = { ...params };
+    const hadChecksum = 'CHECKSUMHASH' in paramsForChecksum;
+    delete paramsForChecksum.CHECKSUMHASH;
     
-    console.log('   Step 2: Remove CHECKSUMHASH');
+    console.log('   Step 2: Prepare Parameters');
     console.log('   - Had CHECKSUMHASH:', hadChecksum);
-    console.log('   - Params after removal:', Object.keys(filteredParams).length);
+    console.log('   - Params for checksum:', Object.keys(paramsForChecksum).length);
+    console.log('   - Parameters:', JSON.stringify(paramsForChecksum, null, 2));
 
-    // Filter out empty values and convert all values to strings, then sort keys alphabetically
-    console.log('   Step 3: Filter and Sort Parameters');
-    const allKeys = Object.keys(filteredParams);
-    console.log('   - All keys before filtering:', allKeys.join(', '));
-    
-    const sortedKeys = allKeys
-        .filter(key => {
-            const value = filteredParams[key];
-            const isEmpty = value === null || value === undefined || value === '';
-            if (isEmpty) {
-                console.log(`   - Filtered out (empty): ${key} = ${value}`);
-            }
-            return !isEmpty;
-        })
-        .sort();
-
-    console.log('   - Keys after filtering:', sortedKeys.length);
-    console.log('   - Sorted keys:', sortedKeys.join(', '));
-
-    // Create string: key1=value1&key2=value2&...
-    console.log('   Step 4: Build Parameter String');
-    const paramPairs = sortedKeys.map(key => {
-        let value = filteredParams[key];
-        const originalType = typeof value;
+    try {
+        // Use official Paytm SDK to generate checksum
+        // The SDK accepts either an object or JSON string - we'll pass the object directly
+        console.log('   Step 3: Generate Checksum using Paytm SDK');
+        console.log('   - Passing params object to PaytmChecksum.generateSignature()');
+        const checksum = await PaytmChecksum.generateSignature(paramsForChecksum, merchantKey);
         
-        // Convert to string but preserve exact value
-        if (typeof value !== 'string') {
-            value = String(value);
-        }
+        console.log('   - Checksum (first 30 chars):', checksum.substring(0, 30) + '...');
+        console.log('   - Checksum (last 10 chars):', '...' + checksum.substring(checksum.length - 10));
+        console.log('   - Checksum Length:', checksum.length, 'characters');
         
-        // Note: Paytm typically expects CALLBACK_URL as-is (not URL-encoded) in checksum
-        // But we'll use it exactly as provided
-        const pair = `${key}=${value}`;
-        console.log(`   - ${key} (${originalType}): "${value}" -> "${pair}"`);
-        
-        return pair;
-    });
+        console.log('-'.repeat(80));
+        console.log('✅ Checksum Generation Complete (using official Paytm SDK)');
+        console.log('-'.repeat(80) + '\n');
 
-    const dataString = paramPairs.join('&');
-    console.log('   - Data String (without key):', dataString);
-    console.log('   - Data String Length:', dataString.length, 'characters');
-
-    // Append merchant key: ...&key=merchantKey
-    const finalString = `${dataString}&key=${merchantKey}`;
-    console.log('   Step 5: Append Merchant Key');
-    console.log('   - Final String Length:', finalString.length, 'characters');
-    
-    // Log full checksum string for debugging (hide merchant key)
-    const maskedString = finalString.replace(new RegExp(merchantKey, 'g'), '***MERCHANT_KEY***');
-    console.log('   - Final String (masked):', maskedString);
-    console.log('   - Final String (first 100 chars):', finalString.substring(0, 100));
-    console.log('   - Final String (last 50 chars):', '...' + finalString.substring(finalString.length - 50));
-
-    // Generate SHA256 hash and convert to uppercase
-    console.log('   Step 6: Generate SHA256 Hash');
-    const hashBuffer = crypto.createHash('sha256').update(finalString, 'utf8').digest();
-    const hashHex = hashBuffer.toString('hex');
-    const hash = hashHex.toUpperCase();
-    
-    console.log('   - Hash (lowercase):', hashHex);
-    console.log('   - Hash (uppercase):', hash);
-    console.log('   - Hash Length:', hash.length, 'characters (expected: 64)');
-
-    console.log('-'.repeat(80));
-    console.log('✅ Checksum Generation Complete');
-    console.log('-'.repeat(80) + '\n');
-
-    return hash;
+        return checksum;
+    } catch (error) {
+        console.error('❌ Error generating checksum with Paytm SDK:', error.message);
+        console.error('   Error details:', error);
+        throw new Error(`Failed to generate Paytm checksum: ${error.message}`);
+    }
 }
 
 /**
- * Verify Paytm checksum
+ * Verify Paytm checksum using official Paytm SDK
  */
-function verifyPaytmChecksum(params, merchantKey, checksum) {
+async function verifyPaytmChecksum(params, merchantKey, checksum) {
     if (!checksum) return false;
 
-    // Generate checksum using same method
-    const calculatedChecksum = generatePaytmChecksum(params, merchantKey);
+    try {
+        // Remove CHECKSUMHASH from params for verification
+        const paramsForVerification = { ...params };
+        delete paramsForVerification.CHECKSUMHASH;
+        
+        // Generate checksum using official SDK (pass object directly)
+        const calculatedChecksum = await PaytmChecksum.generateSignature(paramsForVerification, merchantKey);
 
-    // Compare (case-insensitive)
-    return calculatedChecksum.toLowerCase() === checksum.toLowerCase();
+        // Compare (case-insensitive)
+        return calculatedChecksum.toLowerCase() === checksum.toLowerCase();
+    } catch (error) {
+        console.error('❌ Error verifying checksum with Paytm SDK:', error.message);
+        return false;
+    }
 }
 
 /**
@@ -978,11 +941,10 @@ async function verifyPaytmPayment(orderId) {
     try {
         const params = {
             MID: PAYTM_MERCHANT_ID,
-            ORDERID: orderId,
-            CHECKSUMHASH: ''
+            ORDERID: orderId
         };
 
-        const checksum = generatePaytmChecksum(params, PAYTM_MERCHANT_KEY);
+        const checksum = await generatePaytmChecksum(params, PAYTM_MERCHANT_KEY);
         params.CHECKSUMHASH = checksum;
 
         const response = await axios.post(
