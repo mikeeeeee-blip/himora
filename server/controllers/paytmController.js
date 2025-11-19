@@ -32,8 +32,13 @@ if (PAYTM_MERCHANT_KEY) {
 const PAYTM_WEBSITE = process.env.PAYTM_WEBSITE || 'DEFAULT'; // Should match Paytm Dashboard
 const PAYTM_INDUSTRY_TYPE = process.env.PAYTM_INDUSTRY_TYPE || 'Retail'; // Should match Paytm Dashboard
 const PAYTM_ENVIRONMENT = process.env.PAYTM_ENVIRONMENT || 'production'; // 'staging' or 'production'
+// Paytm API URLs - New API structure
 const PAYTM_BASE_URL = PAYTM_ENVIRONMENT === 'staging' 
-    ? 'https://securegw.paytm.in'
+    ? 'https://securestage.paytmpayments.com'
+    : 'https://secure.paytmpayments.com';
+// Legacy form-based URL (for backward compatibility)
+const PAYTM_FORM_URL = PAYTM_ENVIRONMENT === 'staging'
+    ? 'https://securegw-stage.paytm.in'
     : 'https://securegw.paytm.in';
 
 // ============ CREATE PAYTM PAYMENT LINK ============
@@ -141,75 +146,96 @@ exports.createPaytmPaymentLink = async (req, res) => {
         // Paytm callback URL - points to our callback handler
         const paytmCallbackUrl = `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/paytm/callback?transaction_id=${transactionId}`;
 
-        // Prepare Paytm payment request parameters
-        // Paytm expects TXN_AMOUNT as a string with 2 decimal places (e.g., "100.00" for ₹100)
+        // Prepare Paytm payment request parameters using NEW API structure
+        // Based on latest Paytm documentation: https://paytmpayments.com/docs/checksum/
         const amountFormatted = parseFloat(amount).toFixed(2);
         console.log('💰 Amount Formatting:');
         console.log('   Original:', amount);
         console.log('   Parsed:', parseFloat(amount));
-        console.log('   Formatted (TXN_AMOUNT):', amountFormatted);
+        console.log('   Formatted (value):', amountFormatted);
 
-        // Create checksum for Paytm request (without CHECKSUMHASH first)
-        // Note: Parameter names and values must match exactly what's in Paytm Dashboard
+        // NEW Paytm API structure (as per latest documentation)
         const paytmParams = {
+            body: {
+                requestType: "Payment",
+                mid: PAYTM_MERCHANT_ID,
+                websiteName: PAYTM_WEBSITE, // Must match Paytm Dashboard
+                orderId: orderId,
+                callbackUrl: paytmCallbackUrl,
+                txnAmount: {
+                    value: amountFormatted,
+                    currency: "INR"
+                },
+                userInfo: {
+                    custId: `CUST_${customer_phone}_${Date.now()}`,
+                    mobile: customer_phone,
+                    email: customer_email,
+                    firstName: customer_name.split(' ')[0] || customer_name,
+                    lastName: customer_name.split(' ').slice(1).join(' ') || ''
+                }
+            }
+        };
+
+        // Also keep old format for form-based submission (if needed)
+        const paytmFormParams = {
             MID: PAYTM_MERCHANT_ID,
             ORDER_ID: orderId,
             CUST_ID: `CUST_${customer_phone}_${Date.now()}`,
             INDUSTRY_TYPE_ID: PAYTM_INDUSTRY_TYPE,
             CHANNEL_ID: 'WEB',
-            TXN_AMOUNT: amountFormatted, // Format: "100.00" (not in paise)
-            WEBSITE: PAYTM_WEBSITE, // Must match Paytm Dashboard configuration
+            TXN_AMOUNT: amountFormatted,
+            WEBSITE: PAYTM_WEBSITE,
             CALLBACK_URL: paytmCallbackUrl,
             EMAIL: customer_email,
             MOBILE_NO: customer_phone
         };
 
-        console.log('\n📋 Paytm Parameters (BEFORE checksum generation):');
-        console.log('   MID:', paytmParams.MID);
-        console.log('   ORDER_ID:', paytmParams.ORDER_ID);
-        console.log('   CUST_ID:', paytmParams.CUST_ID);
-        console.log('   INDUSTRY_TYPE_ID:', paytmParams.INDUSTRY_TYPE_ID, '(⚠️ MUST match Dashboard)');
-        console.log('   CHANNEL_ID:', paytmParams.CHANNEL_ID);
-        console.log('   TXN_AMOUNT:', paytmParams.TXN_AMOUNT, '(type:', typeof paytmParams.TXN_AMOUNT + ')');
-        console.log('   WEBSITE:', paytmParams.WEBSITE, '(⚠️ MUST match Dashboard)');
-        console.log('   CALLBACK_URL:', paytmParams.CALLBACK_URL);
-        console.log('   EMAIL:', paytmParams.EMAIL);
-        console.log('   MOBILE_NO:', paytmParams.MOBILE_NO);
-        console.log('   Total Parameters:', Object.keys(paytmParams).length);
+        console.log('\n📋 Paytm Parameters (NEW API Structure):');
+        console.log('   body.requestType:', paytmParams.body.requestType);
+        console.log('   body.mid:', paytmParams.body.mid);
+        console.log('   body.websiteName:', paytmParams.body.websiteName, '(⚠️ MUST match Dashboard)');
+        console.log('   body.orderId:', paytmParams.body.orderId);
+        console.log('   body.callbackUrl:', paytmParams.body.callbackUrl);
+        console.log('   body.txnAmount.value:', paytmParams.body.txnAmount.value);
+        console.log('   body.txnAmount.currency:', paytmParams.body.txnAmount.currency);
+        console.log('   body.userInfo.custId:', paytmParams.body.userInfo.custId);
 
-        // Generate checksum (don't include CHECKSUMHASH in the params when generating)
-        console.log('\n🔐 Generating Checksum using official Paytm SDK...');
-        const checksum = await generatePaytmChecksum(paytmParams, PAYTM_MERCHANT_KEY);
-        paytmParams.CHECKSUMHASH = checksum;
+        // Generate checksum using NEW API structure (checksum is generated from body only)
+        console.log('\n🔐 Generating Checksum using official Paytm SDK (NEW API)...');
+        console.log('   - Generating checksum from body object only (as per latest Paytm docs)');
+        const checksum = await PaytmChecksum.generateSignature(JSON.stringify(paytmParams.body), PAYTM_MERCHANT_KEY);
+        
+        // Add checksum to head.signature (NEW API structure)
+        paytmParams.head = {
+            signature: checksum
+        };
 
         console.log('\n✅ Checksum Generated Successfully');
         console.log('   Checksum (first 30 chars):', checksum.substring(0, 30) + '...');
         console.log('   Checksum (last 10 chars):', '...' + checksum.substring(checksum.length - 10));
         console.log('   Checksum Length:', checksum.length, 'characters');
 
-        console.log('\n📦 Final Paytm Parameters (for form submission):');
+        console.log('\n📦 Final Paytm Parameters (NEW API Structure):');
         const paramsForLog = { ...paytmParams };
-        paramsForLog.MID = '***HIDDEN***';
-        paramsForLog.CHECKSUMHASH = checksum.substring(0, 20) + '...' + checksum.substring(checksum.length - 10);
+        if (paramsForLog.body?.mid) paramsForLog.body.mid = '***HIDDEN***';
+        if (paramsForLog.head?.signature) paramsForLog.head.signature = checksum.substring(0, 20) + '...' + checksum.substring(checksum.length - 10);
         console.log(JSON.stringify(paramsForLog, null, 2));
 
         console.log('\n⚠️ CRITICAL: Verify these match your Paytm Dashboard EXACTLY:');
-        console.log('   - WEBSITE:', PAYTM_WEBSITE, '(case-sensitive, must match Dashboard EXACTLY)');
-        console.log('   - INDUSTRY_TYPE_ID:', PAYTM_INDUSTRY_TYPE, '(case-sensitive, must match Dashboard EXACTLY)');
-        console.log('   - MID:', PAYTM_MERCHANT_ID, '(must match Dashboard)');
+        console.log('   - websiteName:', paytmParams.body.websiteName, '(case-sensitive, must match Dashboard EXACTLY)');
+        console.log('   - mid:', paytmParams.body.mid, '(must match Dashboard)');
         console.log('   - Merchant Key:', PAYTM_MERCHANT_KEY ? `SET (${PAYTM_MERCHANT_KEY.length} chars - verify it matches Dashboard)` : 'MISSING!');
         console.log('\n💡 TROUBLESHOOTING TIPS:');
         console.log('   1. Go to Paytm Dashboard → Settings → API Keys');
-        console.log('   2. Check WEBSITE name (might be "DEFAULT", "WEBSTAGING", or custom)');
-        console.log('   3. Check INDUSTRY_TYPE_ID (might be "Retail", "Retail109", "Retail120", etc.)');
-        console.log('   4. These values are CASE-SENSITIVE and must match EXACTLY');
-        console.log('   5. Even a single character difference will cause "Invalid checksum" error');
+        console.log('   2. Check websiteName (might be "DEFAULT", "WEBSTAGING", or custom)');
+        console.log('   3. These values are CASE-SENSITIVE and must match EXACTLY');
+        console.log('   4. Even a single character difference will cause "Invalid checksum" error');
 
         console.log('\n📤 Payment Link Details:');
         console.log('   Transaction ID:', transactionId);
         console.log('   Order ID:', orderId);
         console.log('   Amount: ₹', amount, '(formatted as:', amountFormatted + ')');
-        console.log('   Paytm Payment URL:', `${PAYTM_BASE_URL}/theia/processTransaction`);
+        console.log('   Paytm API Endpoint:', `${PAYTM_BASE_URL}/theia/api/v1/initiateTransaction`);
         console.log('   Callback URL:', paytmCallbackUrl);
         console.log('   Success Redirect:', finalCallbackUrl);
 
@@ -252,24 +278,77 @@ exports.createPaytmPaymentLink = async (req, res) => {
         await transaction.save();
         console.log('💾 Transaction saved:', transactionId);
 
-        // Return payment form URL (Paytm uses form-based payment)
-        const paymentUrl = `${PAYTM_BASE_URL}/theia/processTransaction`;
+        // Call Paytm NEW API to initiate transaction
+        console.log('\n📤 Calling Paytm API to initiate transaction...');
+        const initiateUrl = `${PAYTM_BASE_URL}/theia/api/v1/initiateTransaction?mid=${PAYTM_MERCHANT_ID}&orderId=${orderId}`;
+        console.log('   API Endpoint:', initiateUrl);
+        console.log('   Request Payload:', JSON.stringify(paytmParams, null, 2));
 
-        res.json({
-            success: true,
-            transaction_id: transactionId,
-            payment_link_id: orderId,
-            payment_url: paymentUrl,
-            order_id: orderId,
-            order_amount: parseFloat(amount),
-            order_currency: 'INR',
-            merchant_id: merchantId.toString(),
-            merchant_name: merchantName,
-            reference_id: referenceId,
-            callback_url: finalCallbackUrl,
-            paytm_params: paytmParams, // Include params for frontend to submit form
-            message: 'Payment link created successfully. Use payment_url and paytm_params to create payment form.'
-        });
+        try {
+            const apiResponse = await axios.post(initiateUrl, paytmParams, {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('✅ Paytm API Response Status:', apiResponse.status);
+            console.log('📦 Paytm API Response:', JSON.stringify(apiResponse.data, null, 2));
+
+            const responseData = apiResponse.data;
+            const paymentUrl = responseData.body?.txnToken 
+                ? `${PAYTM_FORM_URL}/theia/processTransaction?mid=${PAYTM_MERCHANT_ID}&orderId=${orderId}&txnToken=${responseData.body.txnToken}`
+                : responseData.body?.redirectUrl || `${PAYTM_FORM_URL}/theia/processTransaction`;
+
+            // Update transaction with txnToken if available
+            if (responseData.body?.txnToken) {
+                await Transaction.findOneAndUpdate(
+                    { transactionId: transactionId },
+                    { paytmPaymentId: responseData.body.txnToken }
+                );
+            }
+
+            res.json({
+                success: true,
+                transaction_id: transactionId,
+                payment_link_id: orderId,
+                payment_url: paymentUrl,
+                order_id: orderId,
+                order_amount: parseFloat(amount),
+                order_currency: 'INR',
+                merchant_id: merchantId.toString(),
+                merchant_name: merchantName,
+                reference_id: referenceId,
+                callback_url: finalCallbackUrl,
+                txn_token: responseData.body?.txnToken || null,
+                paytm_params: paytmFormParams, // Keep old format for backward compatibility
+                message: 'Payment link created successfully. Use payment_url to redirect user to payment page.'
+            });
+
+        } catch (apiError) {
+            console.error('❌ Paytm API Error:', apiError.response?.data || apiError.message);
+            console.error('   Status:', apiError.response?.status);
+            console.error('   Headers:', apiError.response?.headers);
+            
+            // Fallback: Return form-based payment URL if API call fails
+            console.warn('⚠️ Falling back to form-based payment URL');
+            const fallbackUrl = `${PAYTM_FORM_URL}/theia/processTransaction`;
+            
+            res.json({
+                success: true,
+                transaction_id: transactionId,
+                payment_link_id: orderId,
+                payment_url: fallbackUrl,
+                order_id: orderId,
+                order_amount: parseFloat(amount),
+                order_currency: 'INR',
+                merchant_id: merchantId.toString(),
+                merchant_name: merchantName,
+                reference_id: referenceId,
+                callback_url: finalCallbackUrl,
+                paytm_params: paytmFormParams, // Use old format for form submission
+                message: 'Payment link created. Using form-based payment (API call failed, check logs).'
+            });
+        }
 
     } catch (error) {
         console.error('❌ Create Paytm Payment Link Error:', error);
