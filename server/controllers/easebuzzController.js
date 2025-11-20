@@ -332,14 +332,28 @@ exports.createEasebuzzPaymentLink = async (req, res) => {
             console.log('   Short URL:', shortUrl);
 
             // Update transaction with Easebuzz response data
-            await Transaction.findOneAndUpdate(
+            // IMPORTANT: Store the merchant_txn as easebuzzOrderId - this is what Easebuzz will send back in webhooks
+            const updateResult = await Transaction.findOneAndUpdate(
                 { transactionId: transactionId },
                 { 
                     easebuzzPaymentId: linkId?.toString(),
-                    easebuzzOrderId: merchantTxn,
-                    easebuzzLinkId: linkId?.toString()
-                }
+                    easebuzzOrderId: merchantTxn, // This is the merchant_txn we sent to Easebuzz
+                    easebuzzLinkId: linkId?.toString(),
+                    orderId: merchantTxn // Also update orderId to match for easier lookup
+                },
+                { new: true }
             );
+            
+            console.log('💾 Transaction updated with Easebuzz data:');
+            console.log('   Transaction ID:', transactionId);
+            console.log('   Easebuzz Order ID (merchant_txn):', merchantTxn);
+            console.log('   Easebuzz Link ID:', linkId);
+            console.log('   Update Result:', updateResult ? 'Success' : 'Failed');
+            
+            if (!updateResult) {
+                console.warn('⚠️  WARNING: Failed to update transaction with Easebuzz order ID!');
+                console.warn('   This might cause webhook lookup to fail!');
+            }
 
             // Generate UPI deep links
             const deepLinks = generateUPIDeepLinks({
@@ -763,26 +777,87 @@ exports.handleEasebuzzWebhook = async (req, res) => {
         const orderId = webhookData.order_id || 
                        webhookData.merchant_order_id || 
                        webhookData.merchant_txn ||
-                       webhookData.merchant_txn_id;
+                       webhookData.merchant_txn_id ||
+                       webhookData.merchant_transaction_id ||
+                       webhookData.orderId;
         const transactionId = transaction_id || 
                               webhookData.transaction_id || 
                               webhookData.txn_id ||
-                              webhookData.payment_id;
+                              webhookData.payment_id ||
+                              webhookData.transactionId;
         
-        console.log('🔍 Searching for transaction:');
-        console.log('   Order ID:', orderId);
-        console.log('   Transaction ID:', transactionId);
+        console.log('\n🔍 TRANSACTION SEARCH:');
+        console.log('   📋 Order ID (from webhook):', orderId);
+        console.log('   🆔 Transaction ID (from webhook):', transactionId);
+        console.log('   📋 Transaction ID (from query):', transaction_id);
+        console.log('   📦 All webhook keys:', Object.keys(webhookData).join(', '));
 
-        let transaction;
+        let transaction = null;
+        
+        // Try multiple search strategies
         if (orderId) {
+            console.log('   🔎 Searching by Order ID:', orderId);
             transaction = await Transaction.findOne({ 
                 $or: [
                     { orderId: orderId },
-                    { easebuzzOrderId: orderId }
+                    { easebuzzOrderId: orderId },
+                    { easebuzzOrderId: orderId.toString() }
                 ]
             }).populate('merchantId');
-        } else if (transactionId) {
-            transaction = await Transaction.findOne({ transactionId: transactionId }).populate('merchantId');
+            
+            if (transaction) {
+                console.log('   ✅ Transaction found by Order ID!');
+                console.log('      Transaction ID:', transaction.transactionId);
+                console.log('      Current Status:', transaction.status);
+                console.log('      Easebuzz Order ID:', transaction.easebuzzOrderId);
+            } else {
+                console.log('   ❌ Transaction NOT found by Order ID');
+            }
+        }
+        
+        // If not found by order ID, try transaction ID
+        if (!transaction && transactionId) {
+            console.log('   🔎 Searching by Transaction ID:', transactionId);
+            transaction = await Transaction.findOne({ 
+                $or: [
+                    { transactionId: transactionId },
+                    { transactionId: transactionId.toString() }
+                ]
+            }).populate('merchantId');
+            
+            if (transaction) {
+                console.log('   ✅ Transaction found by Transaction ID!');
+                console.log('      Transaction ID:', transaction.transactionId);
+                console.log('      Current Status:', transaction.status);
+                console.log('      Easebuzz Order ID:', transaction.easebuzzOrderId);
+            } else {
+                console.log('   ❌ Transaction NOT found by Transaction ID');
+            }
+        }
+        
+        // Last resort: search by any matching field in webhook data
+        if (!transaction) {
+            console.log('   🔎 Last resort: Searching by any matching field...');
+            const searchFields = [
+                { easebuzzOrderId: webhookData.merchant_txn },
+                { easebuzzOrderId: webhookData.order_id },
+                { easebuzzOrderId: webhookData.merchant_order_id },
+                { easebuzzPaymentId: webhookData.transaction_id },
+                { easebuzzPaymentId: webhookData.txn_id },
+                { easebuzzPaymentId: webhookData.payment_id }
+            ];
+            
+            for (const searchField of searchFields) {
+                const key = Object.keys(searchField)[0];
+                const value = searchField[key];
+                if (value) {
+                    transaction = await Transaction.findOne({ [key]: value }).populate('merchantId');
+                    if (transaction) {
+                        console.log(`   ✅ Transaction found by ${key}:`, value);
+                        break;
+                    }
+                }
+            }
         }
 
         if (!transaction) {
@@ -798,39 +873,105 @@ exports.handleEasebuzzWebhook = async (req, res) => {
         }
 
         // Extract payment status from various possible fields
+        // Easebuzz may send status in different formats, check all possibilities
         const status = webhookData.status || 
                       webhookData.payment_status || 
                       webhookData.txn_status ||
                       webhookData.transaction_status ||
+                      webhookData.paymentStatus ||
+                      webhookData.state ||
+                      webhookData.payment_state ||
+                      webhookData.result ||
+                      webhookData.response ||
+                      (webhookData.data && webhookData.data.status) ||
+                      (webhookData.data && webhookData.data.payment_status) ||
                       'pending';
         
-        const statusLower = status.toLowerCase();
+        const statusLower = status ? status.toString().toLowerCase().trim() : 'pending';
         
-        console.log('📊 Payment Status:', status);
-        console.log('   Status (normalized):', statusLower);
+        console.log('\n📊 PAYMENT STATUS ANALYSIS:');
+        console.log('   Raw status field:', webhookData.status);
+        console.log('   Raw payment_status field:', webhookData.payment_status);
+        console.log('   Raw txn_status field:', webhookData.txn_status);
+        console.log('   Raw transaction_status field:', webhookData.transaction_status);
+        console.log('   Raw state field:', webhookData.state);
+        console.log('   Raw result field:', webhookData.result);
+        console.log('   Raw response field:', webhookData.response);
+        if (webhookData.data) {
+            console.log('   Raw data.status:', webhookData.data.status);
+            console.log('   Raw data.payment_status:', webhookData.data.payment_status);
+        }
+        console.log('   ✅ Extracted Status:', status);
+        console.log('   ✅ Normalized Status (lowercase):', statusLower);
+        console.log('   📋 All webhook fields:', Object.keys(webhookData).join(', '));
 
         // Handle different payment statuses
-        if (statusLower === 'success' || 
-            statusLower === 'paid' || 
-            statusLower === 'completed' ||
-            statusLower === 'captured') {
+        // Check for success statuses (including numeric codes that might indicate success)
+        const isSuccess = statusLower === 'success' || 
+                         statusLower === 'paid' || 
+                         statusLower === 'completed' ||
+                         statusLower === 'captured' ||
+                         statusLower === '1' ||
+                         statusLower === 'true' ||
+                         status === '1' ||
+                         status === 1 ||
+                         (typeof status === 'number' && status === 1) ||
+                         webhookData.response_code === '1' ||
+                         webhookData.response_code === 1 ||
+                         webhookData.code === '1' ||
+                         webhookData.code === 1;
+        
+        const isFailed = statusLower === 'failed' || 
+                        statusLower === 'failure' ||
+                        statusLower === 'declined' ||
+                        statusLower === 'rejected' ||
+                        statusLower === '0' ||
+                        statusLower === 'false' ||
+                        status === '0' ||
+                        status === 0 ||
+                        (typeof status === 'number' && status === 0) ||
+                        webhookData.response_code === '0' ||
+                        webhookData.response_code === 0 ||
+                        webhookData.code === '0' ||
+                        webhookData.code === 0;
+        
+        const isPending = statusLower === 'pending' || 
+                         statusLower === 'processing' ||
+                         statusLower === 'initiated' ||
+                         statusLower === 'in_progress';
+        
+        const isCancelled = statusLower === 'cancelled' || 
+                           statusLower === 'canceled' ||
+                           statusLower === 'aborted';
+        
+        console.log('\n🎯 STATUS MATCHING:');
+        console.log('   Is Success?', isSuccess);
+        console.log('   Is Failed?', isFailed);
+        console.log('   Is Pending?', isPending);
+        console.log('   Is Cancelled?', isCancelled);
+        
+        if (isSuccess) {
+            console.log('\n✅ ROUTING TO: handleEasebuzzPaymentSuccess');
             await handleEasebuzzPaymentSuccess(transaction, webhookData);
-        } else if (statusLower === 'failed' || 
-                   statusLower === 'failure' ||
-                   statusLower === 'declined' ||
-                   statusLower === 'rejected') {
+        } else if (isFailed) {
+            console.log('\n❌ ROUTING TO: handleEasebuzzPaymentFailed');
             await handleEasebuzzPaymentFailed(transaction, webhookData);
-        } else if (statusLower === 'pending' || 
-                   statusLower === 'processing' ||
-                   statusLower === 'initiated') {
+        } else if (isPending) {
+            console.log('\n⏳ ROUTING TO: handleEasebuzzPaymentPending');
             await handleEasebuzzPaymentPending(transaction, webhookData);
-        } else if (statusLower === 'cancelled' || 
-                   statusLower === 'canceled' ||
-                   statusLower === 'aborted') {
+        } else if (isCancelled) {
+            console.log('\n🚫 ROUTING TO: handleEasebuzzPaymentCancelled');
             await handleEasebuzzPaymentCancelled(transaction, webhookData);
         } else {
-            console.warn('⚠️ Unknown payment status:', status);
+            console.warn('\n⚠️ UNKNOWN PAYMENT STATUS - Status not recognized!');
+            console.warn('   Status value:', status);
+            console.warn('   Status type:', typeof status);
+            console.warn('   Full webhook payload:', JSON.stringify(webhookData, null, 2));
+            console.warn('   ⚠️  Transaction status will NOT be updated automatically');
+            console.warn('   ⚠️  Please check Easebuzz documentation for correct status values');
+            
             // Update transaction with webhook data but don't change status
+            // This allows us to see the raw webhook data in the database
             await Transaction.findOneAndUpdate(
                 { _id: transaction._id },
                 { 
@@ -838,6 +979,7 @@ exports.handleEasebuzzWebhook = async (req, res) => {
                     updatedAt: new Date()
                 }
             );
+            console.warn('   ℹ️  Transaction webhookData field updated with raw payload');
         }
 
         const processingTime = Date.now() - startTime;
@@ -1008,11 +1150,19 @@ exports.handleUPIRedirect = (req, res) => {
 // ============ HANDLE EASEBUZZ PAYMENT SUCCESS ============
 async function handleEasebuzzPaymentSuccess(transaction, payload) {
     try {
-        console.log('💡 handleEasebuzzPaymentSuccess triggered');
+        console.log('\n' + '💰'.repeat(40));
+        console.log('💰 HANDLE EASEBUZZ PAYMENT SUCCESS - STARTED 💰');
+        console.log('💰'.repeat(40));
+        console.log('   🆔 Transaction ID:', transaction.transactionId);
+        console.log('   📋 Order ID:', transaction.orderId);
+        console.log('   📊 Current Status:', transaction.status);
+        console.log('   💵 Amount:', transaction.amount);
+        console.log('   📦 Payload:', JSON.stringify(payload, null, 2));
 
         // Prevent duplicate processing
         if (transaction.status === 'paid') {
             console.log('⚠️ Transaction already marked as paid, skipping update');
+            console.log('💰'.repeat(40) + '\n');
             return;
         }
 
@@ -1039,6 +1189,11 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
             }
         };
 
+        console.log('\n💾 Attempting to update transaction in database...');
+        console.log('   Update Query:', JSON.stringify(update, null, 2));
+        console.log('   Transaction ID:', transaction._id);
+        console.log('   Current Status:', transaction.status);
+        
         const updatedTransaction = await Transaction.findOneAndUpdate(
             { _id: transaction._id, status: { $ne: 'paid' } },
             update,
@@ -1046,15 +1201,34 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
         ).populate('merchantId');
 
         if (!updatedTransaction) {
-            console.warn('⚠️ Failed to update transaction (may have been updated already)');
+            console.warn('\n⚠️ WARNING: Failed to update transaction!');
+            console.warn('   Possible reasons:');
+            console.warn('   1. Transaction was already marked as paid');
+            console.warn('   2. Transaction ID not found');
+            console.warn('   3. Database connection issue');
+            
+            // Try to find the transaction again to see its current state
+            const currentTransaction = await Transaction.findById(transaction._id);
+            if (currentTransaction) {
+                console.warn('   Current transaction status:', currentTransaction.status);
+                console.warn('   Current transaction ID:', currentTransaction.transactionId);
+            } else {
+                console.warn('   Transaction not found in database!');
+            }
+            console.log('💰'.repeat(40) + '\n');
             return;
         }
 
-        console.log('✅ Easebuzz Transaction marked as PAID:', updatedTransaction.transactionId);
-        console.log('   Payment ID:', paymentId);
-        console.log('   Amount: ₹', amount);
-        console.log('   Commission: ₹', commission);
-        console.log('   Net Amount: ₹', netAmount);
+        console.log('\n✅✅✅ TRANSACTION SUCCESSFULLY UPDATED TO PAID ✅✅✅');
+        console.log('   🆔 Transaction ID:', updatedTransaction.transactionId);
+        console.log('   📋 Order ID:', updatedTransaction.orderId);
+        console.log('   💰 Payment ID:', paymentId);
+        console.log('   💵 Amount: ₹', amount);
+        console.log('   💸 Commission: ₹', commission);
+        console.log('   💵 Net Amount: ₹', netAmount);
+        console.log('   📊 New Status:', updatedTransaction.status);
+        console.log('   ⏰ Paid At:', updatedTransaction.paidAt);
+        console.log('💰'.repeat(40) + '\n');
 
         // Send merchant webhook if enabled
         if (updatedTransaction.merchantId.webhookEnabled) {
