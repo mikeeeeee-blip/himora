@@ -18,6 +18,7 @@ import SuperadminTransactionsPage from "./components/pages/SuperadminTransaction
 import SuperadminUpdateTransactionsPage from "./components/pages/SuperadminUpdateTransactionsPage";
 import SuperadminPayoutsPage from "./components/pages/PayoutsManagement";
 import SuperadminMerchantsPage from "./components/pages/SuperadminMerchantsPage";
+import SuperadminPaymentGatewaySettings from "./components/pages/SuperadminPaymentGatewaySettings";
 import WebhookPage from "./components/pages/WebhookPage";
 import WebhookHowTo from "./components/pages/WebhookHowTo";
 import ApiDocumentationPage from "./components/pages/ApiDocumentationPage";
@@ -25,6 +26,8 @@ import AuthWrapper from "./components/AuthWrapper";
 import SuperadminLayout from "./components/SuperadminLayout";
 import { USER_ROLES } from "./constants/api";
 import TransactionDetailPage from "./components/pages/TransactionDetailPage";
+import PaymentSuccess from "./components/pages/PaymentSuccess";
+import PaymentFailed from "./components/pages/PaymentFailed";
 
 function App() {
   return (
@@ -87,6 +90,16 @@ function App() {
             <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
               <SuperadminLayout>
                 <SuperadminMerchantsPage />
+              </SuperadminLayout>
+            </AuthWrapper>
+          }
+        />
+        <Route
+          path="/superadmin/settings/payment-gateways"
+          element={
+            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+              <SuperadminLayout>
+                <SuperadminPaymentGatewaySettings />
               </SuperadminLayout>
             </AuthWrapper>
           }
@@ -163,6 +176,10 @@ function App() {
             </AuthWrapper>
           }
         />
+        {/* Payment Result Pages (Public - No Auth Required) */}
+        <Route path="/payment-success" element={<PaymentSuccess />} />
+        <Route path="/payment-failed" element={<PaymentFailed />} />
+        
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>

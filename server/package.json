@@ -6,7 +6,8 @@
     "docs:pdf": "md-to-pdf docs/Backend-API.md",
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:paytm": "node scripts/testPaytmPaymentLink.js"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +25,7 @@
     "mongoose": "^8.19.0",
     "node-cron": "^4.2.1",
     "pdfkit": "^0.17.2",
+    "paytmchecksum": "^1.5.1",
     "pg-sdk-node": "^2.0.2",
     "razorpay": "^2.9.6"
   },

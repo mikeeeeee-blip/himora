@@ -69,8 +69,28 @@ const PaymentSection = () => {
     setSuccess('Link copied to clipboard!');
   };
 
-  const openPaymentLink = (url) => {
-    if (url) {
+  const openPaymentLink = (url, paytmParams) => {
+    if (paytmParams && url) {
+      // Paytm requires form submission
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = url;
+      form.target = '_blank';
+      
+      // Add all Paytm parameters as hidden inputs
+      Object.keys(paytmParams).forEach(key => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = paytmParams[key];
+        form.appendChild(input);
+      });
+      
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+    } else if (url) {
+      // Regular URL opening for other payment gateways
       window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
@@ -192,7 +212,7 @@ const PaymentSection = () => {
                   <FiCopy />
                 </button>
                 <button 
-                  onClick={() => openPaymentLink(createdLink.paymentLink || createdLink.payment_url || createdLink.link)}
+                  onClick={() => openPaymentLink(createdLink.paymentLink || createdLink.payment_url || createdLink.paytmPaymentUrl, createdLink.paytmParams)}
                   className="action-btn redirect"
                   title="Open payment link"
                 >

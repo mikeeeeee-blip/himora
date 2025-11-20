@@ -1,6 +1,7 @@
 const Payout = require('../models/Payout');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
+const Settings = require('../models/Settings');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
 const { sendMerchantWebhook, sendPayoutWebhook } = require('./merchantWebhookController');
 const { selectProductsForInvoice, generateInvoicePDF } = require('../utils/invoiceGenerator');
@@ -1462,6 +1463,124 @@ exports.getAllMerchantsData = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to fetch merchants comprehensive data',
+            detail: error.message
+        });
+    }
+};
+
+// ============ GET PAYMENT GATEWAY SETTINGS ============
+exports.getPaymentGatewaySettings = async (req, res) => {
+    try {
+        console.log(`⚙️ SuperAdmin ${req.user.name} fetching payment gateway settings`);
+
+        const settings = await Settings.getSettings();
+        const defaultGateway = settings.getDefaultGateway();
+        const enabledGateways = settings.getEnabledGateways();
+
+        res.json({
+            success: true,
+            payment_gateways: settings.paymentGateways,
+            default_gateway: defaultGateway,
+            enabled_gateways: enabledGateways,
+            updated_at: settings.updatedAt,
+            updated_by: settings.updatedBy
+        });
+
+    } catch (error) {
+        console.error('❌ Get Payment Gateway Settings Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch payment gateway settings',
+            detail: error.message
+        });
+    }
+};
+
+// ============ UPDATE PAYMENT GATEWAY SETTINGS ============
+exports.updatePaymentGatewaySettings = async (req, res) => {
+    try {
+        const { payment_gateways } = req.body;
+
+        console.log(`⚙️ SuperAdmin ${req.user.name} updating payment gateway settings`);
+
+        if (!payment_gateways || typeof payment_gateways !== 'object') {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid payment_gateways data. Must be an object.'
+            });
+        }
+
+        // Get current settings
+        const settings = await Settings.getSettings();
+
+        // Validate and update each gateway
+        const validGateways = ['razorpay', 'paytm', 'phonepe', 'easebuzz', 'cashfree'];
+        let hasDefault = false;
+
+        for (const gateway of validGateways) {
+            if (payment_gateways[gateway]) {
+                const gatewayConfig = payment_gateways[gateway];
+                
+                if (typeof gatewayConfig.enabled === 'boolean') {
+                    settings.paymentGateways[gateway].enabled = gatewayConfig.enabled;
+                }
+                
+                if (typeof gatewayConfig.isDefault === 'boolean') {
+                    settings.paymentGateways[gateway].isDefault = gatewayConfig.isDefault;
+                    if (gatewayConfig.isDefault && gatewayConfig.enabled) {
+                        hasDefault = true;
+                        // Unset other defaults
+                        for (const otherGateway of validGateways) {
+                            if (otherGateway !== gateway) {
+                                settings.paymentGateways[otherGateway].isDefault = false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Ensure at least one gateway is enabled and set as default
+        const enabledGateways = settings.getEnabledGateways();
+        if (enabledGateways.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'At least one payment gateway must be enabled'
+            });
+        }
+
+        // If no default is set, set the first enabled gateway as default
+        if (!hasDefault) {
+            const firstEnabled = enabledGateways[0];
+            settings.paymentGateways[firstEnabled].isDefault = true;
+            console.log(`⚠️ No default gateway specified, setting ${firstEnabled} as default`);
+        }
+
+        // Update metadata
+        settings.updatedBy = req.user.id;
+        settings.updatedAt = new Date();
+
+        await settings.save();
+
+        const defaultGateway = settings.getDefaultGateway();
+
+        console.log(`✅ Payment gateway settings updated. Default: ${defaultGateway}, Enabled: ${enabledGateways.join(', ')}`);
+
+        res.json({
+            success: true,
+            message: 'Payment gateway settings updated successfully',
+            payment_gateways: settings.paymentGateways,
+            default_gateway: defaultGateway,
+            enabled_gateways: enabledGateways,
+            updated_at: settings.updatedAt,
+            updated_by: req.user.name
+        });
+
+    } catch (error) {
+        console.error('❌ Update Payment Gateway Settings Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update payment gateway settings',
             detail: error.message
         });
     }

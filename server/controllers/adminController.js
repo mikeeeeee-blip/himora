@@ -368,11 +368,11 @@ exports.getMyBalance = async (req, res) => {
             }
         });
 
-        console.log(`✅ Balance returned to ${req.user.name}:`);
-        console.log(`   - Available: ₹${availableBalance.toFixed(2)}`);
-        console.log(`   - Settled: ${settled.settledCount} transactions`);
-        console.log(`   - Unsettled: ${unsettled.unsettledCount} transactions`);
-        console.log(`   - Next settlement: ${nextSettlementText}`);
+        // console.log(`✅ Balance returned to ${req.user.name}:`);
+        // console.log(`   - Available: ₹${availableBalance.toFixed(2)}`);
+        // console.log(`   - Settled: ${settled.settledCount} transactions`);
+        // console.log(`   - Unsettled: ${unsettled.unsettledCount} transactions`);
+        // console.log(`   - Next settlement: ${nextSettlementText}`);
     } catch (error) {
         console.error('❌ Get My Balance Error:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch balance' });
@@ -410,7 +410,7 @@ exports.searchTransactions = async (req, res) => {
     const merchantId = req.merchantId
 
     if (merchantId) query.merchantId = new mongoose.Types.ObjectId(merchantId);
-    console.table(query.merchantId)
+    // console.table(query.merchantId)
     if (status) query.status = status;
     if (paymentGateway) query.paymentGateway = paymentGateway;
     if (paymentMethod) query.paymentMethod = paymentMethod;

@@ -92,10 +92,12 @@ app.post('/api/debug/reject-payout/:payoutId', async (req, res) => {
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/superadmin', require('./routes/superAdminRoutes')); // Must be before /api to avoid conflicts
 app.use('/api', require('./routes/apiRoutes'));
-app.use('/api/superadmin', require('./routes/superAdminRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
-app.use('/api/razorpay', require('./routes/razorpayRoutes')); // ✅ NEW
+app.use('/api/razorpay', require('./routes/razorpayRoutes'));
+app.use('/api/paytm', require('./routes/paytmRoutes'));
+app.use('/api/easebuzz', require('./routes/easebuzzRoutes')); // ✅ NEW
 
 // 404 Handler - Must be after all routes
 app.use((req, res) => {
@@ -124,4 +126,4 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => {console.log(`🚀 Server running on port ${PORT} and env is ${process.env.PAYTM_MERCHANT_KEY}`)});

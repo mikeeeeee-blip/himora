@@ -210,92 +210,37 @@ exports.createRazorpayPaymentLink = async (req, res) => {
     await transaction.save();
     console.log("💾 Transaction saved:", transactionId);
 
-    res.json({
-      success: true,
-      transaction_id: transactionId,
-      payment_link_id: paymentLink.id,
-      payment_url: paymentLink.short_url,
-      order_amount: parseFloat(amount),
-      order_currency: "INR",
-      merchant_id: merchantId.toString(),
-      merchant_name: merchantName,
-      reference_id: referenceId,
-      callback_url: finalCallbackUrl,
-      expires_at: paymentLink.expire_by,
-      message:
-        "Payment link created successfully. Share this URL with customer.",
-    });
-  } catch (error) {
-    console.error("❌ Create Razorpay Payment Link Error:", {
-      statusCode: error.statusCode,
-      error: error.error,
-      message: error.message,
-    });
-    console.error("❌ Full error details:", {
-      message: error.message,
-      error: error.error,
-      statusCode: error.statusCode,
-      status: error.status,
-    });
+        // Check if this was called from unified endpoint (has gateway_used in response)
+        const response = {
+            success: true,
+            transaction_id: transactionId,
+            payment_link_id: paymentLink.id,
+            payment_url: paymentLink.short_url,
+            order_amount: parseFloat(amount),
+            order_currency: 'INR',
+            merchant_id: merchantId.toString(),
+            merchant_name: merchantName,
+            reference_id: referenceId,
+            callback_url: finalCallbackUrl,
+            expires_at: paymentLink.expire_by
+        };
 
-    // Handle Razorpay authentication errors specifically
-    if (
-      error.statusCode === 401 ||
-      (error.error && error.error.code === "BAD_REQUEST_ERROR")
-    ) {
-      console.error("❌ Razorpay Authentication Failed!");
-      console.error(
-        "🔍 Check your RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env file"
-      );
-      console.error(
-        "🔍 Current KEY_ID:",
-        process.env.RAZORPAY_KEY_ID || "NOT SET"
-      );
-      console.error(
-        "🔍 KEY_SECRET length:",
-        process.env.RAZORPAY_KEY_SECRET?.length || 0
-      );
-      console.error(
-        "🔍 KEY_SECRET preview:",
-        process.env.RAZORPAY_KEY_SECRET
-          ? process.env.RAZORPAY_KEY_SECRET.substring(0, 10) + "..."
-          : "NOT SET"
-      );
+        // Only add message if not already set by unified endpoint
+        if (!res.gateway_message_added) {
+            response.message = 'Payment link created successfully. Share this URL with customer.';
+        }
 
-      // Check for common issues
-      if (
-        process.env.RAZORPAY_KEY_SECRET &&
-        process.env.RAZORPAY_KEY_SECRET.length < 30
-      ) {
-        console.error(
-          "⚠️ WARNING: RAZORPAY_KEY_SECRET appears to be too short!"
-        );
-        console.error(
-          "⚠️ Valid Razorpay secret keys are usually 32+ characters long."
-        );
-        console.error(
-          "⚠️ Please verify your secret key in Razorpay Dashboard > Settings > API Keys"
-        );
-      }
+        res.json(response);
 
-      if (
-        process.env.RAZORPAY_KEY_ID &&
-        !process.env.RAZORPAY_KEY_ID.startsWith("rzp_")
-      ) {
-        console.error("⚠️ WARNING: RAZORPAY_KEY_ID format looks incorrect!");
-        console.error(
-          "⚠️ Valid key IDs start with 'rzp_test_' (test mode) or 'rzp_live_' (live mode)"
-        );
-      }
-
-      return res.status(401).json({
-        success: false,
-        error:
-          "Razorpay authentication failed. Please verify your Razorpay credentials in the Razorpay Dashboard.",
-        detail: error.error?.description || "Invalid Razorpay credentials",
-        hint: "Check that RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in your .env file match your Razorpay Dashboard API keys. Ensure there are no extra spaces or quotes.",
-      });
-    }
+    } catch (error) {
+        console.error('❌ Create Razorpay Payment Link Error:', error);
+        console.error('❌ Error details:', {
+            message: error.message,
+            error: error.error,
+            statusCode: error.statusCode,
+            status: error.status,
+            stack: error.stack
+        });
 
     // Handle different error structures from Razorpay SDK
     let errorMessage = "Failed to create payment link";

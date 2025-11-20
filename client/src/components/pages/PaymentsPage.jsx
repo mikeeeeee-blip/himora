@@ -67,8 +67,30 @@ const PaymentsPage = () => {
     setToast({ message: 'Copied to clipboard!', type: 'success' });
   };
 
-  const openPaymentLink = (url) => {
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  const openPaymentLink = (url, paytmParams) => {
+    if (paytmParams && url) {
+      // Paytm requires form submission
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = url;
+      form.target = '_blank';
+      
+      // Add all Paytm parameters as hidden inputs
+      Object.keys(paytmParams).forEach(key => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = paytmParams[key];
+        form.appendChild(input);
+      });
+      
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+    } else if (url) {
+      // Regular URL opening for other payment gateways
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const openDeepLink = (url, appName) => {
@@ -305,9 +327,9 @@ const PaymentsPage = () => {
                     <span className="hidden sm:inline">Copy</span>
                   </button>
                   <button 
-                    onClick={() => openPaymentLink(createdLink.paymentLink || createdLink.payment_url)} 
+                    onClick={() => openPaymentLink(createdLink.paymentLink || createdLink.payment_url || createdLink.paytmPaymentUrl, createdLink.paytmParams)} 
                     className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-4 py-3 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-2"
-                    title="Open link"
+                    title="Open payment link"
                   >
                     <FiExternalLink className="w-4 h-4" />
                     <span className="hidden sm:inline">Open</span>

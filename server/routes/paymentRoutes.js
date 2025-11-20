@@ -10,6 +10,11 @@ const {
 } = require('../controllers/paymentController.js');
 
 const {
+    createPaymentLink,
+    getAvailableGateways
+} = require('../controllers/paymentGatewayController.js');
+
+const {
     getAllTransactions,
     getAllPayouts,
     approvePayout,
@@ -48,6 +53,10 @@ const {
 } = require('../controllers/adminController.js');
 
 // ============ MERCHANT APIs (API Key Auth) ============
+
+// Unified payment link creation (uses enabled gateway from settings)
+router.post('/create-payment-link', apiKeyAuth, createPaymentLink);
+router.get('/available-gateways', apiKeyAuth, getAvailableGateways);
 
 router.get('/status/:orderId', apiKeyAuth, getPaymentStatus);
 router.get('/transactions', apiKeyAuth, getTransactions);

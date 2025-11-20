@@ -9,6 +9,7 @@ import {
   FiHome,
   FiUserPlus,
   FiEdit3,
+  FiSettings,
 } from "react-icons/fi";
 import { TbArrowsTransferDown } from "react-icons/tb";
 import { HiOutlineChartBar } from "react-icons/hi2";
@@ -48,6 +49,11 @@ const SuperadminNavbar = () => {
       path: "/superadmin/transactions/update",
       label: "Update Transactions",
       icon: <FiEdit3 />,
+    },
+    {
+      path: "/superadmin/settings/payment-gateways",
+      label: "Payment Gateways",
+      icon: <FiSettings />,
     },
   ];
 
