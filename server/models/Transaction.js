@@ -27,7 +27,7 @@ const TransactionSchema = new mongoose.Schema({
     paytmOrderId: String,
     paytmPaymentId: String,
     paytmReferenceId: String,
-    
+ 
     // Easebuzz Fields
     easebuzzOrderId: String,
     easebuzzPaymentId: String,

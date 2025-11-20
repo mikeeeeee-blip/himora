@@ -773,18 +773,21 @@ exports.handleEasebuzzWebhook = async (req, res) => {
         }
 
         // Find transaction by order_id or transaction_id
-        // Easebuzz may send different field names, so check multiple possibilities
-        const orderId = webhookData.order_id || 
+        // Easebuzz sends: txnid (the merchant_txn we sent), and our transactionId is in udf2
+        // IMPORTANT: Easebuzz webhook format uses "txnid" for the order ID and "udf2" for our transaction ID
+        const orderId = webhookData.txnid ||  // Easebuzz sends merchant_txn as "txnid"
+                       webhookData.order_id || 
                        webhookData.merchant_order_id || 
                        webhookData.merchant_txn ||
                        webhookData.merchant_txn_id ||
                        webhookData.merchant_transaction_id ||
                        webhookData.orderId;
-        const transactionId = transaction_id || 
-                              webhookData.transaction_id || 
-                              webhookData.txn_id ||
-                              webhookData.payment_id ||
-                              webhookData.transactionId;
+        const transactionId = webhookData.udf2 ||  // We stored our transactionId in udf2
+                             transaction_id || 
+                             webhookData.transaction_id || 
+                             webhookData.txn_id ||
+                             webhookData.payment_id ||
+                             webhookData.transactionId;
         
         console.log('\n🔍 TRANSACTION SEARCH:');
         console.log('   📋 Order ID (from webhook):', orderId);
@@ -836,9 +839,13 @@ exports.handleEasebuzzWebhook = async (req, res) => {
         }
         
         // Last resort: search by any matching field in webhook data
+        // Easebuzz specific fields: txnid (order ID), udf2 (our transaction ID), easepayid (payment ID)
         if (!transaction) {
-            console.log('   🔎 Last resort: Searching by any matching field...');
+            console.log('   🔎 Last resort: Searching by Easebuzz-specific fields...');
             const searchFields = [
+                { easebuzzOrderId: webhookData.txnid },  // Most important - Easebuzz sends merchant_txn as txnid
+                { transactionId: webhookData.udf2 },    // We stored transactionId in udf2
+                { easebuzzPaymentId: webhookData.easepayid },  // Easebuzz payment ID
                 { easebuzzOrderId: webhookData.merchant_txn },
                 { easebuzzOrderId: webhookData.order_id },
                 { easebuzzOrderId: webhookData.merchant_order_id },
@@ -850,7 +857,8 @@ exports.handleEasebuzzWebhook = async (req, res) => {
             for (const searchField of searchFields) {
                 const key = Object.keys(searchField)[0];
                 const value = searchField[key];
-                if (value) {
+                if (value && value !== 'NA' && value !== '') {
+                    console.log(`      Trying: ${key} = ${value}`);
                     transaction = await Transaction.findOne({ [key]: value }).populate('merchantId');
                     if (transaction) {
                         console.log(`   ✅ Transaction found by ${key}:`, value);
@@ -861,14 +869,37 @@ exports.handleEasebuzzWebhook = async (req, res) => {
         }
 
         if (!transaction) {
-            console.warn('❌ Transaction not found for webhook');
-            console.warn('   Searched for orderId:', orderId);
-            console.warn('   Searched for transactionId:', transactionId);
-            return res.status(404).json({
+            console.error('\n' + '❌'.repeat(40));
+            console.error('❌ TRANSACTION NOT FOUND FOR WEBHOOK ❌');
+            console.error('❌'.repeat(40));
+            console.error('   📋 Searched Order ID (txnid):', webhookData.txnid);
+            console.error('   🆔 Searched Transaction ID (udf2):', webhookData.udf2);
+            console.error('   📋 All order ID attempts:', {
+                txnid: webhookData.txnid,
+                order_id: webhookData.order_id,
+                merchant_order_id: webhookData.merchant_order_id,
+                merchant_txn: webhookData.merchant_txn
+            });
+            console.error('   🆔 All transaction ID attempts:', {
+                udf2: webhookData.udf2,
+                transaction_id: webhookData.transaction_id,
+                txn_id: webhookData.txn_id
+            });
+            console.error('   ⚠️  This webhook will be ignored - transaction status will not be updated!');
+            console.error('   💡 Tip: Check if the transaction exists in database with:');
+            console.error('      - easebuzzOrderId:', webhookData.txnid);
+            console.error('      - transactionId:', webhookData.udf2);
+            console.error('❌'.repeat(40) + '\n');
+            
+            // Don't return 404 - return 200 so Easebuzz doesn't retry
+            // But log the error for debugging
+            return res.status(200).json({
                 success: false,
                 error: 'Transaction not found',
-                searched_order_id: orderId,
-                searched_transaction_id: transactionId
+                message: 'Webhook received but transaction not found in database',
+                searched_order_id: webhookData.txnid,
+                searched_transaction_id: webhookData.udf2,
+                webhook_received: true
             });
         }
 
