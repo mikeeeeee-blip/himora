@@ -149,7 +149,8 @@ exports.createRazorpayPaymentLink = async (req, res) => {
         await transaction.save();
         console.log('💾 Transaction saved:', transactionId);
 
-        res.json({
+        // Check if this was called from unified endpoint (has gateway_used in response)
+        const response = {
             success: true,
             transaction_id: transactionId,
             payment_link_id: paymentLink.id,
@@ -160,9 +161,15 @@ exports.createRazorpayPaymentLink = async (req, res) => {
             merchant_name: merchantName,
             reference_id: referenceId,
             callback_url: finalCallbackUrl,
-            expires_at: paymentLink.expire_by,
-            message: 'Payment link created successfully. Share this URL with customer.'
-        });
+            expires_at: paymentLink.expire_by
+        };
+
+        // Only add message if not already set by unified endpoint
+        if (!res.gateway_message_added) {
+            response.message = 'Payment link created successfully. Share this URL with customer.';
+        }
+
+        res.json(response);
 
     } catch (error) {
         console.error('❌ Create Razorpay Payment Link Error:', error);

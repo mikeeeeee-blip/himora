@@ -7,6 +7,9 @@ const { createPhonePeDeepLink } = require('./razorpayController');
 /**
  * Unified payment link creation endpoint
  * Automatically uses the enabled/default payment gateway from settings
+ * 
+ * This endpoint automatically selects the payment gateway configured by the administrator.
+ * You don't need to specify which gateway to use - it's handled automatically.
  */
 exports.createPaymentLink = async (req, res) => {
     try {
@@ -19,7 +22,8 @@ exports.createPaymentLink = async (req, res) => {
         if (enabledGateways.length === 0) {
             return res.status(503).json({
                 success: false,
-                error: 'No payment gateway is enabled. Please contact administrator.'
+                error: 'No payment gateway is enabled. Please contact administrator.',
+                message: 'The administrator needs to enable at least one payment gateway in the system settings.'
             });
         }
 
@@ -29,6 +33,29 @@ exports.createPaymentLink = async (req, res) => {
         console.log(`🔀 Routing payment link creation to ${selectedGateway} gateway`);
         console.log(`   Enabled gateways: ${enabledGateways.join(', ')}`);
         console.log(`   Default gateway: ${defaultGateway}`);
+
+        // Store original json method to intercept response
+        const originalJson = res.json.bind(res);
+        res.json = function(data) {
+            // Add gateway information and helpful message to response
+            if (data && data.success !== false) {
+                const gatewayName = selectedGateway.charAt(0).toUpperCase() + selectedGateway.slice(1);
+                data.gateway_used = selectedGateway;
+                data.gateway_name = gatewayName;
+                data.gateway_message = `Payment link created using ${gatewayName} gateway (automatically selected by system administrator)`;
+                
+                // Update message to include gateway info
+                if (data.message) {
+                    data.message = `${data.message} Gateway: ${gatewayName}.`;
+                } else {
+                    data.message = `Payment link created successfully using ${gatewayName}. Share this URL with customer.`;
+                }
+                
+                // Add helpful note about automatic gateway selection
+                data.note = 'The payment gateway is automatically selected by the system administrator. You don\'t need to specify which gateway to use.';
+            }
+            return originalJson(data);
+        };
 
         // Route to appropriate gateway controller
         switch (selectedGateway) {
@@ -47,7 +74,8 @@ exports.createPaymentLink = async (req, res) => {
             default:
                 return res.status(503).json({
                     success: false,
-                    error: `Payment gateway '${selectedGateway}' is not supported or not properly configured.`
+                    error: `Payment gateway '${selectedGateway}' is not supported or not properly configured.`,
+                    message: 'Please contact administrator to configure a valid payment gateway.'
                 });
         }
 
@@ -56,7 +84,8 @@ exports.createPaymentLink = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to create payment link',
-            detail: error.message
+            detail: error.message,
+            message: 'An error occurred while creating the payment link. Please try again or contact support.'
         });
     }
 };
