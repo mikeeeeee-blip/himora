@@ -1,14 +1,6 @@
 const crypto = require('crypto');
 const axios = require('axios');
-let PaytmChecksum;
-try {
-    PaytmChecksum = require('paytmchecksum');
-    console.log('✅ PaytmChecksum SDK loaded successfully');
-} catch (error) {
-    console.error('❌ Failed to load PaytmChecksum SDK:', error.message);
-    console.error('   Please run: npm install paytmchecksum');
-    throw error;
-}
+const PaytmChecksum = require('../utils/PaytmChecksum'); // Official PaytmChecksum from GitHub
 const Transaction = require('../models/Transaction');
 const { sendMerchantWebhook } = require('./merchantWebhookController');
 const User = require('../models/User');
@@ -32,14 +24,17 @@ if (PAYTM_MERCHANT_KEY) {
 const PAYTM_WEBSITE = process.env.PAYTM_WEBSITE || 'DEFAULT'; // Should match Paytm Dashboard
 const PAYTM_INDUSTRY_TYPE = process.env.PAYTM_INDUSTRY_TYPE || 'Retail'; // Should match Paytm Dashboard
 const PAYTM_ENVIRONMENT = process.env.PAYTM_ENVIRONMENT || 'production'; // 'staging' or 'production'
-// Paytm API URLs - New API structure
+// Paytm API URLs - Using NEW host as per Paytm support (Jan 2025)
+// IMPORTANT: Old Host (https://securegw.paytm.in) is DEPRECATED and causes issues
+// New Host: https://secure.paytmpayments.com (for production)
+// New Host: https://securestage.paytmpayments.com (for staging)
 const PAYTM_BASE_URL = PAYTM_ENVIRONMENT === 'staging' 
     ? 'https://securestage.paytmpayments.com'
     : 'https://secure.paytmpayments.com';
-// Legacy form-based URL (for backward compatibility)
+// Form-based payment URL (also uses new host)
 const PAYTM_FORM_URL = PAYTM_ENVIRONMENT === 'staging'
-    ? 'https://securegw-stage.paytm.in'
-    : 'https://securegw.paytm.in';
+    ? 'https://securestage.paytmpayments.com'
+    : 'https://secure.paytmpayments.com';
 
 // ============ CREATE PAYTM PAYMENT LINK ============
 exports.createPaytmPaymentLink = async (req, res) => {
@@ -201,9 +196,14 @@ exports.createPaytmPaymentLink = async (req, res) => {
         console.log('   body.userInfo.custId:', paytmParams.body.userInfo.custId);
 
         // Generate checksum using NEW API structure (checksum is generated from body only)
-        console.log('\n🔐 Generating Checksum using official Paytm SDK (NEW API)...');
-        console.log('   - Generating checksum from body object only (as per latest Paytm docs)');
-        const checksum = await PaytmChecksum.generateSignature(JSON.stringify(paytmParams.body), PAYTM_MERCHANT_KEY);
+        // Using official PaytmChecksum from GitHub (uses AES encryption with salt)
+        // As per Paytm docs: generateSignature(JSON.stringify(paytmParams.body), merchantKey)
+        console.log('\n🔐 Generating Checksum using official PaytmChecksum (from GitHub)...');
+        console.log('   - Generating checksum from JSON.stringify(body) as per Paytm documentation');
+        console.log('   - PaytmChecksum uses AES-128-CBC encryption with salt');
+        const bodyString = JSON.stringify(paytmParams.body);
+        console.log('   - Body JSON string length:', bodyString.length, 'characters');
+        const checksum = await PaytmChecksum.generateSignature(bodyString, PAYTM_MERCHANT_KEY);
         
         // Add checksum to head.signature (NEW API structure)
         paytmParams.head = {
@@ -941,12 +941,12 @@ async function handlePaytmPaymentFailed(transaction, payload) {
 // ============ PAYTM UTILITY FUNCTIONS ============
 
 /**
- * Generate Paytm checksum using official Paytm SDK
- * This uses the official PaytmChecksum library which handles all edge cases correctly
+ * Generate Paytm checksum using official PaytmChecksum from GitHub
+ * Wrapper function for logging and error handling
  */
 async function generatePaytmChecksum(params, merchantKey) {
     console.log('\n' + '-'.repeat(80));
-    console.log('🔐 CHECKSUM GENERATION - USING OFFICIAL PAYTM SDK');
+    console.log('🔐 CHECKSUM GENERATION - USING OFFICIAL PAYTMCHECKSUM (GitHub)');
     console.log('-'.repeat(80));
 
     if (!merchantKey) {
@@ -966,50 +966,45 @@ async function generatePaytmChecksum(params, merchantKey) {
         console.warn('   ⚠️ Please verify the merchant key in your Paytm Dashboard matches the one in .env');
     }
 
-    // Remove CHECKSUMHASH if present (don't include it in checksum generation)
+    // Remove CHECKSUMHASH/signature if present (don't include it in checksum generation)
     const paramsForChecksum = { ...params };
-    const hadChecksum = 'CHECKSUMHASH' in paramsForChecksum;
+    const hadChecksum = 'CHECKSUMHASH' in paramsForChecksum || 'signature' in paramsForChecksum;
     delete paramsForChecksum.CHECKSUMHASH;
+    delete paramsForChecksum.signature;
     
     console.log('   Step 2: Prepare Parameters');
-    console.log('   - Had CHECKSUMHASH:', hadChecksum);
+    console.log('   - Had CHECKSUMHASH/signature:', hadChecksum);
     console.log('   - Params for checksum:', Object.keys(paramsForChecksum).length);
     console.log('   - Parameters:', JSON.stringify(paramsForChecksum, null, 2));
 
     try {
-        // Use official Paytm SDK to generate checksum
-        // The SDK accepts either an object or JSON string - we'll pass the object directly
-        console.log('   Step 3: Generate Checksum using Paytm SDK');
-        console.log('   - SDK Method: PaytmChecksum.generateSignature()');
-        console.log('   - Passing params object (not JSON string) to SDK');
-        console.log('   - Merchant Key length:', merchantKey.length);
-        
-        // Verify SDK is available
-        if (!PaytmChecksum || !PaytmChecksum.generateSignature) {
-            throw new Error('PaytmChecksum SDK not available. Please install: npm install paytmchecksum');
-        }
+        // Use official PaytmChecksum from GitHub
+        // The SDK converts object to string using getStringByParams (sorts keys, joins with |)
+        console.log('   Step 3: Generate Checksum using PaytmChecksum.generateSignature()');
+        console.log('   - PaytmChecksum uses AES-128-CBC encryption with salt');
+        console.log('   - Object will be converted to string: sorted keys, values joined with |');
         
         const checksum = await PaytmChecksum.generateSignature(paramsForChecksum, merchantKey);
         
         if (!checksum || typeof checksum !== 'string') {
-            throw new Error(`Invalid checksum returned from SDK: ${typeof checksum}`);
+            throw new Error(`Invalid checksum returned: ${typeof checksum}`);
         }
         
-        console.log('   ✅ SDK Checksum Generated Successfully');
+        console.log('   ✅ PaytmChecksum Generated Successfully');
         console.log('   - Checksum (first 30 chars):', checksum.substring(0, 30) + '...');
         console.log('   - Checksum (last 10 chars):', '...' + checksum.substring(checksum.length - 10));
         console.log('   - Checksum Length:', checksum.length, 'characters');
         
         console.log('-'.repeat(80));
-        console.log('✅ Checksum Generation Complete (using official Paytm SDK)');
+        console.log('✅ Checksum Generation Complete (using official PaytmChecksum from GitHub)');
         console.log('-'.repeat(80) + '\n');
 
         return checksum;
     } catch (error) {
-        console.error('❌ Error generating checksum with Paytm SDK:');
+        console.error('❌ Error generating checksum with PaytmChecksum:');
         console.error('   Error Message:', error.message);
         console.error('   Error Stack:', error.stack);
-        console.error('   Params sent to SDK:', JSON.stringify(paramsForChecksum, null, 2));
+        console.error('   Params sent:', JSON.stringify(paramsForChecksum, null, 2));
         throw new Error(`Failed to generate Paytm checksum: ${error.message}`);
     }
 }
@@ -1025,7 +1020,7 @@ async function verifyPaytmChecksum(params, merchantKey, checksum) {
         const paramsForVerification = { ...params };
         delete paramsForVerification.CHECKSUMHASH;
         
-        // Generate checksum using official SDK (pass object directly)
+        // Generate checksum using official PaytmChecksum (pass object directly, SDK will convert)
         const calculatedChecksum = await PaytmChecksum.generateSignature(paramsForVerification, merchantKey);
 
         // Compare (case-insensitive)
@@ -1046,7 +1041,7 @@ async function verifyPaytmPayment(orderId) {
             ORDERID: orderId
         };
 
-        const checksum = await generatePaytmChecksum(params, PAYTM_MERCHANT_KEY);
+        const checksum = await PaytmChecksum.generateSignature(params, PAYTM_MERCHANT_KEY);
         params.CHECKSUMHASH = checksum;
 
         const response = await axios.post(

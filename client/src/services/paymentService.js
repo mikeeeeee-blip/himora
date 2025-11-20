@@ -361,7 +361,11 @@ console.log(url);
         description: paymentData.description || 'Product purchase'
       };
 
-      const response = await axios.post(API_ENDPOINTS.CREATE_LINK, requestBody, {
+      // Use unified endpoint (automatically uses enabled gateway from settings)
+      // If paymentGateway is explicitly provided, it will be ignored in favor of system settings
+      const endpoint = API_ENDPOINTS.CREATE_LINK;
+
+      const response = await axios.post(endpoint, requestBody, {
         headers: {
           'x-api-key': `${apiKey}`,
           'Content-Type': 'application/json',
@@ -390,6 +394,8 @@ console.log(url);
         // Paytm specific fields
         paytmParams: api.paytm_params || null,
         paytmPaymentUrl: api.payment_url || null,
+        // Easebuzz specific fields (form-based payment like Paytm)
+        easebuzzParams: api.easebuzz_params || null,
         // PhonePe fields (for backward compatibility)
         phonepe_deep_link : api.phonepe_deep_link,
         gpay_deep_link :  api.gpay_deep_link,

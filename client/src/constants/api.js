@@ -1,7 +1,7 @@
 // constants/api.js
 
-export const BASE_URL = 'https://api.himora.art/api';
-// export const BASE_URL = 'http://localhost:5001/api';
+// export const BASE_URL = 'https://api.himora.art/api';
+export const BASE_URL = 'http://localhost:5001/api';
 
 export const API_ENDPOINTS = {
   // ============ AUTH ============
@@ -28,7 +28,11 @@ export const API_ENDPOINTS = {
   BALANCE: `${BASE_URL}/payments/merchant/balance`,
   
   // ============ PAYMENT LINK CREATION (API Key Auth) ============
-  CREATE_LINK: `${BASE_URL}/paytm/create-payment-link`,
+  CREATE_LINK: `${BASE_URL}/payments/create-payment-link`, // Unified endpoint (uses enabled gateway)
+  CREATE_LINK_PAYTM: `${BASE_URL}/paytm/create-payment-link`,
+  CREATE_LINK_EASEBUZZ: `${BASE_URL}/easebuzz/create-payment-link`,
+  CREATE_LINK_RAZORPAY: `${BASE_URL}/razorpay/create-payment-link`,
+  AVAILABLE_GATEWAYS: `${BASE_URL}/payments/available-gateways`,
   VERIFY_PAYMENT: `${BASE_URL}/paytm/verify-payment`,
   
   // ============ PAYMENT STATUS (API Key Auth) ============
@@ -57,6 +61,9 @@ export const API_ENDPOINTS = {
   
   // ============ SUPERADMIN - DASHBOARD ============
   DASHBOARD_STATS: `${BASE_URL}/superadmin/dashboard/stats`,
+  // ============ SUPERADMIN - SETTINGS ============
+  GET_PAYMENT_GATEWAY_SETTINGS: `${BASE_URL}/superadmin/settings/payment-gateways`,
+  UPDATE_PAYMENT_GATEWAY_SETTINGS: `${BASE_URL}/superadmin/settings/payment-gateways`,
   // ============ SUPERADMIN - MERCHANTS ============
   SUPERADMIN_MERCHANTS_COMPREHENSIVE: `${BASE_URL}/superadmin/merchants/comprehensive`,
   
@@ -78,6 +85,8 @@ export const API_ENDPOINTS = {
   
   // ============ PAYTM WEBHOOK (No Auth) ============
   PAYTM_WEBHOOK: `${BASE_URL}/paytm/webhook`,
+  // ============ EASEBUZZ WEBHOOK (No Auth) ============
+  EASEBUZZ_WEBHOOK: `${BASE_URL}/easebuzz/webhook`,
   // ============ RAZORPAY WEBHOOK (No Auth) - Kept for backward compatibility ============
   RAZORPAY_WEBHOOK: `${BASE_URL}/razorpay/webhook`,
 };
