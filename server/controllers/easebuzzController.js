@@ -696,18 +696,50 @@ exports.handleEasebuzzCallback = async (req, res) => {
 
 // ============ HANDLE EASEBUZZ WEBHOOK ============
 exports.handleEasebuzzWebhook = async (req, res) => {
+    const startTime = Date.now();
+    const timestamp = new Date().toISOString();
+    const ip = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'Unknown';
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    
     try {
         // Support both JSON body (POST) and query params (GET)
         const webhookData = req.body && Object.keys(req.body).length > 0 ? req.body : req.query;
         const { transaction_id } = req.query;
 
-        console.log('\n' + '='.repeat(80));
-        console.log('🔔 EASEBUZZ WEBHOOK RECEIVED');
-        console.log('='.repeat(80));
-        console.log('   Method:', req.method);
-        console.log('   Headers:', JSON.stringify(req.headers, null, 2));
-        console.log('   Query Params:', JSON.stringify(req.query, null, 2));
-        console.log('   Webhook Data:', JSON.stringify(webhookData, null, 2));
+        console.log('\n' + '🔔'.repeat(40));
+        console.log('🔔 EASEBUZZ WEBHOOK PROCESSING STARTED 🔔');
+        console.log('🔔'.repeat(40));
+        console.log('   ⏰ Timestamp:', timestamp);
+        console.log('   🌐 IP Address:', ip);
+        console.log('   📱 User-Agent:', userAgent);
+        console.log('   🔗 HTTP Method:', req.method);
+        console.log('   🔗 Request URL:', req.originalUrl || req.url);
+        console.log('   📋 Content-Type:', req.headers['content-type'] || 'Not set');
+        console.log('   📦 Content-Length:', req.headers['content-length'] || 'Unknown', 'bytes');
+        console.log('\n   📥 REQUEST HEADERS:');
+        console.log('      ' + JSON.stringify(req.headers, null, 2).split('\n').join('\n      '));
+        console.log('\n   📥 QUERY PARAMETERS:');
+        console.log('      ' + JSON.stringify(req.query, null, 2).split('\n').join('\n      '));
+        console.log('\n   📥 REQUEST BODY:');
+        console.log('      ' + JSON.stringify(req.body, null, 2).split('\n').join('\n      '));
+        console.log('\n   📦 PARSED WEBHOOK DATA:');
+        console.log('      ' + JSON.stringify(webhookData, null, 2).split('\n').join('\n      '));
+        
+        // Check if webhook data is empty
+        if (!webhookData || Object.keys(webhookData).length === 0) {
+            console.warn('\n⚠️  WARNING: Webhook received with empty payload!');
+            console.warn('   This might indicate:');
+            console.warn('   1. Easebuzz is sending a test webhook');
+            console.warn('   2. The webhook payload format is different than expected');
+            console.warn('   3. The request body was not parsed correctly');
+            return res.status(200).json({
+                success: true,
+                message: 'Webhook received (empty payload)',
+                timestamp: timestamp
+            });
+        }
+        
+        console.log('\n   ✅ Webhook payload received successfully!');
 
         // Verify checksum if present (Easebuzz may or may not send checksum)
         if (webhookData.checksum || webhookData.hash) {
@@ -808,18 +840,54 @@ exports.handleEasebuzzWebhook = async (req, res) => {
             );
         }
 
-        console.log('✅ Easebuzz webhook processed successfully');
+        const processingTime = Date.now() - startTime;
+        const finalStatus = statusLower || 'unknown';
+        const finalTransactionId = transaction?.transactionId || 'N/A';
+        
+        console.log('\n' + '✅'.repeat(40));
+        console.log('✅ EASEBUZZ WEBHOOK PROCESSED SUCCESSFULLY ✅');
+        console.log('✅'.repeat(40));
+        console.log('   ⏱️  Processing Time:', processingTime, 'ms');
+        console.log('   ⏰ Completed At:', new Date().toISOString());
+        console.log('   📊 Final Status:', finalStatus);
+        console.log('   🆔 Transaction ID:', finalTransactionId);
+        console.log('   📋 Order ID:', orderId || 'N/A');
+        console.log('✅'.repeat(40) + '\n');
 
         res.status(200).json({
             success: true,
-            message: 'Webhook received and processed'
+            message: 'Webhook received and processed',
+            timestamp: timestamp,
+            processing_time_ms: processingTime,
+            transaction_id: finalTransactionId,
+            order_id: orderId,
+            status: finalStatus
         });
 
     } catch (error) {
-        console.error('❌ handleEasebuzzWebhook error:', error.message);
+        const processingTime = Date.now() - startTime;
+        const webhookData = req.body && Object.keys(req.body).length > 0 ? req.body : req.query;
+        
+        console.error('\n' + '❌'.repeat(40));
+        console.error('❌ EASEBUZZ WEBHOOK PROCESSING ERROR ❌');
+        console.error('❌'.repeat(40));
+        console.error('   ⏰ Timestamp:', timestamp);
+        console.error('   🌐 IP Address:', ip);
+        console.error('   ⏱️  Processing Time:', processingTime, 'ms');
+        console.error('   ❌ Error Message:', error.message);
+        console.error('   📚 Error Stack:', error.stack);
+        if (webhookData) {
+            console.error('   📦 Webhook Data:', JSON.stringify(webhookData, null, 2));
+        } else {
+            console.error('   📦 Webhook Data: Not available');
+        }
+        console.error('❌'.repeat(40) + '\n');
+        
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to process webhook'
+            error: error.message || 'Failed to process webhook',
+            timestamp: timestamp,
+            processing_time_ms: processingTime
         });
     }
 };
