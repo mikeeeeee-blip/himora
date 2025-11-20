@@ -981,9 +981,23 @@ exports.handleEasebuzzWebhook = async (req, res) => {
         console.log('   Is Pending?', isPending);
         console.log('   Is Cancelled?', isCancelled);
         
+        console.log('\n🎯 STATUS MATCHING RESULT:');
+        console.log('   isSuccess:', isSuccess);
+        console.log('   isFailed:', isFailed);
+        console.log('   isPending:', isPending);
+        console.log('   isCancelled:', isCancelled);
+        
         if (isSuccess) {
-            console.log('\n✅ ROUTING TO: handleEasebuzzPaymentSuccess');
-            await handleEasebuzzPaymentSuccess(transaction, webhookData);
+            console.log('\n✅✅✅ ROUTING TO: handleEasebuzzPaymentSuccess ✅✅✅');
+            try {
+                await handleEasebuzzPaymentSuccess(transaction, webhookData);
+                console.log('✅ handleEasebuzzPaymentSuccess completed successfully');
+            } catch (error) {
+                console.error('❌ ERROR in handleEasebuzzPaymentSuccess:', error);
+                console.error('   Error message:', error.message);
+                console.error('   Error stack:', error.stack);
+                // Don't throw - we still want to return 200 to Easebuzz
+            }
         } else if (isFailed) {
             console.log('\n❌ ROUTING TO: handleEasebuzzPaymentFailed');
             await handleEasebuzzPaymentFailed(transaction, webhookData);
@@ -997,6 +1011,7 @@ exports.handleEasebuzzWebhook = async (req, res) => {
             console.warn('\n⚠️ UNKNOWN PAYMENT STATUS - Status not recognized!');
             console.warn('   Status value:', status);
             console.warn('   Status type:', typeof status);
+            console.warn('   Status lower:', statusLower);
             console.warn('   Full webhook payload:', JSON.stringify(webhookData, null, 2));
             console.warn('   ⚠️  Transaction status will NOT be updated automatically');
             console.warn('   ⚠️  Please check Easebuzz documentation for correct status values');
@@ -1223,31 +1238,51 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
         console.log('\n💾 Attempting to update transaction in database...');
         console.log('   Update Query:', JSON.stringify(update, null, 2));
         console.log('   Transaction ID:', transaction._id);
+        console.log('   Transaction Object ID:', transaction._id.toString());
         console.log('   Current Status:', transaction.status);
+        console.log('   Query Filter: { _id: ObjectId("' + transaction._id + '"), status: { $ne: "paid" } }');
         
-        const updatedTransaction = await Transaction.findOneAndUpdate(
+        // Try the update
+        let updatedTransaction = await Transaction.findOneAndUpdate(
             { _id: transaction._id, status: { $ne: 'paid' } },
             update,
             { new: true }
         ).populate('merchantId');
 
+        // If update failed (maybe already paid), try without the status filter
         if (!updatedTransaction) {
-            console.warn('\n⚠️ WARNING: Failed to update transaction!');
-            console.warn('   Possible reasons:');
-            console.warn('   1. Transaction was already marked as paid');
-            console.warn('   2. Transaction ID not found');
-            console.warn('   3. Database connection issue');
+            console.warn('\n⚠️ First update attempt failed (transaction may already be paid)');
+            console.warn('   Trying update without status filter...');
+            
+            // Try updating without the status filter - this will update even if already paid
+            updatedTransaction = await Transaction.findByIdAndUpdate(
+                transaction._id,
+                update,
+                { new: true }
+            ).populate('merchantId');
+        }
+
+        if (!updatedTransaction) {
+            console.error('\n❌❌❌ CRITICAL: Failed to update transaction! ❌❌❌');
+            console.error('   Transaction Object ID:', transaction._id);
+            console.error('   Transaction ID String:', transaction._id.toString());
+            console.error('   Possible reasons:');
+            console.error('   1. Transaction ID not found in database');
+            console.error('   2. Database connection issue');
+            console.error('   3. Transaction was deleted');
             
             // Try to find the transaction again to see its current state
             const currentTransaction = await Transaction.findById(transaction._id);
             if (currentTransaction) {
-                console.warn('   Current transaction status:', currentTransaction.status);
-                console.warn('   Current transaction ID:', currentTransaction.transactionId);
+                console.error('   ✅ Transaction still exists in database');
+                console.error('   Current transaction status:', currentTransaction.status);
+                console.error('   Current transaction ID:', currentTransaction.transactionId);
+                console.error('   ⚠️  Update query may have failed - check database logs');
             } else {
-                console.warn('   Transaction not found in database!');
+                console.error('   ❌ Transaction not found in database!');
             }
-            console.log('💰'.repeat(40) + '\n');
-            return;
+            console.error('💰'.repeat(40) + '\n');
+            throw new Error('Failed to update transaction in database');
         }
 
         console.log('\n✅✅✅ TRANSACTION SUCCESSFULLY UPDATED TO PAID ✅✅✅');
