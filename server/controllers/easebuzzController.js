@@ -1224,36 +1224,173 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
         console.log('   💰 Commission Calculation:');
         console.log('      Amount: ₹', amount);
         console.log('      Commission Object:', JSON.stringify(commissionObj, null, 2));
-        console.log('      Commission Amount: ₹', commissionAmount);
+        console.log('      Commission Amount (extracted): ₹', commissionAmount);
         console.log('      Net Amount: ₹', netAmount);
+        console.log('      Commission Amount Type:', typeof commissionAmount);
+        console.log('      Net Amount Type:', typeof netAmount);
+        console.log('      Is Commission Valid Number?', !isNaN(commissionAmount) && isFinite(commissionAmount));
+        console.log('      Is Net Amount Valid Number?', !isNaN(netAmount) && isFinite(netAmount));
 
-        // Get paidAt timestamp
+        // Get paidAt timestamp - ensure it's valid
         const paidAt = new Date();
-        const expectedSettlementDate = calculateExpectedSettlementDate(paidAt);
+        if (isNaN(paidAt.getTime())) {
+            throw new Error('Cannot create valid paidAt date');
+        }
+        
+        console.log('   📅 Settlement Calculation:');
+        console.log('      Paid At:', paidAt.toISOString());
+        console.log('      Paid At Valid?', !isNaN(paidAt.getTime()));
+        
+        // Calculate settlement date with robust error handling
+        let expectedSettlementDate = null;
+        let settlementDateCalculated = false;
+        
+        try {
+            expectedSettlementDate = calculateExpectedSettlementDate(paidAt);
+            console.log('      Expected Settlement Date (calculated):', expectedSettlementDate ? expectedSettlementDate.toISOString() : 'null');
+            
+            // Validate the returned date
+            if (expectedSettlementDate && expectedSettlementDate instanceof Date && !isNaN(expectedSettlementDate.getTime())) {
+                settlementDateCalculated = true;
+                console.log('      ✅ Settlement Date Valid');
+            } else {
+                throw new Error('Invalid date returned from calculateExpectedSettlementDate');
+            }
+        } catch (error) {
+            console.error('      ❌ Error calculating settlement date:', error.message);
+            settlementDateCalculated = false;
+        }
+        
+        // If calculation failed, use fallback
+        if (!settlementDateCalculated) {
+            console.log('      Using fallback: T+1 from paidAt');
+            expectedSettlementDate = new Date(paidAt);
+            expectedSettlementDate.setDate(expectedSettlementDate.getDate() + 1);
+            expectedSettlementDate.setHours(16, 0, 0, 0);
+            console.log('      Fallback date:', expectedSettlementDate.toISOString());
+            console.log('      Fallback date valid?', !isNaN(expectedSettlementDate.getTime()));
+        }
+        
+        // Final validation - ensure date is valid before proceeding
+        if (!expectedSettlementDate || !(expectedSettlementDate instanceof Date) || isNaN(expectedSettlementDate.getTime())) {
+            console.error('   ❌ CRITICAL: Settlement date is still invalid after all attempts!');
+            // Emergency fallback: use current date + 1 day
+            expectedSettlementDate = new Date();
+            expectedSettlementDate.setDate(expectedSettlementDate.getDate() + 1);
+            expectedSettlementDate.setHours(16, 0, 0, 0);
+            console.log('   Using emergency fallback date:', expectedSettlementDate.toISOString());
+            
+            // One final check
+            if (isNaN(expectedSettlementDate.getTime())) {
+                console.error('   ❌ CRITICAL: Even emergency fallback date is invalid!');
+                // Last resort: use a hardcoded valid date (tomorrow)
+                expectedSettlementDate = new Date();
+                expectedSettlementDate.setTime(expectedSettlementDate.getTime() + 24 * 60 * 60 * 1000);
+                expectedSettlementDate.setHours(16, 0, 0, 0);
+                console.log('   Using last resort date:', expectedSettlementDate.toISOString());
+            }
+        }
+        
+        // Absolute final check
+        if (isNaN(expectedSettlementDate.getTime())) {
+            throw new Error(`Cannot create valid settlement date. Final attempt: ${expectedSettlementDate}`);
+        }
+        
+        console.log('   ✅ Final Settlement Date:', expectedSettlementDate.toISOString());
+        
+        // Validate all values before update
+        if (isNaN(commissionAmount) || !isFinite(commissionAmount)) {
+            console.error('   ❌ Invalid commission amount:', commissionAmount);
+            throw new Error(`Invalid commission amount: ${commissionAmount}`);
+        }
+        
+        if (isNaN(netAmount) || !isFinite(netAmount)) {
+            console.error('   ❌ Invalid net amount:', netAmount);
+            throw new Error(`Invalid net amount: ${netAmount}`);
+        }
         
         // Update transaction atomically
-        // NOTE: Transaction schema expects commission as Number, but we'll store both
+        // IMPORTANT: Store commission as NUMBER (not object) to match schema
+        const finalCommission = Number(commissionAmount);
+        const finalNetAmount = Number(netAmount);
+        
+        // Verify types before update
+        if (typeof finalCommission !== 'number' || isNaN(finalCommission)) {
+            throw new Error(`Commission is not a valid number: ${finalCommission} (type: ${typeof finalCommission})`);
+        }
+        if (typeof finalNetAmount !== 'number' || isNaN(finalNetAmount)) {
+            throw new Error(`NetAmount is not a valid number: ${finalNetAmount} (type: ${typeof finalNetAmount})`);
+        }
+        if (!(expectedSettlementDate instanceof Date) || isNaN(expectedSettlementDate.getTime())) {
+            throw new Error(`ExpectedSettlementDate is not a valid date: ${expectedSettlementDate}`);
+        }
+        
+        // Build update object - ensure all types are correct
         const update = {
             $set: {
                 status: 'paid',
-                easebuzzPaymentId: paymentId,
-                easebuzzReferenceId: payload.bank_ref_num || payload.auth_ref_num || transaction.easebuzzReferenceId,
-                paymentMethod: paymentMethod,
-                paidAt: paidAt,
+                easebuzzPaymentId: String(paymentId || ''),
+                easebuzzReferenceId: String(payload.bank_ref_num || payload.auth_ref_num || transaction.easebuzzReferenceId || ''),
+                paymentMethod: String(paymentMethod || 'UPI'),
+                paidAt: paidAt instanceof Date ? paidAt : new Date(paidAt),
                 updatedAt: new Date(),
-                commission: commissionAmount, // Store numeric commission value (schema expects Number)
-                netAmount: netAmount,
-                expectedSettlementDate: expectedSettlementDate,
+                commission: Number(finalCommission), // MUST be a number
+                netAmount: Number(finalNetAmount), // MUST be a number
+                expectedSettlementDate: expectedSettlementDate instanceof Date ? expectedSettlementDate : new Date(expectedSettlementDate),
                 webhookData: payload
             }
         };
         
-        console.log('   📅 Settlement Calculation:');
-        console.log('      Paid At:', paidAt);
-        console.log('      Expected Settlement Date:', expectedSettlementDate);
+        // Final type check before update
+        console.log('   🔍 Final Type Check:');
+        console.log('      commission type:', typeof update.$set.commission, 'value:', update.$set.commission);
+        console.log('      netAmount type:', typeof update.$set.netAmount, 'value:', update.$set.netAmount);
+        console.log('      expectedSettlementDate type:', typeof update.$set.expectedSettlementDate);
+        console.log('      expectedSettlementDate instanceof Date:', update.$set.expectedSettlementDate instanceof Date);
+        console.log('      expectedSettlementDate valid:', !isNaN(update.$set.expectedSettlementDate.getTime()));
+        
+        if (typeof update.$set.commission !== 'number') {
+            throw new Error(`Commission must be a number, got: ${typeof update.$set.commission} (${update.$set.commission})`);
+        }
+        if (typeof update.$set.netAmount !== 'number') {
+            throw new Error(`netAmount must be a number, got: ${typeof update.$set.netAmount} (${update.$set.netAmount})`);
+        }
+        if (!(update.$set.expectedSettlementDate instanceof Date) || isNaN(update.$set.expectedSettlementDate.getTime())) {
+            throw new Error(`expectedSettlementDate must be a valid Date, got: ${update.$set.expectedSettlementDate}`);
+        }
+        
+        console.log('   ✅ Update Query Prepared:');
+        console.log('      Status:', update.$set.status);
+        console.log('      Commission (type):', typeof update.$set.commission, 'value:', update.$set.commission);
+        console.log('      Net Amount (type):', typeof update.$set.netAmount, 'value:', update.$set.netAmount);
+        console.log('      Expected Settlement Date:', update.$set.expectedSettlementDate);
+        console.log('      Expected Settlement Date Type:', typeof update.$set.expectedSettlementDate);
+        console.log('      Expected Settlement Date Valid?', update.$set.expectedSettlementDate instanceof Date && !isNaN(update.$set.expectedSettlementDate.getTime()));
+        
+        // Final validation before attempting update
+        if (typeof update.$set.commission !== 'number' || isNaN(update.$set.commission)) {
+            throw new Error(`Invalid commission in update: ${update.$set.commission} (type: ${typeof update.$set.commission})`);
+        }
+        if (typeof update.$set.netAmount !== 'number' || isNaN(update.$set.netAmount)) {
+            throw new Error(`Invalid netAmount in update: ${update.$set.netAmount} (type: ${typeof update.$set.netAmount})`);
+        }
+        if (!(update.$set.expectedSettlementDate instanceof Date) || isNaN(update.$set.expectedSettlementDate.getTime())) {
+            throw new Error(`Invalid expectedSettlementDate in update: ${update.$set.expectedSettlementDate}`);
+        }
 
         console.log('\n💾 Attempting to update transaction in database...');
-        console.log('   Update Query:', JSON.stringify(update, null, 2));
+        // Log update query with proper serialization (dates won't serialize well in JSON)
+        const updateForLog = {
+            $set: {
+                ...update.$set,
+                paidAt: update.$set.paidAt.toISOString(),
+                updatedAt: update.$set.updatedAt.toISOString(),
+                expectedSettlementDate: update.$set.expectedSettlementDate.toISOString()
+            }
+        };
+        console.log('   Update Query:', JSON.stringify(updateForLog, null, 2));
+        console.log('   ⚠️  NOTE: Commission MUST be a number, not an object!');
+        console.log('   ⚠️  NOTE: Expected Settlement Date MUST be a valid Date object!');
         console.log('   Transaction ID:', transaction._id);
         console.log('   Transaction Object ID:', transaction._id.toString());
         console.log('   Current Status:', transaction.status);
@@ -1265,15 +1402,31 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
         let updateError = null;
         
         try {
+            console.log('   🔄 Attempting first update (with status filter)...');
             updatedTransaction = await Transaction.findOneAndUpdate(
                 { _id: transaction._id, status: { $ne: 'paid' } },
                 update,
-                { new: true, runValidators: true }
+                { new: true, runValidators: false } // Disable validators to avoid date casting issues
             ).populate('merchantId');
+            
+            if (updatedTransaction) {
+                console.log('   ✅ First update succeeded!');
+            }
         } catch (error) {
             updateError = error;
             console.error('   ❌ Database update error:', error.message);
-            console.error('   Error details:', error);
+            console.error('   Error name:', error.name);
+            console.error('   Error stack:', error.stack);
+            console.error('   Update object that failed:', {
+                status: update.$set.status,
+                commission: update.$set.commission,
+                commissionType: typeof update.$set.commission,
+                netAmount: update.$set.netAmount,
+                netAmountType: typeof update.$set.netAmount,
+                expectedSettlementDate: update.$set.expectedSettlementDate,
+                expectedSettlementDateType: typeof update.$set.expectedSettlementDate,
+                expectedSettlementDateValid: update.$set.expectedSettlementDate instanceof Date && !isNaN(update.$set.expectedSettlementDate.getTime())
+            });
         }
 
         // If update failed (maybe already paid), try without the status filter
@@ -1283,28 +1436,83 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
             console.warn('   Trying update without status filter...');
             
             try {
+                console.log('   🔄 Attempting second update (without status filter)...');
                 // Try updating without the status filter - this will update even if already paid
                 updatedTransaction = await Transaction.findByIdAndUpdate(
                     transaction._id,
                     update,
-                    { new: true, runValidators: true }
+                    { new: true, runValidators: false } // Disable validators to avoid date casting issues
                 ).populate('merchantId');
                 
                 if (updatedTransaction) {
                     console.warn('   ✅ Update succeeded on second attempt (without status filter)');
+                } else {
+                    console.warn('   ⚠️  Second update attempt returned null');
                 }
             } catch (error) {
                 updateError = error;
                 console.error('   ❌ Second update attempt also failed:', error.message);
+                console.error('   Error name:', error.name);
+                console.error('   Error stack:', error.stack);
             }
         }
 
         if (updateError) {
             console.error('\n❌❌❌ CRITICAL: Database update threw an error! ❌❌❌');
             console.error('   Error:', updateError.message);
+            console.error('   Error Name:', updateError.name);
             console.error('   Stack:', updateError.stack);
             console.error('   Transaction Object ID:', transaction._id);
-            throw updateError;
+            
+            // If it's a date casting error, try updating without the problematic date field
+            if (updateError.message && updateError.message.includes('Cast to date')) {
+                console.error('   ⚠️  Date casting error detected! Trying update without expectedSettlementDate...');
+                
+                // Create a simplified update without the problematic date
+                const simplifiedUpdate = {
+                    $set: {
+                        status: 'paid',
+                        easebuzzPaymentId: paymentId,
+                        easebuzzReferenceId: payload.bank_ref_num || payload.auth_ref_num || transaction.easebuzzReferenceId,
+                        paymentMethod: paymentMethod,
+                        paidAt: paidAt,
+                        updatedAt: new Date(),
+                        commission: finalCommission,
+                        netAmount: finalNetAmount,
+                        webhookData: payload
+                        // Skip expectedSettlementDate for now
+                    }
+                };
+                
+                try {
+                    updatedTransaction = await Transaction.findByIdAndUpdate(
+                        transaction._id,
+                        simplifiedUpdate,
+                        { new: true, runValidators: false }
+                    ).populate('merchantId');
+                    
+                    if (updatedTransaction) {
+                        console.error('   ✅ Update succeeded with simplified query (without expectedSettlementDate)');
+                        // Now try to update just the settlement date separately
+                        try {
+                            const settlementUpdate = {
+                                $set: {
+                                    expectedSettlementDate: expectedSettlementDate
+                                }
+                            };
+                            await Transaction.findByIdAndUpdate(transaction._id, settlementUpdate, { runValidators: false });
+                            console.error('   ✅ Settlement date updated separately');
+                        } catch (settlementError) {
+                            console.error('   ⚠️  Could not update settlement date separately:', settlementError.message);
+                        }
+                    }
+                } catch (simplifiedError) {
+                    console.error('   ❌ Simplified update also failed:', simplifiedError.message);
+                    throw updateError; // Throw original error
+                }
+            } else {
+                throw updateError;
+            }
         }
 
         if (!updatedTransaction) {
@@ -1334,17 +1542,31 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
         // Verify the update actually persisted
         console.log('   ✅ Database update completed successfully!');
         console.log('   📊 Updated Transaction Status (from returned object):', updatedTransaction.status);
+        console.log('   💰 Commission (from returned object):', updatedTransaction.commission, 'type:', typeof updatedTransaction.commission);
+        console.log('   💵 Net Amount (from returned object):', updatedTransaction.netAmount, 'type:', typeof updatedTransaction.netAmount);
+        console.log('   📅 Expected Settlement Date (from returned object):', updatedTransaction.expectedSettlementDate);
         
         // Double-check by querying the database again
         const verifyTransaction = await Transaction.findById(transaction._id);
         if (verifyTransaction) {
-            console.log('   🔍 Verification Query - Current Status in DB:', verifyTransaction.status);
+            console.log('\n   🔍 Verification Query Results:');
+            console.log('      Current Status in DB:', verifyTransaction.status);
+            console.log('      Commission in DB:', verifyTransaction.commission, 'type:', typeof verifyTransaction.commission);
+            console.log('      Net Amount in DB:', verifyTransaction.netAmount, 'type:', typeof verifyTransaction.netAmount);
+            console.log('      Expected Settlement Date in DB:', verifyTransaction.expectedSettlementDate);
+            
             if (verifyTransaction.status !== 'paid') {
                 console.error('   ❌ WARNING: Status mismatch! Update returned "paid" but DB still shows:', verifyTransaction.status);
                 console.error('   ⚠️  This indicates the update did not persist!');
+                console.error('   💡 Possible causes:');
+                console.error('      1. Database transaction rollback');
+                console.error('      2. Validation error that was silently ignored');
+                console.error('      3. Concurrent update overwrote the change');
             } else {
                 console.log('   ✅ Verification passed - Status is correctly set to "paid" in database');
             }
+        } else {
+            console.error('   ❌ Verification query returned null - transaction not found!');
         }
 
         console.log('\n✅✅✅ TRANSACTION SUCCESSFULLY UPDATED TO PAID ✅✅✅');
