@@ -1212,28 +1212,45 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
             return;
         }
 
-        const paymentId = payload.transaction_id || payload.txn_id || transaction.easebuzzPaymentId;
-        const paymentMethod = payload.payment_mode || payload.payment_method || 'unknown';
+        const paymentId = payload.easepayid || payload.transaction_id || payload.txn_id || transaction.easebuzzPaymentId;
+        const paymentMethod = payload.mode || payload.payment_mode || payload.payment_method || 'UPI';
         const amount = parseFloat(payload.amount || transaction.amount);
 
-        // Calculate commission
-        const commission = calculatePayinCommission(amount, transaction.merchantId);
-        const netAmount = amount - commission;
+        // Calculate commission (returns an object with commission.commission as the numeric value)
+        const commissionObj = calculatePayinCommission(amount, transaction.merchantId);
+        const commissionAmount = commissionObj.commission || 0;
+        const netAmount = parseFloat((amount - commissionAmount).toFixed(2));
+        
+        console.log('   💰 Commission Calculation:');
+        console.log('      Amount: ₹', amount);
+        console.log('      Commission Object:', JSON.stringify(commissionObj, null, 2));
+        console.log('      Commission Amount: ₹', commissionAmount);
+        console.log('      Net Amount: ₹', netAmount);
 
+        // Get paidAt timestamp
+        const paidAt = new Date();
+        const expectedSettlementDate = calculateExpectedSettlementDate(paidAt);
+        
         // Update transaction atomically
+        // NOTE: Transaction schema expects commission as Number, but we'll store both
         const update = {
             $set: {
                 status: 'paid',
                 easebuzzPaymentId: paymentId,
+                easebuzzReferenceId: payload.bank_ref_num || payload.auth_ref_num || transaction.easebuzzReferenceId,
                 paymentMethod: paymentMethod,
-                paidAt: new Date(),
+                paidAt: paidAt,
                 updatedAt: new Date(),
-                commission: commission,
+                commission: commissionAmount, // Store numeric commission value (schema expects Number)
                 netAmount: netAmount,
-                expectedSettlementDate: calculateExpectedSettlementDate(),
+                expectedSettlementDate: expectedSettlementDate,
                 webhookData: payload
             }
         };
+        
+        console.log('   📅 Settlement Calculation:');
+        console.log('      Paid At:', paidAt);
+        console.log('      Expected Settlement Date:', expectedSettlementDate);
 
         console.log('\n💾 Attempting to update transaction in database...');
         console.log('   Update Query:', JSON.stringify(update, null, 2));
@@ -1243,23 +1260,51 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
         console.log('   Query Filter: { _id: ObjectId("' + transaction._id + '"), status: { $ne: "paid" } }');
         
         // Try the update
-        let updatedTransaction = await Transaction.findOneAndUpdate(
-            { _id: transaction._id, status: { $ne: 'paid' } },
-            update,
-            { new: true }
-        ).populate('merchantId');
+        console.log('   🔄 Executing database update...');
+        let updatedTransaction = null;
+        let updateError = null;
+        
+        try {
+            updatedTransaction = await Transaction.findOneAndUpdate(
+                { _id: transaction._id, status: { $ne: 'paid' } },
+                update,
+                { new: true, runValidators: true }
+            ).populate('merchantId');
+        } catch (error) {
+            updateError = error;
+            console.error('   ❌ Database update error:', error.message);
+            console.error('   Error details:', error);
+        }
 
         // If update failed (maybe already paid), try without the status filter
-        if (!updatedTransaction) {
-            console.warn('\n⚠️ First update attempt failed (transaction may already be paid)');
+        if (!updatedTransaction && !updateError) {
+            console.warn('\n⚠️ First update attempt returned null');
+            console.warn('   Transaction may already be paid, or query filter didn\'t match');
             console.warn('   Trying update without status filter...');
             
-            // Try updating without the status filter - this will update even if already paid
-            updatedTransaction = await Transaction.findByIdAndUpdate(
-                transaction._id,
-                update,
-                { new: true }
-            ).populate('merchantId');
+            try {
+                // Try updating without the status filter - this will update even if already paid
+                updatedTransaction = await Transaction.findByIdAndUpdate(
+                    transaction._id,
+                    update,
+                    { new: true, runValidators: true }
+                ).populate('merchantId');
+                
+                if (updatedTransaction) {
+                    console.warn('   ✅ Update succeeded on second attempt (without status filter)');
+                }
+            } catch (error) {
+                updateError = error;
+                console.error('   ❌ Second update attempt also failed:', error.message);
+            }
+        }
+
+        if (updateError) {
+            console.error('\n❌❌❌ CRITICAL: Database update threw an error! ❌❌❌');
+            console.error('   Error:', updateError.message);
+            console.error('   Stack:', updateError.stack);
+            console.error('   Transaction Object ID:', transaction._id);
+            throw updateError;
         }
 
         if (!updatedTransaction) {
@@ -1270,6 +1315,7 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
             console.error('   1. Transaction ID not found in database');
             console.error('   2. Database connection issue');
             console.error('   3. Transaction was deleted');
+            console.error('   4. Validation error in update query');
             
             // Try to find the transaction again to see its current state
             const currentTransaction = await Transaction.findById(transaction._id);
@@ -1284,13 +1330,29 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
             console.error('💰'.repeat(40) + '\n');
             throw new Error('Failed to update transaction in database');
         }
+        
+        // Verify the update actually persisted
+        console.log('   ✅ Database update completed successfully!');
+        console.log('   📊 Updated Transaction Status (from returned object):', updatedTransaction.status);
+        
+        // Double-check by querying the database again
+        const verifyTransaction = await Transaction.findById(transaction._id);
+        if (verifyTransaction) {
+            console.log('   🔍 Verification Query - Current Status in DB:', verifyTransaction.status);
+            if (verifyTransaction.status !== 'paid') {
+                console.error('   ❌ WARNING: Status mismatch! Update returned "paid" but DB still shows:', verifyTransaction.status);
+                console.error('   ⚠️  This indicates the update did not persist!');
+            } else {
+                console.log('   ✅ Verification passed - Status is correctly set to "paid" in database');
+            }
+        }
 
         console.log('\n✅✅✅ TRANSACTION SUCCESSFULLY UPDATED TO PAID ✅✅✅');
         console.log('   🆔 Transaction ID:', updatedTransaction.transactionId);
         console.log('   📋 Order ID:', updatedTransaction.orderId);
         console.log('   💰 Payment ID:', paymentId);
         console.log('   💵 Amount: ₹', amount);
-        console.log('   💸 Commission: ₹', commission);
+        console.log('   💸 Commission: ₹', commissionAmount);
         console.log('   💵 Net Amount: ₹', netAmount);
         console.log('   📊 New Status:', updatedTransaction.status);
         console.log('   ⏰ Paid At:', updatedTransaction.paidAt);
