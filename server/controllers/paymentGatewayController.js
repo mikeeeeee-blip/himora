@@ -16,7 +16,6 @@ exports.createPaymentLink = async (req, res) => {
     try {
         // Get payment gateway settings
         const settings = await Settings.getSettings();
-        const defaultGateway = settings.getDefaultGateway();
         const enabledGateways = settings.getEnabledGateways();
 
         // Check if any gateway is enabled
@@ -28,43 +27,38 @@ exports.createPaymentLink = async (req, res) => {
             });
         }
 
-        // Gateway selection logic
+        // Gateway selection logic - Always use round-robin rotation
         let selectedGateway;
         
         // Sort enabled gateways for consistent rotation order
         const sortedEnabledGateways = [...enabledGateways].sort();
         
-        // If multiple gateways are enabled, use rotation logic
+        // Always use round-robin rotation (even for single gateway, though it won't rotate)
+        // Initialize rotation counter if not set
+        if (settings.rotationCounter === undefined || settings.rotationCounter === null) {
+            settings.rotationCounter = 0;
+        }
+        
+        // Get the gateway at the current rotation index
+        const rotationIndex = settings.rotationCounter % sortedEnabledGateways.length;
+        selectedGateway = sortedEnabledGateways[rotationIndex];
+        
+        // Increment rotation counter for next request
+        settings.rotationCounter = (settings.rotationCounter + 1) % sortedEnabledGateways.length;
+        await settings.save();
+        
+        console.log(`🔄 Round-Robin Selection: Using gateway ${rotationIndex + 1} of ${sortedEnabledGateways.length}`);
+        console.log(`   Rotation index: ${rotationIndex}, Selected: ${selectedGateway}, Next: ${settings.rotationCounter}`);
+        console.log(`   Enabled gateways (sorted): ${sortedEnabledGateways.join(', ')}`);
         if (sortedEnabledGateways.length > 1) {
-            // Check if rotation is enabled (when multiple gateways are enabled)
-            // Use round-robin rotation based on a counter stored in settings
-            if (settings.rotationCounter === undefined || settings.rotationCounter === null) {
-                settings.rotationCounter = 0;
-            }
-            
-            // Get the gateway at the current rotation index
-            const rotationIndex = settings.rotationCounter % sortedEnabledGateways.length;
-            selectedGateway = sortedEnabledGateways[rotationIndex];
-            
-            // Increment rotation counter for next request
-            settings.rotationCounter = (settings.rotationCounter + 1) % sortedEnabledGateways.length;
-            await settings.save();
-            
-            console.log(`🔄 Rotation Mode: Using gateway ${rotationIndex + 1} of ${sortedEnabledGateways.length}`);
-            console.log(`   Rotation index: ${rotationIndex}, Selected: ${selectedGateway}, Next: ${settings.rotationCounter}`);
-            console.log(`   Enabled gateways (sorted): ${sortedEnabledGateways.join(', ')}`);
+            console.log(`   🔄 Round-robin mode active (${sortedEnabledGateways.length} gateways enabled)`);
         } else {
-            // Single gateway or default gateway
-            selectedGateway = defaultGateway || sortedEnabledGateways[0];
+            console.log(`   ℹ️ Single gateway enabled (round-robin will always select this gateway)`);
         }
 
         console.log(`🔀 Routing payment link creation to ${selectedGateway} gateway`);
         console.log(`   Enabled gateways: ${sortedEnabledGateways.join(', ')}`);
-        console.log(`   Default gateway: ${defaultGateway}`);
         console.log(`   Selected gateway: ${selectedGateway}`);
-        if (sortedEnabledGateways.length > 1) {
-            console.log(`   🔄 Rotation mode active (${sortedEnabledGateways.length} gateways enabled)`);
-        }
 
         // Store original json method to intercept response
         const originalJson = res.json.bind(res);
@@ -75,16 +69,13 @@ exports.createPaymentLink = async (req, res) => {
                 data.gateway_used = selectedGateway;
                 data.gateway_name = gatewayName;
                 
-                // Different messages based on rotation mode
-                if (sortedEnabledGateways.length > 1) {
-                    data.gateway_message = `Payment link created using ${gatewayName} gateway (rotation mode: ${sortedEnabledGateways.length} gateways active)`;
-                    data.rotation_mode = true;
-                    data.enabled_gateways_count = sortedEnabledGateways.length;
-                    data.enabled_gateways = sortedEnabledGateways;
-                } else {
-                    data.gateway_message = `Payment link created using ${gatewayName} gateway (automatically selected by system administrator)`;
-                    data.rotation_mode = false;
-                }
+                // Round-robin mode information
+                data.gateway_message = sortedEnabledGateways.length > 1
+                    ? `Payment link created using ${gatewayName} gateway (round-robin: ${sortedEnabledGateways.length} gateways active)`
+                    : `Payment link created using ${gatewayName} gateway (round-robin mode)`;
+                data.rotation_mode = true; // Always true now (round-robin is always active)
+                data.enabled_gateways_count = sortedEnabledGateways.length;
+                data.enabled_gateways = sortedEnabledGateways;
                 
                 // Update message to include gateway info
                 if (data.message) {
@@ -93,11 +84,11 @@ exports.createPaymentLink = async (req, res) => {
                     data.message = `Payment link created successfully using ${gatewayName}. Share this URL with customer.`;
                 }
                 
-                // Add helpful note about automatic gateway selection
+                // Add helpful note about round-robin selection
                 if (sortedEnabledGateways.length > 1) {
-                    data.note = `Rotation mode active: Payment requests are distributed across ${sortedEnabledGateways.length} enabled gateways (${sortedEnabledGateways.join(', ')}).`;
+                    data.note = `Round-robin mode: Payment requests are automatically distributed across ${sortedEnabledGateways.length} enabled gateways (${sortedEnabledGateways.join(', ')}).`;
                 } else {
-                    data.note = 'The payment gateway is automatically selected by the system administrator. You don\'t need to specify which gateway to use.';
+                    data.note = 'Round-robin mode: Payment gateway is automatically selected. You don\'t need to specify which gateway to use.';
                 }
             }
             return originalJson(data);
@@ -145,43 +136,36 @@ exports.createPaymentLink = async (req, res) => {
 exports.getAvailableGateways = async (req, res) => {
     try {
         const settings = await Settings.getSettings();
-        const defaultGateway = settings.getDefaultGateway();
         const enabledGateways = settings.getEnabledGateways();
 
         res.json({
             success: true,
-            default_gateway: defaultGateway,
             enabled_gateways: enabledGateways,
+            rotation_mode: true, // Round-robin is always active
             all_gateways: {
                 razorpay: {
                     name: 'Razorpay',
-                    enabled: settings.paymentGateways.razorpay.enabled,
-                    isDefault: settings.paymentGateways.razorpay.isDefault
+                    enabled: settings.paymentGateways.razorpay.enabled
                 },
                 paytm: {
                     name: 'Paytm',
-                    enabled: settings.paymentGateways.paytm.enabled,
-                    isDefault: settings.paymentGateways.paytm.isDefault
+                    enabled: settings.paymentGateways.paytm.enabled
                 },
                 phonepe: {
                     name: 'PhonePe',
-                    enabled: settings.paymentGateways.phonepe.enabled,
-                    isDefault: settings.paymentGateways.phonepe.isDefault
+                    enabled: settings.paymentGateways.phonepe.enabled
                 },
                 easebuzz: {
                     name: 'Easebuzz',
-                    enabled: settings.paymentGateways.easebuzz.enabled,
-                    isDefault: settings.paymentGateways.easebuzz.isDefault
+                    enabled: settings.paymentGateways.easebuzz.enabled
                 },
                 sabpaisa: {
                     name: 'SabPaisa',
-                    enabled: settings.paymentGateways.sabpaisa?.enabled || false,
-                    isDefault: settings.paymentGateways.sabpaisa?.isDefault || false
+                    enabled: settings.paymentGateways.sabpaisa?.enabled || false
                 },
                 cashfree: {
                     name: 'Cashfree',
-                    enabled: settings.paymentGateways.cashfree.enabled,
-                    isDefault: settings.paymentGateways.cashfree.isDefault
+                    enabled: settings.paymentGateways.cashfree.enabled
                 }
             }
         });

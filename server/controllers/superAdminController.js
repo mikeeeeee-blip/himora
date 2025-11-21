@@ -1416,14 +1416,13 @@ exports.getPaymentGatewaySettings = async (req, res) => {
         console.log(`⚙️ SuperAdmin ${req.user.name} fetching payment gateway settings`);
 
         const settings = await Settings.getSettings();
-        const defaultGateway = settings.getDefaultGateway();
         const enabledGateways = settings.getEnabledGateways();
 
         res.json({
             success: true,
             payment_gateways: settings.paymentGateways,
-            default_gateway: defaultGateway,
             enabled_gateways: enabledGateways,
+            rotation_mode: true, // Round-robin is always active
             updated_at: settings.updatedAt,
             updated_by: settings.updatedBy
         });
@@ -1457,7 +1456,6 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
 
         // Validate and update each gateway
         const validGateways = ['razorpay', 'paytm', 'phonepe', 'easebuzz', 'sabpaisa', 'cashfree'];
-        let hasDefault = false;
 
         for (const gateway of validGateways) {
             if (payment_gateways[gateway]) {
@@ -1465,13 +1463,18 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
                 
                 if (typeof gatewayConfig.enabled === 'boolean') {
                     settings.paymentGateways[gateway].enabled = gatewayConfig.enabled;
+                    // Clear isDefault when disabling (for backward compatibility)
+                    if (!gatewayConfig.enabled) {
+                        settings.paymentGateways[gateway].isDefault = false;
+                    }
                 }
                 
+                // Keep isDefault for backward compatibility but don't use it for selection
+                // Round-robin will handle gateway selection automatically
                 if (typeof gatewayConfig.isDefault === 'boolean') {
                     settings.paymentGateways[gateway].isDefault = gatewayConfig.isDefault;
+                    // Unset other defaults if this one is set
                     if (gatewayConfig.isDefault && gatewayConfig.enabled) {
-                        hasDefault = true;
-                        // Unset other defaults
                         for (const otherGateway of validGateways) {
                             if (otherGateway !== gateway) {
                                 settings.paymentGateways[otherGateway].isDefault = false;
@@ -1482,7 +1485,7 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
             }
         }
 
-        // Ensure at least one gateway is enabled and set as default
+        // Ensure at least one gateway is enabled
         const enabledGateways = settings.getEnabledGateways();
         if (enabledGateways.length === 0) {
             return res.status(400).json({
@@ -1491,11 +1494,10 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
             });
         }
 
-        // If no default is set, set the first enabled gateway as default
-        if (!hasDefault) {
-            const firstEnabled = enabledGateways[0];
-            settings.paymentGateways[firstEnabled].isDefault = true;
-            console.log(`⚠️ No default gateway specified, setting ${firstEnabled} as default`);
+        // Reset rotation counter if all gateways were disabled and re-enabled
+        // This ensures fair rotation when gateways are reconfigured
+        if (settings.rotationCounter >= enabledGateways.length) {
+            settings.rotationCounter = 0;
         }
 
         // Update metadata
@@ -1504,16 +1506,14 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
 
         await settings.save();
 
-        const defaultGateway = settings.getDefaultGateway();
-
-        console.log(`✅ Payment gateway settings updated. Default: ${defaultGateway}, Enabled: ${enabledGateways.join(', ')}`);
+        console.log(`✅ Payment gateway settings updated. Round-robin mode active. Enabled: ${enabledGateways.join(', ')}`);
 
         res.json({
             success: true,
-            message: 'Payment gateway settings updated successfully',
+            message: 'Payment gateway settings updated successfully. Round-robin mode is active.',
             payment_gateways: settings.paymentGateways,
-            default_gateway: defaultGateway,
             enabled_gateways: enabledGateways,
+            rotation_mode: true,
             updated_at: settings.updatedAt,
             updated_by: req.user.name
         });

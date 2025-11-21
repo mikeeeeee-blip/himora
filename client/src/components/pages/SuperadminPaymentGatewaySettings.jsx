@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiSettings, FiCheck, FiX, FiRefreshCw, FiSave } from 'react-icons/fi';
+import { FiSettings, FiRefreshCw, FiSave } from 'react-icons/fi';
 import superadminSettingsService from '../../services/superadminSettingsService';
 
 const SuperadminPaymentGatewaySettings = () => {
@@ -8,14 +8,14 @@ const SuperadminPaymentGatewaySettings = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [gateways, setGateways] = useState({
-    razorpay: { enabled: false, isDefault: false },
-    paytm: { enabled: false, isDefault: false },
-    phonepe: { enabled: false, isDefault: false },
-    easebuzz: { enabled: false, isDefault: false },
-    sabpaisa: { enabled: false, isDefault: false },
-    cashfree: { enabled: false, isDefault: false }
+    razorpay: { enabled: false },
+    paytm: { enabled: false },
+    phonepe: { enabled: false },
+    easebuzz: { enabled: false },
+    sabpaisa: { enabled: false },
+    cashfree: { enabled: false }
   });
-  const [defaultGateway, setDefaultGateway] = useState(null);
+  const [rotationMode, setRotationMode] = useState(true);
 
   useEffect(() => {
     fetchSettings();
@@ -29,36 +29,30 @@ const SuperadminPaymentGatewaySettings = () => {
       console.log('Fetched settings:', response);
       if (response.success) {
         console.log('Setting gateways:', response.payment_gateways);
-        // Ensure all gateways are properly structured
+        // Ensure all gateways are properly structured (round-robin mode - no default needed)
         const normalizedGateways = {
           razorpay: { 
-            enabled: Boolean(response.payment_gateways?.razorpay?.enabled), 
-            isDefault: Boolean(response.payment_gateways?.razorpay?.isDefault) 
+            enabled: Boolean(response.payment_gateways?.razorpay?.enabled)
           },
           paytm: { 
-            enabled: Boolean(response.payment_gateways?.paytm?.enabled), 
-            isDefault: Boolean(response.payment_gateways?.paytm?.isDefault) 
+            enabled: Boolean(response.payment_gateways?.paytm?.enabled)
           },
           phonepe: { 
-            enabled: Boolean(response.payment_gateways?.phonepe?.enabled), 
-            isDefault: Boolean(response.payment_gateways?.phonepe?.isDefault) 
+            enabled: Boolean(response.payment_gateways?.phonepe?.enabled)
           },
           easebuzz: { 
-            enabled: Boolean(response.payment_gateways?.easebuzz?.enabled), 
-            isDefault: Boolean(response.payment_gateways?.easebuzz?.isDefault) 
+            enabled: Boolean(response.payment_gateways?.easebuzz?.enabled)
           },
           sabpaisa: { 
-            enabled: Boolean(response.payment_gateways?.sabpaisa?.enabled), 
-            isDefault: Boolean(response.payment_gateways?.sabpaisa?.isDefault) 
+            enabled: Boolean(response.payment_gateways?.sabpaisa?.enabled)
           },
           cashfree: { 
-            enabled: Boolean(response.payment_gateways?.cashfree?.enabled), 
-            isDefault: Boolean(response.payment_gateways?.cashfree?.isDefault) 
+            enabled: Boolean(response.payment_gateways?.cashfree?.enabled)
           }
         };
         console.log('Normalized gateways:', normalizedGateways);
         setGateways(normalizedGateways);
-        setDefaultGateway(response.default_gateway);
+        setRotationMode(response.rotation_mode !== false); // Default to true
       }
     } catch (err) {
       console.error('Fetch error:', err);
@@ -78,89 +72,29 @@ const SuperadminPaymentGatewaySettings = () => {
       
       // Create a completely new object structure to ensure React detects the change
       const updated = {
-        razorpay: { enabled: prev.razorpay?.enabled || false, isDefault: prev.razorpay?.isDefault || false },
-        paytm: { enabled: prev.paytm?.enabled || false, isDefault: prev.paytm?.isDefault || false },
-        phonepe: { enabled: prev.phonepe?.enabled || false, isDefault: prev.phonepe?.isDefault || false },
-        easebuzz: { enabled: prev.easebuzz?.enabled || false, isDefault: prev.easebuzz?.isDefault || false },
-        sabpaisa: { enabled: prev.sabpaisa?.enabled || false, isDefault: prev.sabpaisa?.isDefault || false },
-        cashfree: { enabled: prev.cashfree?.enabled || false, isDefault: prev.cashfree?.isDefault || false }
+        razorpay: { enabled: prev.razorpay?.enabled || false },
+        paytm: { enabled: prev.paytm?.enabled || false },
+        phonepe: { enabled: prev.phonepe?.enabled || false },
+        easebuzz: { enabled: prev.easebuzz?.enabled || false },
+        sabpaisa: { enabled: prev.sabpaisa?.enabled || false },
+        cashfree: { enabled: prev.cashfree?.enabled || false }
       };
       
       const currentGateway = updated[gatewayName];
       console.log('Current gateway state before toggle:', gatewayName, currentGateway);
       
-      // If disabling, also remove default
-      if (currentGateway.enabled) {
-        updated[gatewayName] = {
-          enabled: false,
-          isDefault: false
-        };
-        console.log('✅ Disabling gateway:', gatewayName);
-      } else {
-        // Enabling the gateway
-        updated[gatewayName] = {
-          enabled: true,
-          isDefault: currentGateway.isDefault || false
-        };
-        
-        // If no other gateway is default, make this one default
-        const hasDefault = Object.values(updated).some(g => g.isDefault && g.enabled);
-        if (!hasDefault) {
-          updated[gatewayName] = {
-            ...updated[gatewayName],
-            isDefault: true
-          };
-          console.log('✅ Setting', gatewayName, 'as default (no other default exists)');
-        }
-        console.log('✅ Enabling gateway:', gatewayName);
-      }
+      // Simple toggle - round-robin handles selection automatically
+      updated[gatewayName] = {
+        enabled: !currentGateway.enabled
+      };
       
+      console.log('✅ Toggled gateway:', gatewayName, 'to', updated[gatewayName].enabled);
       console.log('✅ Updated gateways after toggle:', JSON.stringify(updated, null, 2));
       return updated;
     });
   };
 
-  const handleSetDefault = (gatewayName) => {
-    console.log('Set default gateway:', gatewayName);
-    console.log('Current gateways state:', gateways);
-    
-    setGateways(prev => {
-      // Create a completely new object to ensure React detects the change
-      const updated = {
-        razorpay: { ...prev.razorpay },
-        paytm: { ...prev.paytm },
-        phonepe: { ...prev.phonepe },
-        easebuzz: { ...prev.easebuzz },
-        sabpaisa: { ...prev.sabpaisa },
-        cashfree: { ...prev.cashfree }
-      };
-      
-      console.log('Previous state:', prev);
-      console.log('Gateway to set as default:', gatewayName, 'Current value:', updated[gatewayName]);
-      
-      // Unset all defaults
-      updated.razorpay.isDefault = false;
-      updated.paytm.isDefault = false;
-      updated.phonepe.isDefault = false;
-      updated.easebuzz.isDefault = false;
-      updated.sabpaisa.isDefault = false;
-      updated.cashfree.isDefault = false;
-      
-      // Set new default (only if enabled)
-      if (updated[gatewayName] && updated[gatewayName].enabled) {
-        updated[gatewayName] = {
-          ...updated[gatewayName],
-          isDefault: true
-        };
-        console.log('Set', gatewayName, 'as default');
-      } else {
-        console.warn('Cannot set default - gateway not enabled:', gatewayName, updated[gatewayName]);
-      }
-      
-      console.log('Updated gateways:', updated);
-      return updated;
-    });
-  };
+  // Removed handleSetDefault - round-robin handles selection automatically
 
   const handleSave = async () => {
     setSaving(true);
@@ -175,19 +109,13 @@ const SuperadminPaymentGatewaySettings = () => {
       return;
     }
 
-    // Validate: at least one default must be set
-    const defaultCount = Object.values(gateways).filter(g => g.isDefault && g.enabled).length;
-    if (defaultCount === 0) {
-      setError('At least one enabled gateway must be set as default');
-      setSaving(false);
-      return;
-    }
+    // No need to validate default - round-robin handles selection automatically
 
     try {
       const response = await superadminSettingsService.updatePaymentGatewaySettings(gateways);
       if (response.success) {
-        setSuccess('Payment gateway settings updated successfully!');
-        setDefaultGateway(response.default_gateway);
+        setSuccess('Payment gateway settings updated successfully! Round-robin mode is active.');
+        setRotationMode(response.rotation_mode !== false);
         setTimeout(() => setSuccess(''), 3000);
       }
     } catch (err) {
@@ -206,50 +134,7 @@ const SuperadminPaymentGatewaySettings = () => {
     cashfree: 'Cashfree'
   };
 
-  // Rotation logic: Cycle through enabled gateways
-  const handleRotateGateway = () => {
-    const enabledGateways = Object.entries(gateways)
-      .filter(([_, gateway]) => gateway.enabled)
-      .map(([name]) => name);
-    
-    if (enabledGateways.length <= 1) {
-      setError('At least two gateways must be enabled to use rotation');
-      setTimeout(() => setError(''), 3000);
-      return;
-    }
-
-    setGateways(prev => {
-      const updated = {
-        razorpay: { ...prev.razorpay },
-        paytm: { ...prev.paytm },
-        phonepe: { ...prev.phonepe },
-        easebuzz: { ...prev.easebuzz },
-        sabpaisa: { ...prev.sabpaisa },
-        cashfree: { ...prev.cashfree }
-      };
-
-      // Find current default
-      const currentDefaultIndex = enabledGateways.findIndex(
-        name => updated[name]?.isDefault && updated[name]?.enabled
-      );
-
-      // Unset all defaults
-      enabledGateways.forEach(name => {
-        updated[name].isDefault = false;
-      });
-
-      // Set next gateway as default (round-robin)
-      const nextIndex = (currentDefaultIndex + 1) % enabledGateways.length;
-      const nextGateway = enabledGateways[nextIndex];
-      updated[nextGateway] = {
-        ...updated[nextGateway],
-        isDefault: true
-      };
-
-      console.log(`🔄 Rotated default gateway from ${enabledGateways[currentDefaultIndex]} to ${nextGateway}`);
-      return updated;
-    });
-  };
+  // Removed handleRotateGateway - round-robin is automatic on the backend
 
   if (loading) {
     return (
@@ -269,8 +154,7 @@ const SuperadminPaymentGatewaySettings = () => {
             Payment Gateway Settings
           </h1>
           <p className="text-white/70 font-['Albert_Sans']">
-            Enable or disable payment gateways and set the default gateway for payment link creation.
-            When multiple gateways are enabled, use rotation to cycle through them.
+            Enable or disable payment gateways. Round-robin mode automatically distributes payment requests across all enabled gateways.
           </p>
         </div>
 
@@ -291,16 +175,13 @@ const SuperadminPaymentGatewaySettings = () => {
           <div className="space-y-4">
             {Object.entries(gateways).map(([key, gateway]) => {
               const isEnabled = gateway?.enabled === true;
-              const isDefault = gateway?.isDefault === true;
               
               return (
                 <div
                   key={key}
                   className={`p-4 rounded-lg border-2 transition-all ${
                     isEnabled
-                      ? isDefault
-                        ? 'border-accent bg-accent/10'
-                        : 'border-white/20 bg-white/5'
+                      ? 'border-white/20 bg-white/5'
                       : 'border-white/10 bg-white/5 opacity-50'
                   }`}
                 >
@@ -359,46 +240,11 @@ const SuperadminPaymentGatewaySettings = () => {
                           Enabled
                         </span>
                       )}
-                      {isDefault && isEnabled && (
-                        <span className="text-xs px-2 py-1 bg-accent/20 text-accent rounded font-medium">
-                          Default
-                        </span>
-                      )}
                     </div>
                     <div className="flex items-center gap-2" style={{ position: 'relative', zIndex: 10 }}>
-                      {isEnabled && !isDefault && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log('Set default clicked for:', key);
-                            console.log('Current gateway state:', gateway);
-                            console.log('isEnabled:', isEnabled, 'isDefault:', isDefault);
-                            handleSetDefault(key);
-                          }}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }}
-                          className="px-3 py-1.5 bg-accent/20 hover:bg-accent/30 active:bg-accent/40 text-accent rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                          style={{ 
-                            pointerEvents: 'auto',
-                            position: 'relative',
-                            zIndex: 20
-                          }}
-                        >
-                          Set as Default
-                        </button>
-                      )}
-                      {isDefault && isEnabled && (
-                        <span className="px-3 py-1.5 bg-accent text-white rounded-lg text-sm font-medium">
-                          Default Gateway
-                        </span>
-                      )}
                       {!isEnabled && (
                         <span className="px-3 py-1.5 bg-white/10 text-white/50 rounded-lg text-sm font-medium">
-                          Enable first
+                          Disabled
                         </span>
                       )}
                     </div>
@@ -408,25 +254,19 @@ const SuperadminPaymentGatewaySettings = () => {
             })}
           </div>
 
-          {/* Rotation Button - Show when multiple gateways are enabled */}
+          {/* Round-Robin Info - Show when multiple gateways are enabled */}
           {Object.values(gateways).filter(g => g.enabled).length > 1 && (
             <div className="mt-6 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FiRefreshCw className="text-purple-400" />
                 <div>
                   <p className="text-purple-400 text-sm font-medium mb-1">
-                    Multiple Gateways Enabled
+                    Round-Robin Mode Active
                   </p>
                   <p className="text-purple-300 text-xs">
-                    Rotate the default gateway to distribute load across enabled providers
+                    Payment requests are automatically distributed across {Object.values(gateways).filter(g => g.enabled).length} enabled gateways in round-robin fashion
                   </p>
                 </div>
-                <button
-                  onClick={handleRotateGateway}
-                  className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                >
-                  <FiRefreshCw />
-                  Rotate Gateway
-                </button>
               </div>
             </div>
           )}
@@ -434,12 +274,11 @@ const SuperadminPaymentGatewaySettings = () => {
           {/* Info Box */}
           <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
             <p className="text-blue-400 text-sm">
-              <strong>Note:</strong> The default gateway will be used automatically when creating payment links.
-              At least one gateway must be enabled and set as default.
+              <strong>Round-Robin Mode:</strong> Payment requests are automatically distributed across all enabled gateways in round-robin fashion.
+              At least one gateway must be enabled. When multiple gateways are enabled, each payment link creation will automatically use the next gateway in rotation.
               {Object.values(gateways).filter(g => g.enabled).length > 1 && (
-                <span className="block mt-1">
-                  <strong>Rotation Mode:</strong> When multiple gateways are enabled, you can rotate the default gateway
-                  to distribute payment requests across different providers.
+                <span className="block mt-1 text-blue-300">
+                  Currently {Object.values(gateways).filter(g => g.enabled).length} gateways are enabled and will be rotated automatically.
                 </span>
               )}
             </p>
