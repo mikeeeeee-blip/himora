@@ -1595,15 +1595,7 @@ exports.handleUPIRedirect = (req, res) => {
 // ============ HANDLE EASEBUZZ PAYMENT SUCCESS ============
 async function handleEasebuzzPaymentSuccess(transaction, payload) {
     try {
-        console.log('\n' + '💰'.repeat(40));
-        console.log('💰 HANDLE EASEBUZZ PAYMENT SUCCESS - STARTED 💰');
-        console.log('💰'.repeat(40));
-        console.log('   🆔 Transaction ID:', transaction.transactionId);
-        console.log('   📋 Order ID:', transaction.orderId);
-        console.log('   📊 Current Status:', transaction.status);
-        console.log('   💵 Amount:', transaction.amount);
-        console.log('   📦 Payload:', JSON.stringify(payload, null, 2));
-
+       
         // Prevent duplicate processing
         if (transaction.status === 'paid') {
             console.log('⚠️ Transaction already marked as paid, skipping update');
@@ -1915,15 +1907,7 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
         }
 
         if (!updatedTransaction) {
-            console.error('\n❌❌❌ CRITICAL: Failed to update transaction! ❌❌❌');
-            console.error('   Transaction Object ID:', transaction._id);
-            console.error('   Transaction ID String:', transaction._id.toString());
-            console.error('   Possible reasons:');
-            console.error('   1. Transaction ID not found in database');
-            console.error('   2. Database connection issue');
-            console.error('   3. Transaction was deleted');
-            console.error('   4. Validation error in update query');
-            
+           
             // Try to find the transaction again to see its current state
             const currentTransaction = await Transaction.findById(transaction._id);
             if (currentTransaction) {
@@ -1939,12 +1923,7 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
         }
         
         // Verify the update actually persisted
-        console.log('   ✅ Database update completed successfully!');
-        console.log('   📊 Updated Transaction Status (from returned object):', updatedTransaction.status);
-        console.log('   💰 Commission (from returned object):', updatedTransaction.commission, 'type:', typeof updatedTransaction.commission);
-        console.log('   💵 Net Amount (from returned object):', updatedTransaction.netAmount, 'type:', typeof updatedTransaction.netAmount);
-        console.log('   📅 Expected Settlement Date (from returned object):', updatedTransaction.expectedSettlementDate);
-        
+       
         // Double-check by querying the database again
         const verifyTransaction = await Transaction.findById(transaction._id);
         if (verifyTransaction) {
@@ -1997,6 +1976,7 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
                     net_amount: updatedTransaction.netAmount,
                     status: updatedTransaction.status,
                     payment_method: updatedTransaction.paymentMethod,
+                    description: updatedTransaction.description,
                     paid_at: updatedTransaction.paidAt.toISOString(),
                     created_at: updatedTransaction.createdAt.toISOString(),
                     updated_at: updatedTransaction.updatedAt.toISOString()
@@ -2055,8 +2035,10 @@ async function handleEasebuzzPaymentFailed(transaction, payload) {
                     order_id: updatedTransaction.orderId,
                     easebuzz_order_id: updatedTransaction.easebuzzOrderId,
                     easebuzz_payment_id: updatedTransaction.easebuzzPaymentId,
+                    amount: updatedTransaction.amount,
                     status: updatedTransaction.status,
                     failure_reason: updatedTransaction.failureReason,
+                    description: updatedTransaction.description,
                     created_at: updatedTransaction.createdAt.toISOString(),
                     updated_at: updatedTransaction.updatedAt.toISOString()
                 }
@@ -2115,7 +2097,9 @@ async function handleEasebuzzPaymentPending(transaction, payload) {
                     order_id: updatedTransaction.orderId,
                     easebuzz_order_id: updatedTransaction.easebuzzOrderId,
                     easebuzz_payment_id: updatedTransaction.easebuzzPaymentId,
+                    amount: updatedTransaction.amount,
                     status: updatedTransaction.status,
+                    description: updatedTransaction.description,
                     created_at: updatedTransaction.createdAt.toISOString(),
                     updated_at: updatedTransaction.updatedAt.toISOString()
                 }
@@ -2178,8 +2162,10 @@ async function handleEasebuzzPaymentCancelled(transaction, payload) {
                     order_id: updatedTransaction.orderId,
                     easebuzz_order_id: updatedTransaction.easebuzzOrderId,
                     easebuzz_payment_id: updatedTransaction.easebuzzPaymentId,
+                    amount: updatedTransaction.amount,
                     status: updatedTransaction.status,
                     cancellation_reason: cancellationReason,
+                    description: updatedTransaction.description,
                     created_at: updatedTransaction.createdAt.toISOString(),
                     updated_at: updatedTransaction.updatedAt.toISOString()
                 }
