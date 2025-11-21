@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FiExternalLink, FiCopy, FiSmartphone, FiZap } from 'react-icons/fi';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { FiExternalLink, FiCopy, FiSmartphone, FiZap, FiRefreshCw } from 'react-icons/fi';
 import { SiGooglepay, SiPhonepe } from 'react-icons/si';
 import paymentService from '../../services/paymentService';
 import './PaymentSection.css';
@@ -17,6 +17,76 @@ const PaymentSection = () => {
     description: ''
   });
   const [createdLink, setCreatedLink] = useState(null);
+  const [gatewayStatus, setGatewayStatus] = useState({
+    activeGateway: null,
+    remainingTransactions: null,
+    currentTransactionCount: null,
+    gatewayTransactionLimit: null,
+    gatewayIntervals: {
+      paytm: 10,
+      easebuzz: 5,
+      razorpay: 10,
+      phonepe: 10,
+      sabpaisa: 10,
+      cashfree: 10
+    }
+  });
+  const intervalRef = useRef(null);
+
+  // Gateway labels
+  const gatewayLabels = {
+    razorpay: 'Razorpay',
+    paytm: 'Paytm',
+    phonepe: 'PhonePe',
+    easebuzz: 'Easebuzz',
+    sabpaisa: 'SabPaisa',
+    cashfree: 'Cashfree'
+  };
+
+  // Fetch gateway status (lightweight update)
+  const updateGatewayStatus = useCallback(async () => {
+    try {
+      const response = await paymentService.getAvailableGateways();
+      if (response.success && response.time_based_rotation) {
+        setGatewayStatus(prev => {
+          // Only update if values changed
+          if (
+            prev.activeGateway !== response.time_based_rotation.active_gateway ||
+            prev.remainingTransactions !== response.time_based_rotation.remaining_transactions ||
+            prev.currentTransactionCount !== response.time_based_rotation.current_transaction_count
+          ) {
+            return {
+              activeGateway: response.time_based_rotation.active_gateway || null,
+              remainingTransactions: response.time_based_rotation.remaining_transactions || null,
+              currentTransactionCount: response.time_based_rotation.current_transaction_count || null,
+              gatewayTransactionLimit: response.time_based_rotation.gateway_transaction_limit || null,
+              gatewayIntervals: response.time_based_rotation.gateway_intervals || prev.gatewayIntervals
+            };
+          }
+          return prev;
+        });
+      }
+    } catch (err) {
+      // Silently fail for transaction count updates
+      console.error('Gateway status update error:', err);
+    }
+  }, []);
+
+  // Initial fetch and set up interval
+  useEffect(() => {
+    updateGatewayStatus();
+    
+    // Update every 2 seconds
+    intervalRef.current = setInterval(() => {
+      updateGatewayStatus();
+    }, 2000);
+    
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [updateGatewayStatus]);
 
   const handleCreateLink = async (e) => {
     e.preventDefault();
@@ -115,6 +185,42 @@ const PaymentSection = () => {
           {showCreateForm ? 'Cancel' : 'Create Link'}
         </button>
       </div>
+      
+      {/* Active Gateway Status Display */}
+      {gatewayStatus.activeGateway && (
+        <div className="gateway-status-card">
+          <div className="gateway-status-left">
+            <div className="gateway-status-icon">
+              <FiRefreshCw />
+            </div>
+            <div className="gateway-status-info">
+              <div className="gateway-status-label">
+                Currently In Use
+              </div>
+              <div className="gateway-status-name">
+                {gatewayLabels[gatewayStatus.activeGateway] || gatewayStatus.activeGateway}
+              </div>
+              <div className="gateway-status-interval">
+                {gatewayStatus.gatewayIntervals[gatewayStatus.activeGateway] || 10} transaction limit
+              </div>
+            </div>
+          </div>
+          <div className="gateway-status-right">
+            <div className="gateway-status-timer-label">
+              Transaction Count
+            </div>
+            <div className="gateway-status-timer">
+              {gatewayStatus.currentTransactionCount !== null && gatewayStatus.gatewayTransactionLimit !== null
+                ? `${gatewayStatus.currentTransactionCount}/${gatewayStatus.gatewayTransactionLimit}`
+                : '--/--'}
+            </div>
+            <div className="gateway-status-live">
+              <div className="gateway-status-live-dot"></div>
+              <span className="gateway-status-live-text">Live</span>
+            </div>
+          </div>
+        </div>
+      )}
       
       {error && <div className="error-message">{error}</div>}
       {success && <div className="success-message">{success}</div>}

@@ -27,49 +27,29 @@ exports.createPaymentLink = async (req, res) => {
             });
         }
 
-        // Gateway selection logic - Use time-based rotation if enabled, otherwise round-robin
-        let selectedGateway;
+        // Gateway selection logic - Always use transaction-count-based rotation
         const sortedEnabledGateways = [...enabledGateways].sort();
         
-        // Check if time-based rotation is enabled
-        if (settings.timeBasedRotation && settings.timeBasedRotation.enabled) {
-            // Use time-based rotation
-            selectedGateway = settings.getActiveGatewayByTime();
-            
-            // Initialize rotation if not set
-            if (!settings.timeBasedRotation.rotationStartTime) {
-                settings.timeBasedRotation.rotationStartTime = new Date();
-                settings.timeBasedRotation.activeGateway = selectedGateway;
-            }
-            
-            // Save settings to persist rotation state
-            await settings.save();
-            
-            const remainingTime = settings.getRemainingTimeForActiveGateway();
-            const remainingMinutes = Math.floor(remainingTime / 60);
-            const remainingSeconds = remainingTime % 60;
-            
-            console.log(`⏰ Time-Based Selection: Using gateway ${selectedGateway}`);
-            console.log(`   Remaining time: ${remainingMinutes}m ${remainingSeconds}s`);
-            console.log(`   Enabled gateways: ${sortedEnabledGateways.join(', ')}`);
-        } else {
-            // Use round-robin rotation (fallback)
-            // Initialize rotation counter if not set
-            if (settings.rotationCounter === undefined || settings.rotationCounter === null) {
-                settings.rotationCounter = 0;
-            }
-            
-            // Get the gateway at the current rotation index
-            const rotationIndex = settings.rotationCounter % sortedEnabledGateways.length;
-            selectedGateway = sortedEnabledGateways[rotationIndex];
-            
-            // Increment rotation counter for next request
-            settings.rotationCounter = (settings.rotationCounter + 1) % sortedEnabledGateways.length;
-            await settings.save();
-            
-            console.log(`🔄 Round-Robin Selection: Using gateway ${rotationIndex + 1} of ${sortedEnabledGateways.length}`);
-            console.log(`   Rotation index: ${rotationIndex}, Selected: ${selectedGateway}, Next: ${settings.rotationCounter}`);
+        // Get active gateway and increment transaction count
+        let selectedGateway = settings.incrementTransactionCount();
+        
+        // Initialize rotation if not set
+        if (settings.timeBasedRotation.transactionCount === undefined || settings.timeBasedRotation.transactionCount === null) {
+            settings.timeBasedRotation.transactionCount = 0;
+            settings.timeBasedRotation.activeGateway = selectedGateway;
         }
+        
+        // Save settings to persist rotation state
+        await settings.save();
+        
+        const remainingTransactions = settings.getRemainingTimeForActiveGateway();
+        const currentCount = settings.timeBasedRotation.transactionCount || 0;
+        const gatewayLimit = settings.timeBasedRotation.gatewayIntervals[selectedGateway] || 10;
+        
+        console.log(`🔄 Transaction-Count-Based Selection: Using gateway ${selectedGateway}`);
+        console.log(`   Transaction count: ${currentCount}/${gatewayLimit}`);
+        console.log(`   Remaining transactions: ${remainingTransactions}`);
+        console.log(`   Enabled gateways: ${sortedEnabledGateways.join(', ')}`);
 
         console.log(`🔀 Routing payment link creation to ${selectedGateway} gateway`);
         console.log(`   Enabled gateways: ${sortedEnabledGateways.join(', ')}`);
@@ -84,21 +64,16 @@ exports.createPaymentLink = async (req, res) => {
                 data.gateway_used = selectedGateway;
                 data.gateway_name = gatewayName;
                 
-                // Rotation mode information
-                const isTimeBased = settings.timeBasedRotation && settings.timeBasedRotation.enabled;
-                if (isTimeBased) {
-                    const remainingTime = settings.getRemainingTimeForActiveGateway();
-                    const remainingMinutes = Math.floor(remainingTime / 60);
-                    data.gateway_message = `Payment link created using ${gatewayName} gateway (time-based rotation)`;
-                    data.rotation_mode = 'time-based';
-                    data.remaining_time_seconds = remainingTime;
-                    data.remaining_time_minutes = remainingMinutes;
-                } else {
-                    data.gateway_message = sortedEnabledGateways.length > 1
-                        ? `Payment link created using ${gatewayName} gateway (round-robin: ${sortedEnabledGateways.length} gateways active)`
-                        : `Payment link created using ${gatewayName} gateway (round-robin mode)`;
-                    data.rotation_mode = 'round-robin';
-                }
+                // Transaction-count-based rotation information (always active)
+                const remainingTransactions = settings.getRemainingTimeForActiveGateway();
+                const currentCount = settings.timeBasedRotation.transactionCount || 0;
+                const gatewayLimit = settings.timeBasedRotation.gatewayIntervals[selectedGateway] || 10;
+                
+                data.gateway_message = `Payment link created using ${gatewayName} gateway (transaction-count-based rotation)`;
+                data.rotation_mode = 'transaction-count-based';
+                data.remaining_transactions = remainingTransactions;
+                data.current_transaction_count = currentCount;
+                data.gateway_transaction_limit = gatewayLimit;
                 data.enabled_gateways_count = sortedEnabledGateways.length;
                 data.enabled_gateways = sortedEnabledGateways;
                 
@@ -109,14 +84,8 @@ exports.createPaymentLink = async (req, res) => {
                     data.message = `Payment link created successfully using ${gatewayName}. Share this URL with customer.`;
                 }
                 
-                // Add helpful note about selection mode
-                if (isTimeBased) {
-                    data.note = `Time-based rotation: Payment gateway rotates based on configured time intervals.`;
-                } else if (sortedEnabledGateways.length > 1) {
-                    data.note = `Round-robin mode: Payment requests are automatically distributed across ${sortedEnabledGateways.length} enabled gateways (${sortedEnabledGateways.join(', ')}).`;
-                } else {
-                    data.note = 'Payment gateway is automatically selected. You don\'t need to specify which gateway to use.';
-                }
+                // Add helpful note about transaction-count-based rotation
+                data.note = `Transaction-count-based rotation: Payment gateway rotates based on configured transaction limits (${gatewayName}: ${gatewayLimit} transactions).`;
             }
             return originalJson(data);
         };
@@ -164,25 +133,31 @@ exports.getAvailableGateways = async (req, res) => {
     try {
         const settings = await Settings.getSettings();
         const enabledGateways = settings.getEnabledGateways();
-        const isTimeBased = settings.timeBasedRotation && settings.timeBasedRotation.enabled;
         
-        let activeGateway = null;
-        let remainingTime = null;
-        
-        if (isTimeBased) {
-            activeGateway = settings.getActiveGatewayByTime();
-            remainingTime = settings.getRemainingTimeForActiveGateway();
-        }
+        // Always use transaction-count-based rotation
+        const activeGateway = settings.getActiveGatewayByTime();
+        const remainingTransactions = settings.getRemainingTimeForActiveGateway();
+        const currentCount = settings.timeBasedRotation?.transactionCount || 0;
+        const gatewayLimit = settings.timeBasedRotation?.gatewayIntervals[activeGateway] || 10;
 
         res.json({
             success: true,
             enabled_gateways: enabledGateways,
-            rotation_mode: isTimeBased ? 'time-based' : 'round-robin',
+            rotation_mode: 'transaction-count-based',
             time_based_rotation: {
-                enabled: isTimeBased,
+                enabled: true, // Always enabled
                 active_gateway: activeGateway,
-                remaining_time_seconds: remainingTime,
-                gateway_intervals: settings.timeBasedRotation?.gatewayIntervals || {}
+                remaining_transactions: remainingTransactions,
+                current_transaction_count: currentCount,
+                gateway_transaction_limit: gatewayLimit,
+                gateway_intervals: settings.timeBasedRotation?.gatewayIntervals || {
+                    paytm: 10,
+                    easebuzz: 5,
+                    razorpay: 10,
+                    phonepe: 10,
+                    sabpaisa: 10,
+                    cashfree: 10
+                }
             },
             all_gateways: {
                 razorpay: {

@@ -508,6 +508,113 @@
   background: #5a6268;
 }
 
+/* Pulse Animation for Live Indicator */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Gateway Status Display */
+.gateway-status-card {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(124, 58, 237, 0.2) 100%);
+  border: 2px solid rgba(139, 92, 246, 0.5);
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.gateway-status-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.gateway-status-icon {
+  padding: 0.5rem;
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: 0.5rem;
+}
+
+.gateway-status-icon svg {
+  color: #a78bfa;
+  font-size: 1.5rem;
+}
+
+.gateway-status-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.gateway-status-label {
+  font-size: 0.75rem;
+  color: #c4b5fd;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.gateway-status-name {
+  font-size: 1.25rem;
+  color: #fff;
+  font-weight: bold;
+}
+
+.gateway-status-interval {
+  font-size: 0.75rem;
+  color: #c4b5fd;
+  margin-top: 0.25rem;
+}
+
+.gateway-status-right {
+  text-align: right;
+}
+
+.gateway-status-timer-label {
+  font-size: 0.75rem;
+  color: #c4b5fd;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.gateway-status-timer {
+  font-size: 2rem;
+  font-family: monospace;
+  color: #a78bfa;
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+
+.gateway-status-live {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  justify-content: flex-end;
+}
+
+.gateway-status-live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: #a78bfa;
+  border-radius: 50%;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.gateway-status-live-text {
+  font-size: 0.75rem;
+  color: #c4b5fd;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .section-header {

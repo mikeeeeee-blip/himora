@@ -413,6 +413,30 @@ console.log(url);
     }
   }
 
+  // Get Available Gateways Status - requires API key
+  async getAvailableGateways() {
+    try {
+      const apiKeyData = await this.getApiKey();
+      const apiKey = apiKeyData.apiKey || apiKeyData.key;
+      
+      if (!apiKey) {
+        throw new Error('API key not found');
+      }
+
+      const response = await axios.get(API_ENDPOINTS.AVAILABLE_GATEWAYS, {
+        headers: {
+          'x-api-key': `${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Get available gateways error:', error);
+      throw new Error(this.getApiErrorMessage(error, 'Failed to fetch gateway status'));
+    }
+  }
+
   // Get Payment Status - requires API key + order ID
   async getPaymentStatus(orderId) {
     try {

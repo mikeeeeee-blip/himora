@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { FiSettings, FiRefreshCw, FiSave, FiClock } from 'react-icons/fi';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { FiSettings, FiRefreshCw, FiSave } from 'react-icons/fi';
 import superadminSettingsService from '../../services/superadminSettingsService';
 
 const SuperadminPaymentGatewaySettings = () => {
@@ -16,9 +16,10 @@ const SuperadminPaymentGatewaySettings = () => {
     cashfree: { enabled: false }
   });
   const [timeBasedRotation, setTimeBasedRotation] = useState({
-    enabled: false,
     activeGateway: null,
-    remainingTimeSeconds: null,
+    remainingTransactions: null,
+    currentTransactionCount: null,
+    gatewayTransactionLimit: null,
     gatewayIntervals: {
       paytm: 10,
       easebuzz: 5,
@@ -30,32 +31,45 @@ const SuperadminPaymentGatewaySettings = () => {
   });
   const intervalRef = useRef(null);
 
-  useEffect(() => {
-    fetchSettings();
-    
-    // Set up interval to refresh remaining time every second when time-based rotation is enabled
-    if (timeBasedRotation.enabled) {
-      intervalRef.current = setInterval(() => {
-        fetchSettings();
-      }, 1000); // Refresh every second
-    }
-    
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+  // Memoized function to update only transaction count data (lightweight)
+  const updateTransactionCountOnly = useCallback(async () => {
+    try {
+      const response = await superadminSettingsService.getPaymentGatewaySettings();
+      if (response.success && response.time_based_rotation) {
+        setTimeBasedRotation(prev => {
+          // Only update if values actually changed
+          if (
+            prev.activeGateway !== response.time_based_rotation.active_gateway ||
+            prev.remainingTransactions !== response.time_based_rotation.remaining_transactions ||
+            prev.currentTransactionCount !== response.time_based_rotation.current_transaction_count
+          ) {
+            return {
+              ...prev,
+              activeGateway: response.time_based_rotation.active_gateway || null,
+              remainingTransactions: response.time_based_rotation.remaining_transactions || null,
+              currentTransactionCount: response.time_based_rotation.current_transaction_count || null,
+              gatewayTransactionLimit: response.time_based_rotation.gateway_transaction_limit || null
+            };
+          }
+          return prev;
+        });
       }
-    };
-  }, [timeBasedRotation.enabled]);
+    } catch (err) {
+      // Silently fail for transaction count updates to avoid disrupting UI
+      console.error('Transaction count update error:', err);
+    }
+  }, []);
 
-  const fetchSettings = async () => {
-    setLoading(true);
+  // Full settings fetch (for initial load and manual refresh)
+  const fetchSettings = useCallback(async (showLoading = false) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     setError('');
     try {
       const response = await superadminSettingsService.getPaymentGatewaySettings();
-      console.log('Fetched settings:', response);
       if (response.success) {
-        console.log('Setting gateways:', response.payment_gateways);
-        // Ensure all gateways are properly structured (round-robin mode - no default needed)
+        // Update gateways only if they changed
         const normalizedGateways = {
           razorpay: { 
             enabled: Boolean(response.payment_gateways?.razorpay?.enabled)
@@ -76,33 +90,52 @@ const SuperadminPaymentGatewaySettings = () => {
             enabled: Boolean(response.payment_gateways?.cashfree?.enabled)
           }
         };
-        console.log('Normalized gateways:', normalizedGateways);
-        setGateways(normalizedGateways);
         
-        // Set time-based rotation state
+        setGateways(prev => {
+          // Only update if something changed
+          const hasChanged = Object.keys(normalizedGateways).some(
+            key => prev[key]?.enabled !== normalizedGateways[key].enabled
+          );
+          return hasChanged ? normalizedGateways : prev;
+        });
+        
+        // Update transaction-count-based rotation state
         if (response.time_based_rotation) {
-          setTimeBasedRotation({
-            enabled: response.time_based_rotation.enabled || false,
+          setTimeBasedRotation(prev => ({
             activeGateway: response.time_based_rotation.active_gateway || null,
-            remainingTimeSeconds: response.time_based_rotation.remaining_time_seconds || null,
-            gatewayIntervals: response.time_based_rotation.gateway_intervals || {
-              paytm: 10,
-              easebuzz: 5,
-              razorpay: 10,
-              phonepe: 10,
-              sabpaisa: 10,
-              cashfree: 10
-            }
-          });
+            remainingTransactions: response.time_based_rotation.remaining_transactions || null,
+            currentTransactionCount: response.time_based_rotation.current_transaction_count || null,
+            gatewayTransactionLimit: response.time_based_rotation.gateway_transaction_limit || null,
+            gatewayIntervals: response.time_based_rotation.gateway_intervals || prev.gatewayIntervals
+          }));
         }
       }
     } catch (err) {
       console.error('Fetch error:', err);
       setError(err.message || 'Failed to fetch settings');
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Initial load
+    fetchSettings(true);
+    
+    // Set up interval for lightweight transaction count updates (every 2 seconds)
+    intervalRef.current = setInterval(() => {
+      updateTransactionCountOnly();
+    }, 2000);
+    
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   const handleToggleGateway = (gatewayName) => {
     console.log('=== TOGGLE GATEWAY FUNCTION CALLED ===');
@@ -125,7 +158,7 @@ const SuperadminPaymentGatewaySettings = () => {
       const currentGateway = updated[gatewayName];
       console.log('Current gateway state before toggle:', gatewayName, currentGateway);
       
-      // Simple toggle - round-robin handles selection automatically
+      // Simple toggle
       updated[gatewayName] = {
         enabled: !currentGateway.enabled
       };
@@ -135,8 +168,6 @@ const SuperadminPaymentGatewaySettings = () => {
       return updated;
     });
   };
-
-  // Removed handleSetDefault - round-robin handles selection automatically
 
   const handleSave = async () => {
     setSaving(true);
@@ -151,22 +182,17 @@ const SuperadminPaymentGatewaySettings = () => {
       return;
     }
 
-    // No need to validate default - round-robin handles selection automatically
-
     try {
-      const response = await superadminSettingsService.updatePaymentGatewaySettings(
-        gateways,
-        timeBasedRotation
-      );
+      const response = await superadminSettingsService.updatePaymentGatewaySettings(gateways);
       if (response.success) {
-        const mode = timeBasedRotation.enabled ? 'Time-based rotation' : 'Round-robin mode';
-        setSuccess(`Payment gateway settings updated successfully! ${mode} is active.`);
+        setSuccess('Payment gateway settings updated successfully! Transaction-count-based rotation is active.');
         
         if (response.time_based_rotation) {
           setTimeBasedRotation({
-            enabled: response.time_based_rotation.enabled || false,
             activeGateway: response.time_based_rotation.active_gateway || null,
-            remainingTimeSeconds: response.time_based_rotation.remaining_time_seconds || null,
+            remainingTransactions: response.time_based_rotation.remaining_transactions || null,
+            currentTransactionCount: response.time_based_rotation.current_transaction_count || null,
+            gatewayTransactionLimit: response.time_based_rotation.gateway_transaction_limit || null,
             gatewayIntervals: response.time_based_rotation.gateway_intervals || timeBasedRotation.gatewayIntervals
           });
         }
@@ -180,19 +206,6 @@ const SuperadminPaymentGatewaySettings = () => {
     }
   };
 
-  const handleToggleTimeBasedRotation = () => {
-    setTimeBasedRotation(prev => ({
-      ...prev,
-      enabled: !prev.enabled
-    }));
-  };
-
-  const formatTime = (seconds) => {
-    if (seconds === null || seconds === undefined) return '--:--';
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const gatewayLabels = {
     razorpay: 'Razorpay',
@@ -223,7 +236,7 @@ const SuperadminPaymentGatewaySettings = () => {
             Payment Gateway Settings
           </h1>
           <p className="text-white/70 font-['Albert_Sans']">
-            Enable or disable payment gateways. Use time-based rotation to automatically switch between gateways at configured intervals.
+            Enable or disable payment gateways. Transaction-count-based rotation automatically switches between gateways at configured transaction limits (Paytm: 10 transactions, Easebuzz: 5 transactions).
           </p>
         </div>
 
@@ -239,78 +252,74 @@ const SuperadminPaymentGatewaySettings = () => {
           </div>
         )}
 
-        {/* Settings Card */}
-        <div className="bg-bg-secondary border border-white/10 rounded-xl p-6">
-          {/* Time-Based Rotation Toggle */}
-          <div className="mb-6 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+        {/* Currently In Use Gateway Status Card */}
+        {timeBasedRotation.activeGateway && gateways[timeBasedRotation.activeGateway]?.enabled && (
+          <div className="mb-6 p-6 bg-gradient-to-r from-purple-500/20 to-purple-600/20 border-2 border-purple-500/50 rounded-xl shadow-lg">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FiClock className="text-purple-400" />
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-purple-500/30 rounded-lg">
+                  <FiClock className="text-purple-300 text-2xl" />
+                </div>
                 <div>
-                  <p className="text-purple-400 text-sm font-medium mb-1">
-                    Time-Based Rotation
+                  <p className="text-purple-300 text-xs mb-1 font-medium uppercase tracking-wide">
+                    Currently In Use (Processing Payments)
                   </p>
-                  <p className="text-purple-300 text-xs">
-                    Automatically switch between gateways based on time intervals (Paytm: 10 min, Easebuzz: 5 min)
+                  <p className="text-white font-bold text-2xl">
+                    {gatewayLabels[timeBasedRotation.activeGateway] || timeBasedRotation.activeGateway}
+                  </p>
+                  <p className="text-purple-300 text-xs mt-1">
+                    This gateway is currently processing payment requests
                   </p>
                 </div>
               </div>
-              <div
-                onClick={handleToggleTimeBasedRotation}
-                className={`relative w-14 h-7 rounded-full transition-colors cursor-pointer select-none ${
-                  timeBasedRotation.enabled ? 'bg-purple-500' : 'bg-white/20'
-                }`}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleToggleTimeBasedRotation();
-                  }
-                }}
-              >
-                <span
-                  className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                    timeBasedRotation.enabled ? 'translate-x-7' : 'translate-x-0'
-                  }`}
-                />
+              <div className="text-right">
+                <p className="text-purple-300 text-xs mb-2 font-medium uppercase tracking-wide">
+                  Transaction Count
+                </p>
+                <p className="text-purple-400 font-mono font-bold text-4xl mb-1">
+                  {timeBasedRotation.currentTransactionCount !== null && timeBasedRotation.gatewayTransactionLimit !== null
+                    ? `${timeBasedRotation.currentTransactionCount}/${timeBasedRotation.gatewayTransactionLimit}`
+                    : '--/--'}
+                </p>
+                <div className="flex items-center gap-1 justify-end">
+                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                  <p className="text-purple-300 text-xs">Live</p>
+                </div>
               </div>
             </div>
-            
-            {/* Active Gateway Display */}
-            {timeBasedRotation.enabled && timeBasedRotation.activeGateway && (
-              <div className="mt-4 p-3 bg-purple-500/20 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-purple-300 text-xs mb-1">Currently Active</p>
-                    <p className="text-purple-400 font-medium">
-                      {gatewayLabels[timeBasedRotation.activeGateway] || timeBasedRotation.activeGateway}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-purple-300 text-xs mb-1">Time Remaining</p>
-                    <p className="text-purple-400 font-mono font-bold text-lg">
-                      {formatTime(timeBasedRotation.remainingTimeSeconds)}
-                    </p>
-                  </div>
-                </div>
+          </div>
+        )}
+
+        {/* Settings Card */}
+        <div className="bg-bg-secondary border border-white/10 rounded-xl p-6">
+          {/* Transaction-Count-Based Rotation Info */}
+          <div className="mb-6 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+            <div className="flex items-center gap-3">
+              <FiRefreshCw className="text-purple-400" />
+              <div>
+                <p className="text-purple-400 text-sm font-medium mb-1">
+                  Transaction-Count-Based Rotation (Always Active)
+                </p>
+                <p className="text-purple-300 text-xs">
+                  Automatically switches between gateways based on transaction limits (Paytm: 10 transactions, Easebuzz: 5 transactions)
+                </p>
               </div>
-            )}
+            </div>
           </div>
 
           <div className="space-y-4">
             {Object.entries(gateways).map(([key, gateway]) => {
               const isEnabled = gateway?.enabled === true;
-              const isActive = timeBasedRotation.enabled && timeBasedRotation.activeGateway === key;
+              const isCurrentlyInUse = timeBasedRotation.activeGateway === key && isEnabled;
               
               return (
                 <div
                   key={key}
                   className={`p-4 rounded-lg border-2 transition-all ${
-                    isActive
-                      ? 'border-purple-500 bg-purple-500/10'
+                    isCurrentlyInUse
+                      ? 'border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/20'
                       : isEnabled
-                      ? 'border-white/20 bg-white/5'
+                      ? 'border-green-500/30 bg-green-500/5'
                       : 'border-white/10 bg-white/5 opacity-50'
                   }`}
                 >
@@ -362,21 +371,33 @@ const SuperadminPaymentGatewaySettings = () => {
                       </div>
                       {isEnabled && (
                         <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded">
-                          Enabled
+                          Active
                         </span>
                       )}
-                      {isActive && (
-                        <span className="text-xs px-2 py-1 bg-purple-500/30 text-purple-300 rounded font-medium flex items-center gap-1">
-                          <FiClock className="text-xs" />
-                          Active
+                      {isCurrentlyInUse && (
+                        <span className="text-xs px-3 py-1.5 bg-purple-500/40 text-purple-200 rounded-full font-bold flex items-center gap-1.5 border border-purple-400/50">
+                          <div className="w-1.5 h-1.5 bg-purple-300 rounded-full animate-pulse"></div>
+                          IN USE
+                        </span>
+                      )}
+                      {!isEnabled && (
+                        <span className="text-xs px-2 py-1 bg-white/10 text-white/50 rounded">
+                          Disabled
                         </span>
                       )}
                     </div>
                     <div className="flex items-center gap-2" style={{ position: 'relative', zIndex: 10 }}>
-                      {timeBasedRotation.enabled && isEnabled && (
-                        <span className="text-xs text-white/60">
-                          {timeBasedRotation.gatewayIntervals[key] || 10} min
-                        </span>
+                      {isEnabled && (
+                        <div className="text-right">
+                          <span className="text-xs text-white/60 block">
+                            {timeBasedRotation.gatewayIntervals[key] || 10} transaction limit
+                          </span>
+                          {isCurrentlyInUse && timeBasedRotation.currentTransactionCount !== null && timeBasedRotation.gatewayTransactionLimit !== null && (
+                            <span className="text-xs text-purple-400 font-mono font-semibold block mt-0.5">
+                              {timeBasedRotation.currentTransactionCount}/{timeBasedRotation.gatewayTransactionLimit} transactions
+                            </span>
+                          )}
+                        </div>
                       )}
                       {!isEnabled && (
                         <span className="px-3 py-1.5 bg-white/10 text-white/50 rounded-lg text-sm font-medium">
@@ -393,31 +414,18 @@ const SuperadminPaymentGatewaySettings = () => {
           {/* Info Box */}
           <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
             <p className="text-blue-400 text-sm">
-              {timeBasedRotation.enabled ? (
-                <>
-                  <strong>Time-Based Rotation:</strong> Payment gateway automatically switches based on configured time intervals.
-                  Paytm is active for 10 minutes, then Easebuzz for 5 minutes, and the cycle repeats.
-                  At least one gateway must be enabled.
-                </>
-              ) : (
-                <>
-                  <strong>Round-Robin Mode:</strong> Payment requests are automatically distributed across all enabled gateways in round-robin fashion.
-                  At least one gateway must be enabled. When multiple gateways are enabled, each payment link creation will automatically use the next gateway in rotation.
-                  {Object.values(gateways).filter(g => g.enabled).length > 1 && (
-                    <span className="block mt-1 text-blue-300">
-                      Currently {Object.values(gateways).filter(g => g.enabled).length} gateways are enabled and will be rotated automatically.
-                    </span>
-                  )}
-                </>
-              )}
+              <strong>Transaction-Count-Based Rotation:</strong> All enabled gateways are active and participate in rotation.
+              The system automatically switches between enabled gateways based on configured transaction limits.
+              Paytm is used for 10 transactions, then Easebuzz for 5 transactions, and the cycle repeats.
+              At least one gateway must be enabled. The rotation starts automatically when the server starts.
             </p>
           </div>
 
           {/* Actions */}
           <div className="mt-6 flex items-center justify-between">
             <button
-              onClick={fetchSettings}
-              disabled={saving}
+              onClick={() => fetchSettings(true)}
+              disabled={saving || loading}
               className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors disabled:opacity-50"
             >
               <FiRefreshCw className={loading ? 'animate-spin' : ''} />

@@ -39,7 +39,7 @@ class SuperadminSettingsService {
   }
 
   // Update payment gateway settings
-  async updatePaymentGatewaySettings(paymentGateways, timeBasedRotation = null) {
+  async updatePaymentGatewaySettings(paymentGateways) {
     try {
       const token = authService.getToken();
       if (!token) {
@@ -47,21 +47,7 @@ class SuperadminSettingsService {
       }
 
       const payload = { payment_gateways: paymentGateways };
-      
-      // Include time-based rotation settings if provided
-      if (timeBasedRotation !== null) {
-        payload.time_based_rotation = {
-          enabled: timeBasedRotation.enabled || false,
-          gateway_intervals: timeBasedRotation.gatewayIntervals || {
-            paytm: 10,
-            easebuzz: 5,
-            razorpay: 10,
-            phonepe: 10,
-            sabpaisa: 10,
-            cashfree: 10
-          }
-        };
-      }
+      // Time-based rotation is always active, no need to send it
 
       const response = await axios.put(
         API_ENDPOINTS.UPDATE_PAYMENT_GATEWAY_SETTINGS,
