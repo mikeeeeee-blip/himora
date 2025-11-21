@@ -19,10 +19,20 @@ const SettingsSchema = new mongoose.Schema({
             enabled: { type: Boolean, default: false },
             isDefault: { type: Boolean, default: false }
         },
+        sabpaisa: {
+            enabled: { type: Boolean, default: false },
+            isDefault: { type: Boolean, default: false }
+        },
         cashfree: {
             enabled: { type: Boolean, default: false },
             isDefault: { type: Boolean, default: false }
         }
+    },
+    
+    // Rotation counter for load balancing when multiple gateways are enabled
+    rotationCounter: {
+        type: Number,
+        default: 0
     },
     
     // Metadata
@@ -49,6 +59,7 @@ SettingsSchema.statics.getSettings = async function() {
                 razorpay: { enabled: false, isDefault: false },
                 phonepe: { enabled: false, isDefault: false },
                 easebuzz: { enabled: false, isDefault: false },
+                sabpaisa: { enabled: false, isDefault: false },
                 cashfree: { enabled: false, isDefault: false }
             }
         });

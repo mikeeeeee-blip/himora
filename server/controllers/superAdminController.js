@@ -1456,7 +1456,7 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
         const settings = await Settings.getSettings();
 
         // Validate and update each gateway
-        const validGateways = ['razorpay', 'paytm', 'phonepe', 'easebuzz', 'cashfree'];
+        const validGateways = ['razorpay', 'paytm', 'phonepe', 'easebuzz', 'sabpaisa', 'cashfree'];
         let hasDefault = false;
 
         for (const gateway of validGateways) {

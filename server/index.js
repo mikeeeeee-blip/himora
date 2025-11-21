@@ -90,6 +90,7 @@ app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/razorpay', require('./routes/razorpayRoutes'));
 app.use('/api/paytm', require('./routes/paytmRoutes'));
 app.use('/api/easebuzz', require('./routes/easebuzzRoutes')); // ✅ NEW
+app.use('/api/sabpaisa', require('./routes/sabpaisaRoutes')); // ✅ NEW
 
 const PORT = process.env.PORT || 5000;
 

@@ -12,6 +12,7 @@ const SuperadminPaymentGatewaySettings = () => {
     paytm: { enabled: false, isDefault: false },
     phonepe: { enabled: false, isDefault: false },
     easebuzz: { enabled: false, isDefault: false },
+    sabpaisa: { enabled: false, isDefault: false },
     cashfree: { enabled: false, isDefault: false }
   });
   const [defaultGateway, setDefaultGateway] = useState(null);
@@ -46,6 +47,10 @@ const SuperadminPaymentGatewaySettings = () => {
             enabled: Boolean(response.payment_gateways?.easebuzz?.enabled), 
             isDefault: Boolean(response.payment_gateways?.easebuzz?.isDefault) 
           },
+          sabpaisa: { 
+            enabled: Boolean(response.payment_gateways?.sabpaisa?.enabled), 
+            isDefault: Boolean(response.payment_gateways?.sabpaisa?.isDefault) 
+          },
           cashfree: { 
             enabled: Boolean(response.payment_gateways?.cashfree?.enabled), 
             isDefault: Boolean(response.payment_gateways?.cashfree?.isDefault) 
@@ -77,6 +82,7 @@ const SuperadminPaymentGatewaySettings = () => {
         paytm: { enabled: prev.paytm?.enabled || false, isDefault: prev.paytm?.isDefault || false },
         phonepe: { enabled: prev.phonepe?.enabled || false, isDefault: prev.phonepe?.isDefault || false },
         easebuzz: { enabled: prev.easebuzz?.enabled || false, isDefault: prev.easebuzz?.isDefault || false },
+        sabpaisa: { enabled: prev.sabpaisa?.enabled || false, isDefault: prev.sabpaisa?.isDefault || false },
         cashfree: { enabled: prev.cashfree?.enabled || false, isDefault: prev.cashfree?.isDefault || false }
       };
       
@@ -125,6 +131,7 @@ const SuperadminPaymentGatewaySettings = () => {
         paytm: { ...prev.paytm },
         phonepe: { ...prev.phonepe },
         easebuzz: { ...prev.easebuzz },
+        sabpaisa: { ...prev.sabpaisa },
         cashfree: { ...prev.cashfree }
       };
       
@@ -136,6 +143,7 @@ const SuperadminPaymentGatewaySettings = () => {
       updated.paytm.isDefault = false;
       updated.phonepe.isDefault = false;
       updated.easebuzz.isDefault = false;
+      updated.sabpaisa.isDefault = false;
       updated.cashfree.isDefault = false;
       
       // Set new default (only if enabled)
@@ -194,7 +202,53 @@ const SuperadminPaymentGatewaySettings = () => {
     paytm: 'Paytm',
     phonepe: 'PhonePe',
     easebuzz: 'Easebuzz',
+    sabpaisa: 'SabPaisa',
     cashfree: 'Cashfree'
+  };
+
+  // Rotation logic: Cycle through enabled gateways
+  const handleRotateGateway = () => {
+    const enabledGateways = Object.entries(gateways)
+      .filter(([_, gateway]) => gateway.enabled)
+      .map(([name]) => name);
+    
+    if (enabledGateways.length <= 1) {
+      setError('At least two gateways must be enabled to use rotation');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+
+    setGateways(prev => {
+      const updated = {
+        razorpay: { ...prev.razorpay },
+        paytm: { ...prev.paytm },
+        phonepe: { ...prev.phonepe },
+        easebuzz: { ...prev.easebuzz },
+        sabpaisa: { ...prev.sabpaisa },
+        cashfree: { ...prev.cashfree }
+      };
+
+      // Find current default
+      const currentDefaultIndex = enabledGateways.findIndex(
+        name => updated[name]?.isDefault && updated[name]?.enabled
+      );
+
+      // Unset all defaults
+      enabledGateways.forEach(name => {
+        updated[name].isDefault = false;
+      });
+
+      // Set next gateway as default (round-robin)
+      const nextIndex = (currentDefaultIndex + 1) % enabledGateways.length;
+      const nextGateway = enabledGateways[nextIndex];
+      updated[nextGateway] = {
+        ...updated[nextGateway],
+        isDefault: true
+      };
+
+      console.log(`🔄 Rotated default gateway from ${enabledGateways[currentDefaultIndex]} to ${nextGateway}`);
+      return updated;
+    });
   };
 
   if (loading) {
@@ -215,7 +269,8 @@ const SuperadminPaymentGatewaySettings = () => {
             Payment Gateway Settings
           </h1>
           <p className="text-white/70 font-['Albert_Sans']">
-            Enable or disable payment gateways and set the default gateway for payment link creation
+            Enable or disable payment gateways and set the default gateway for payment link creation.
+            When multiple gateways are enabled, use rotation to cycle through them.
           </p>
         </div>
 
@@ -353,11 +408,40 @@ const SuperadminPaymentGatewaySettings = () => {
             })}
           </div>
 
+          {/* Rotation Button - Show when multiple gateways are enabled */}
+          {Object.values(gateways).filter(g => g.enabled).length > 1 && (
+            <div className="mt-6 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-purple-400 text-sm font-medium mb-1">
+                    Multiple Gateways Enabled
+                  </p>
+                  <p className="text-purple-300 text-xs">
+                    Rotate the default gateway to distribute load across enabled providers
+                  </p>
+                </div>
+                <button
+                  onClick={handleRotateGateway}
+                  className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  <FiRefreshCw />
+                  Rotate Gateway
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Info Box */}
           <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
             <p className="text-blue-400 text-sm">
               <strong>Note:</strong> The default gateway will be used automatically when creating payment links.
               At least one gateway must be enabled and set as default.
+              {Object.values(gateways).filter(g => g.enabled).length > 1 && (
+                <span className="block mt-1">
+                  <strong>Rotation Mode:</strong> When multiple gateways are enabled, you can rotate the default gateway
+                  to distribute payment requests across different providers.
+                </span>
+              )}
             </p>
           </div>
 
