@@ -1092,8 +1092,20 @@ exports.handleEasebuzzCallback = async (req, res) => {
 
         if (isSuccess) {
             await handleEasebuzzPaymentSuccess(transaction, callbackData);
+            
+            // Reload transaction to get updated UTR after processing
+            const updatedTransaction = await Transaction.findOne({ transactionId: transaction_id });
+            const utr = updatedTransaction?.acquirerData?.utr || 
+                       callbackData.utr || 
+                       callbackData.bank_ref_num || 
+                       callbackData.rrn || 
+                       null;
+            
             const frontendUrl = (transaction.callbackUrl || process.env.FRONTEND_URL || 'https://payments.ninex-group.com').replace(/:\d+$/, '').replace(/\/$/, '');
-            return res.redirect(`${frontendUrl}/payment-success?transaction_id=${transaction_id}`);
+            const redirectUrl = utr 
+                ? `${frontendUrl}/payment-success?transaction_id=${transaction_id}&utr=${encodeURIComponent(utr)}`
+                : `${frontendUrl}/payment-success?transaction_id=${transaction_id}`;
+            return res.redirect(redirectUrl);
         } else {
             await handleEasebuzzPaymentFailed(transaction, callbackData);
             const frontendUrl = (transaction.failureUrl || process.env.FRONTEND_URL || 'https://payments.ninex-group.com').replace(/:\d+$/, '').replace(/\/$/, '');
@@ -1606,6 +1618,26 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
         const paymentId = payload.easepayid || payload.transaction_id || payload.txn_id || transaction.easebuzzPaymentId;
         const paymentMethod = payload.mode || payload.payment_mode || payload.payment_method || 'UPI';
         const amount = parseFloat(payload.amount || transaction.amount);
+        
+        // Extract UTR (Unique Transaction Reference) from various possible fields
+        // Easebuzz may send UTR in different fields: utr, bank_ref_num, rrn, reference_number, etc.
+        const utr = payload.utr || 
+                   payload.bank_ref_num || 
+                   payload.rrn || 
+                   payload.reference_number || 
+                   payload.transaction_ref ||
+                   payload.utr_number ||
+                   null;
+        
+        // Extract RRN (Retrieval Reference Number) for UPI payments
+        const rrn = payload.rrn || 
+                   payload.bank_ref_num || 
+                   null;
+        
+        console.log('   🔍 UTR/RRN Extraction:');
+        console.log('      UTR:', utr || 'Not found');
+        console.log('      RRN:', rrn || 'Not found');
+        console.log('      Bank Ref Num:', payload.bank_ref_num || 'Not found');
 
         // Calculate commission (returns an object with commission.commission as the numeric value)
         const commissionObj = calculatePayinCommission(amount, transaction.merchantId);
@@ -1728,6 +1760,13 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
                 commission: Number(finalCommission), // MUST be a number
                 netAmount: Number(finalNetAmount), // MUST be a number
                 expectedSettlementDate: expectedSettlementDate instanceof Date ? expectedSettlementDate : new Date(expectedSettlementDate),
+                acquirerData: {
+                    utr: utr || null,
+                    rrn: rrn || null,
+                    bank_transaction_id: payload.bank_transaction_id || payload.transaction_id || null,
+                    bank_name: payload.bank_name || null,
+                    vpa: payload.vpa || payload.upi_vpa || null
+                },
                 webhookData: payload
             }
         };
@@ -1870,6 +1909,13 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
                         updatedAt: new Date(),
                         commission: finalCommission,
                         netAmount: finalNetAmount,
+                        acquirerData: {
+                            utr: utr || null,
+                            rrn: rrn || null,
+                            bank_transaction_id: payload.bank_transaction_id || payload.transaction_id || null,
+                            bank_name: payload.bank_name || null,
+                            vpa: payload.vpa || payload.upi_vpa || null
+                        },
                         webhookData: payload
                         // Skip expectedSettlementDate for now
                     }
@@ -1977,6 +2023,9 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
                     status: updatedTransaction.status,
                     payment_method: updatedTransaction.paymentMethod,
                     description: updatedTransaction.description,
+                    utr: updatedTransaction.acquirerData?.utr || null,
+                    rrn: updatedTransaction.acquirerData?.rrn || null,
+                    bank_transaction_id: updatedTransaction.acquirerData?.bank_transaction_id || null,
                     paid_at: updatedTransaction.paidAt.toISOString(),
                     created_at: updatedTransaction.createdAt.toISOString(),
                     updated_at: updatedTransaction.updatedAt.toISOString()
@@ -2039,6 +2088,9 @@ async function handleEasebuzzPaymentFailed(transaction, payload) {
                     status: updatedTransaction.status,
                     failure_reason: updatedTransaction.failureReason,
                     description: updatedTransaction.description,
+                    utr: updatedTransaction.acquirerData?.utr || null,
+                    rrn: updatedTransaction.acquirerData?.rrn || null,
+                    bank_transaction_id: updatedTransaction.acquirerData?.bank_transaction_id || null,
                     created_at: updatedTransaction.createdAt.toISOString(),
                     updated_at: updatedTransaction.updatedAt.toISOString()
                 }
@@ -2100,6 +2152,9 @@ async function handleEasebuzzPaymentPending(transaction, payload) {
                     amount: updatedTransaction.amount,
                     status: updatedTransaction.status,
                     description: updatedTransaction.description,
+                    utr: updatedTransaction.acquirerData?.utr || null,
+                    rrn: updatedTransaction.acquirerData?.rrn || null,
+                    bank_transaction_id: updatedTransaction.acquirerData?.bank_transaction_id || null,
                     created_at: updatedTransaction.createdAt.toISOString(),
                     updated_at: updatedTransaction.updatedAt.toISOString()
                 }
@@ -2166,6 +2221,9 @@ async function handleEasebuzzPaymentCancelled(transaction, payload) {
                     status: updatedTransaction.status,
                     cancellation_reason: cancellationReason,
                     description: updatedTransaction.description,
+                    utr: updatedTransaction.acquirerData?.utr || null,
+                    rrn: updatedTransaction.acquirerData?.rrn || null,
+                    bank_transaction_id: updatedTransaction.acquirerData?.bank_transaction_id || null,
                     created_at: updatedTransaction.createdAt.toISOString(),
                     updated_at: updatedTransaction.updatedAt.toISOString()
                 }
