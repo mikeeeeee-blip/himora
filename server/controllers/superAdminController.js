@@ -1417,12 +1417,34 @@ exports.getPaymentGatewaySettings = async (req, res) => {
 
         const settings = await Settings.getSettings();
         const enabledGateways = settings.getEnabledGateways();
+        const isTimeBased = settings.timeBasedRotation && settings.timeBasedRotation.enabled;
+        
+        let activeGateway = null;
+        let remainingTime = null;
+        
+        if (isTimeBased) {
+            activeGateway = settings.getActiveGatewayByTime();
+            remainingTime = settings.getRemainingTimeForActiveGateway();
+        }
 
         res.json({
             success: true,
             payment_gateways: settings.paymentGateways,
             enabled_gateways: enabledGateways,
-            rotation_mode: true, // Round-robin is always active
+            rotation_mode: isTimeBased ? 'time-based' : 'round-robin',
+            time_based_rotation: {
+                enabled: isTimeBased,
+                active_gateway: activeGateway,
+                remaining_time_seconds: remainingTime,
+                gateway_intervals: settings.timeBasedRotation?.gatewayIntervals || {
+                    paytm: 10,
+                    easebuzz: 5,
+                    razorpay: 10,
+                    phonepe: 10,
+                    sabpaisa: 10,
+                    cashfree: 10
+                }
+            },
             updated_at: settings.updatedAt,
             updated_by: settings.updatedBy
         });
@@ -1470,7 +1492,6 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
                 }
                 
                 // Keep isDefault for backward compatibility but don't use it for selection
-                // Round-robin will handle gateway selection automatically
                 if (typeof gatewayConfig.isDefault === 'boolean') {
                     settings.paymentGateways[gateway].isDefault = gatewayConfig.isDefault;
                     // Unset other defaults if this one is set
@@ -1479,6 +1500,49 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
                             if (otherGateway !== gateway) {
                                 settings.paymentGateways[otherGateway].isDefault = false;
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Handle time-based rotation settings
+        if (req.body.time_based_rotation !== undefined) {
+            const timeBasedConfig = req.body.time_based_rotation;
+            
+            if (typeof timeBasedConfig.enabled === 'boolean') {
+                if (!settings.timeBasedRotation) {
+                    settings.timeBasedRotation = {
+                        enabled: false,
+                        activeGateway: null,
+                        rotationStartTime: null,
+                        gatewayIntervals: {
+                            paytm: 10,
+                            easebuzz: 5,
+                            razorpay: 10,
+                            phonepe: 10,
+                            sabpaisa: 10,
+                            cashfree: 10
+                        }
+                    };
+                }
+                
+                settings.timeBasedRotation.enabled = timeBasedConfig.enabled;
+                
+                // If enabling time-based rotation, initialize it
+                if (timeBasedConfig.enabled) {
+                    const enabledGateways = settings.getEnabledGateways();
+                    if (enabledGateways.length > 0) {
+                        settings.timeBasedRotation.activeGateway = enabledGateways[0];
+                        settings.timeBasedRotation.rotationStartTime = new Date();
+                    }
+                }
+                
+                // Update gateway intervals if provided
+                if (timeBasedConfig.gateway_intervals && typeof timeBasedConfig.gateway_intervals === 'object') {
+                    for (const [gateway, interval] of Object.entries(timeBasedConfig.gateway_intervals)) {
+                        if (validGateways.includes(gateway) && typeof interval === 'number' && interval > 0) {
+                            settings.timeBasedRotation.gatewayIntervals[gateway] = interval;
                         }
                     }
                 }
@@ -1495,7 +1559,6 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
         }
 
         // Reset rotation counter if all gateways were disabled and re-enabled
-        // This ensures fair rotation when gateways are reconfigured
         if (settings.rotationCounter >= enabledGateways.length) {
             settings.rotationCounter = 0;
         }
@@ -1506,14 +1569,38 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
 
         await settings.save();
 
-        console.log(`✅ Payment gateway settings updated. Round-robin mode active. Enabled: ${enabledGateways.join(', ')}`);
+        const isTimeBased = settings.timeBasedRotation && settings.timeBasedRotation.enabled;
+        const rotationMode = isTimeBased ? 'time-based' : 'round-robin';
+        
+        let activeGateway = null;
+        let remainingTime = null;
+        
+        if (isTimeBased) {
+            activeGateway = settings.getActiveGatewayByTime();
+            remainingTime = settings.getRemainingTimeForActiveGateway();
+        }
+
+        console.log(`✅ Payment gateway settings updated. Mode: ${rotationMode}. Enabled: ${enabledGateways.join(', ')}`);
 
         res.json({
             success: true,
-            message: 'Payment gateway settings updated successfully. Round-robin mode is active.',
+            message: `Payment gateway settings updated successfully. ${isTimeBased ? 'Time-based rotation' : 'Round-robin mode'} is active.`,
             payment_gateways: settings.paymentGateways,
             enabled_gateways: enabledGateways,
-            rotation_mode: true,
+            rotation_mode: rotationMode,
+            time_based_rotation: {
+                enabled: isTimeBased,
+                active_gateway: activeGateway,
+                remaining_time_seconds: remainingTime,
+                gateway_intervals: settings.timeBasedRotation?.gatewayIntervals || {
+                    paytm: 10,
+                    easebuzz: 5,
+                    razorpay: 10,
+                    phonepe: 10,
+                    sabpaisa: 10,
+                    cashfree: 10
+                }
+            },
             updated_at: settings.updatedAt,
             updated_by: req.user.name
         });

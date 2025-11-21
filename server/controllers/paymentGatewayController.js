@@ -27,33 +27,48 @@ exports.createPaymentLink = async (req, res) => {
             });
         }
 
-        // Gateway selection logic - Always use round-robin rotation
+        // Gateway selection logic - Use time-based rotation if enabled, otherwise round-robin
         let selectedGateway;
-        
-        // Sort enabled gateways for consistent rotation order
         const sortedEnabledGateways = [...enabledGateways].sort();
         
-        // Always use round-robin rotation (even for single gateway, though it won't rotate)
-        // Initialize rotation counter if not set
-        if (settings.rotationCounter === undefined || settings.rotationCounter === null) {
-            settings.rotationCounter = 0;
-        }
-        
-        // Get the gateway at the current rotation index
-        const rotationIndex = settings.rotationCounter % sortedEnabledGateways.length;
-        selectedGateway = sortedEnabledGateways[rotationIndex];
-        
-        // Increment rotation counter for next request
-        settings.rotationCounter = (settings.rotationCounter + 1) % sortedEnabledGateways.length;
-        await settings.save();
-        
-        console.log(`🔄 Round-Robin Selection: Using gateway ${rotationIndex + 1} of ${sortedEnabledGateways.length}`);
-        console.log(`   Rotation index: ${rotationIndex}, Selected: ${selectedGateway}, Next: ${settings.rotationCounter}`);
-        console.log(`   Enabled gateways (sorted): ${sortedEnabledGateways.join(', ')}`);
-        if (sortedEnabledGateways.length > 1) {
-            console.log(`   🔄 Round-robin mode active (${sortedEnabledGateways.length} gateways enabled)`);
+        // Check if time-based rotation is enabled
+        if (settings.timeBasedRotation && settings.timeBasedRotation.enabled) {
+            // Use time-based rotation
+            selectedGateway = settings.getActiveGatewayByTime();
+            
+            // Initialize rotation if not set
+            if (!settings.timeBasedRotation.rotationStartTime) {
+                settings.timeBasedRotation.rotationStartTime = new Date();
+                settings.timeBasedRotation.activeGateway = selectedGateway;
+            }
+            
+            // Save settings to persist rotation state
+            await settings.save();
+            
+            const remainingTime = settings.getRemainingTimeForActiveGateway();
+            const remainingMinutes = Math.floor(remainingTime / 60);
+            const remainingSeconds = remainingTime % 60;
+            
+            console.log(`⏰ Time-Based Selection: Using gateway ${selectedGateway}`);
+            console.log(`   Remaining time: ${remainingMinutes}m ${remainingSeconds}s`);
+            console.log(`   Enabled gateways: ${sortedEnabledGateways.join(', ')}`);
         } else {
-            console.log(`   ℹ️ Single gateway enabled (round-robin will always select this gateway)`);
+            // Use round-robin rotation (fallback)
+            // Initialize rotation counter if not set
+            if (settings.rotationCounter === undefined || settings.rotationCounter === null) {
+                settings.rotationCounter = 0;
+            }
+            
+            // Get the gateway at the current rotation index
+            const rotationIndex = settings.rotationCounter % sortedEnabledGateways.length;
+            selectedGateway = sortedEnabledGateways[rotationIndex];
+            
+            // Increment rotation counter for next request
+            settings.rotationCounter = (settings.rotationCounter + 1) % sortedEnabledGateways.length;
+            await settings.save();
+            
+            console.log(`🔄 Round-Robin Selection: Using gateway ${rotationIndex + 1} of ${sortedEnabledGateways.length}`);
+            console.log(`   Rotation index: ${rotationIndex}, Selected: ${selectedGateway}, Next: ${settings.rotationCounter}`);
         }
 
         console.log(`🔀 Routing payment link creation to ${selectedGateway} gateway`);
@@ -69,11 +84,21 @@ exports.createPaymentLink = async (req, res) => {
                 data.gateway_used = selectedGateway;
                 data.gateway_name = gatewayName;
                 
-                // Round-robin mode information
-                data.gateway_message = sortedEnabledGateways.length > 1
-                    ? `Payment link created using ${gatewayName} gateway (round-robin: ${sortedEnabledGateways.length} gateways active)`
-                    : `Payment link created using ${gatewayName} gateway (round-robin mode)`;
-                data.rotation_mode = true; // Always true now (round-robin is always active)
+                // Rotation mode information
+                const isTimeBased = settings.timeBasedRotation && settings.timeBasedRotation.enabled;
+                if (isTimeBased) {
+                    const remainingTime = settings.getRemainingTimeForActiveGateway();
+                    const remainingMinutes = Math.floor(remainingTime / 60);
+                    data.gateway_message = `Payment link created using ${gatewayName} gateway (time-based rotation)`;
+                    data.rotation_mode = 'time-based';
+                    data.remaining_time_seconds = remainingTime;
+                    data.remaining_time_minutes = remainingMinutes;
+                } else {
+                    data.gateway_message = sortedEnabledGateways.length > 1
+                        ? `Payment link created using ${gatewayName} gateway (round-robin: ${sortedEnabledGateways.length} gateways active)`
+                        : `Payment link created using ${gatewayName} gateway (round-robin mode)`;
+                    data.rotation_mode = 'round-robin';
+                }
                 data.enabled_gateways_count = sortedEnabledGateways.length;
                 data.enabled_gateways = sortedEnabledGateways;
                 
@@ -84,11 +109,13 @@ exports.createPaymentLink = async (req, res) => {
                     data.message = `Payment link created successfully using ${gatewayName}. Share this URL with customer.`;
                 }
                 
-                // Add helpful note about round-robin selection
-                if (sortedEnabledGateways.length > 1) {
+                // Add helpful note about selection mode
+                if (isTimeBased) {
+                    data.note = `Time-based rotation: Payment gateway rotates based on configured time intervals.`;
+                } else if (sortedEnabledGateways.length > 1) {
                     data.note = `Round-robin mode: Payment requests are automatically distributed across ${sortedEnabledGateways.length} enabled gateways (${sortedEnabledGateways.join(', ')}).`;
                 } else {
-                    data.note = 'Round-robin mode: Payment gateway is automatically selected. You don\'t need to specify which gateway to use.';
+                    data.note = 'Payment gateway is automatically selected. You don\'t need to specify which gateway to use.';
                 }
             }
             return originalJson(data);
@@ -137,11 +164,26 @@ exports.getAvailableGateways = async (req, res) => {
     try {
         const settings = await Settings.getSettings();
         const enabledGateways = settings.getEnabledGateways();
+        const isTimeBased = settings.timeBasedRotation && settings.timeBasedRotation.enabled;
+        
+        let activeGateway = null;
+        let remainingTime = null;
+        
+        if (isTimeBased) {
+            activeGateway = settings.getActiveGatewayByTime();
+            remainingTime = settings.getRemainingTimeForActiveGateway();
+        }
 
         res.json({
             success: true,
             enabled_gateways: enabledGateways,
-            rotation_mode: true, // Round-robin is always active
+            rotation_mode: isTimeBased ? 'time-based' : 'round-robin',
+            time_based_rotation: {
+                enabled: isTimeBased,
+                active_gateway: activeGateway,
+                remaining_time_seconds: remainingTime,
+                gateway_intervals: settings.timeBasedRotation?.gatewayIntervals || {}
+            },
             all_gateways: {
                 razorpay: {
                     name: 'Razorpay',

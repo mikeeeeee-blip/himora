@@ -39,16 +39,33 @@ class SuperadminSettingsService {
   }
 
   // Update payment gateway settings
-  async updatePaymentGatewaySettings(paymentGateways) {
+  async updatePaymentGatewaySettings(paymentGateways, timeBasedRotation = null) {
     try {
       const token = authService.getToken();
       if (!token) {
         throw new Error('No authentication token found');
       }
 
+      const payload = { payment_gateways: paymentGateways };
+      
+      // Include time-based rotation settings if provided
+      if (timeBasedRotation !== null) {
+        payload.time_based_rotation = {
+          enabled: timeBasedRotation.enabled || false,
+          gateway_intervals: timeBasedRotation.gatewayIntervals || {
+            paytm: 10,
+            easebuzz: 5,
+            razorpay: 10,
+            phonepe: 10,
+            sabpaisa: 10,
+            cashfree: 10
+          }
+        };
+      }
+
       const response = await axios.put(
         API_ENDPOINTS.UPDATE_PAYMENT_GATEWAY_SETTINGS,
-        { payment_gateways: paymentGateways },
+        payload,
         {
           headers: {
             'x-auth-token': `${token}`,

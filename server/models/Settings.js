@@ -35,6 +35,21 @@ const SettingsSchema = new mongoose.Schema({
         default: 0
     },
     
+    // Time-based rotation settings
+    timeBasedRotation: {
+        enabled: { type: Boolean, default: false },
+        activeGateway: { type: String, default: null }, // Currently active gateway
+        rotationStartTime: { type: Date, default: null }, // When current gateway became active
+        gatewayIntervals: {
+            paytm: { type: Number, default: 10 }, // 10 minutes
+            easebuzz: { type: Number, default: 5 }, // 5 minutes
+            razorpay: { type: Number, default: 10 }, // Default 10 minutes
+            phonepe: { type: Number, default: 10 }, // Default 10 minutes
+            sabpaisa: { type: Number, default: 10 }, // Default 10 minutes
+            cashfree: { type: Number, default: 10 } // Default 10 minutes
+        }
+    },
+    
     // Metadata
     updatedBy: {
         type: mongoose.Schema.Types.ObjectId,
@@ -93,6 +108,131 @@ SettingsSchema.methods.getEnabledGateways = function() {
         }
     }
     return enabled;
+};
+
+// Get current active gateway based on time-based rotation
+SettingsSchema.methods.getActiveGatewayByTime = function() {
+    if (!this.timeBasedRotation || !this.timeBasedRotation.enabled) {
+        return null;
+    }
+
+    const enabledGateways = this.getEnabledGateways();
+    if (enabledGateways.length === 0) {
+        return null;
+    }
+
+    // If only one gateway is enabled, always return it
+    if (enabledGateways.length === 1) {
+        return enabledGateways[0];
+    }
+
+    const now = new Date();
+    let currentTime = this.timeBasedRotation.rotationStartTime 
+        ? new Date(this.timeBasedRotation.rotationStartTime).getTime()
+        : now.getTime();
+    
+    let activeGateway = this.timeBasedRotation.activeGateway || enabledGateways[0];
+    const intervals = this.timeBasedRotation.gatewayIntervals || {};
+    
+    // Calculate total cycle time (sum of intervals for enabled gateways)
+    const enabledIntervals = enabledGateways.map(gw => ({
+        name: gw,
+        interval: (intervals[gw] || 10) * 60 * 1000 // Convert minutes to milliseconds
+    }));
+    
+    const totalCycleTime = enabledIntervals.reduce((sum, gw) => sum + gw.interval, 0);
+    
+    // Calculate elapsed time since rotation started
+    const elapsedTime = now.getTime() - currentTime;
+    
+    // Handle negative elapsed time (clock adjustments, etc.)
+    if (elapsedTime < 0) {
+        currentTime = now.getTime();
+        activeGateway = enabledGateways[0];
+        this.timeBasedRotation.rotationStartTime = now;
+        this.timeBasedRotation.activeGateway = activeGateway;
+        return activeGateway;
+    }
+    
+    // Calculate how many full cycles have passed
+    const cyclesPassed = Math.floor(elapsedTime / totalCycleTime);
+    const timeInCurrentCycle = elapsedTime % totalCycleTime;
+    
+    // Find which gateway should be active in current cycle
+    let accumulatedTime = 0;
+    for (const gw of enabledIntervals) {
+        if (timeInCurrentCycle < accumulatedTime + gw.interval) {
+            activeGateway = gw.name;
+            break;
+        }
+        accumulatedTime += gw.interval;
+    }
+    
+    // Update rotation start time if gateway changed
+    if (activeGateway !== this.timeBasedRotation.activeGateway || cyclesPassed > 0) {
+        // Calculate new start time for current gateway
+        const gatewayIndex = enabledIntervals.findIndex(gw => gw.name === activeGateway);
+        const timeOffset = enabledIntervals.slice(0, gatewayIndex).reduce((sum, gw) => sum + gw.interval, 0);
+        const newStartTime = new Date(now.getTime() - (timeInCurrentCycle - timeOffset));
+        
+        this.timeBasedRotation.activeGateway = activeGateway;
+        this.timeBasedRotation.rotationStartTime = newStartTime;
+    }
+    
+    return activeGateway;
+};
+
+// Get remaining time for current active gateway
+SettingsSchema.methods.getRemainingTimeForActiveGateway = function() {
+    if (!this.timeBasedRotation || !this.timeBasedRotation.enabled) {
+        return null;
+    }
+
+    const enabledGateways = this.getEnabledGateways();
+    if (enabledGateways.length === 0) {
+        return null;
+    }
+
+    const activeGateway = this.getActiveGatewayByTime();
+    if (!activeGateway) {
+        return null;
+    }
+
+    const intervals = this.timeBasedRotation.gatewayIntervals || {};
+    const gatewayInterval = (intervals[activeGateway] || 10) * 60 * 1000; // Convert to milliseconds
+    
+    const now = new Date();
+    let startTime = this.timeBasedRotation.rotationStartTime 
+        ? new Date(this.timeBasedRotation.rotationStartTime).getTime()
+        : now.getTime();
+    
+    // If only one gateway, use a simple countdown
+    if (enabledGateways.length === 1) {
+        const elapsedTime = now.getTime() - startTime;
+        const remainingTime = Math.max(0, gatewayInterval - (elapsedTime % gatewayInterval));
+        return Math.ceil(remainingTime / 1000); // Return in seconds
+    }
+    
+    // For multiple gateways, calculate based on cycle position
+    const enabledIntervals = enabledGateways.map(gw => ({
+        name: gw,
+        interval: (intervals[gw] || 10) * 60 * 1000
+    }));
+    
+    const totalCycleTime = enabledIntervals.reduce((sum, gw) => sum + gw.interval, 0);
+    const elapsedTime = now.getTime() - startTime;
+    
+    if (elapsedTime < 0) {
+        return gatewayInterval / 1000; // Return full interval in seconds
+    }
+    
+    const timeInCurrentCycle = elapsedTime % totalCycleTime;
+    const gatewayIndex = enabledIntervals.findIndex(gw => gw.name === activeGateway);
+    const timeOffset = enabledIntervals.slice(0, gatewayIndex).reduce((sum, gw) => sum + gw.interval, 0);
+    const timeInCurrentGateway = timeInCurrentCycle - timeOffset;
+    const remainingTime = Math.max(0, gatewayInterval - timeInCurrentGateway);
+    
+    return Math.ceil(remainingTime / 1000); // Return in seconds
 };
 
 module.exports = mongoose.model('Settings', SettingsSchema);
