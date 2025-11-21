@@ -279,76 +279,208 @@ exports.createPaytmPaymentLink = async (req, res) => {
         console.log('💾 Transaction saved:', transactionId);
 
         // Call Paytm NEW API to initiate transaction
+        // According to Paytm docs: https://www.paytmpayments.com/docs/jscheckout-initiate-payment
+        // Endpoint: /theia/api/v1/initiateTransaction?mid={mid}&orderId={orderId}
         console.log('\n📤 Calling Paytm API to initiate transaction...');
         const initiateUrl = `${PAYTM_BASE_URL}/theia/api/v1/initiateTransaction?mid=${PAYTM_MERCHANT_ID}&orderId=${orderId}`;
         console.log('   API Endpoint:', initiateUrl);
         console.log('   Request Payload:', JSON.stringify(paytmParams, null, 2));
 
+        let txnToken = null;
+        let paymentUrl = null;
+
         try {
             const apiResponse = await axios.post(initiateUrl, paytmParams, {
                 headers: {
-                    'Content-Type': 'application/json'
-                }
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                timeout: 30000 // 30 second timeout
             });
 
             console.log('✅ Paytm API Response Status:', apiResponse.status);
-            console.log('📦 Paytm API Response:', JSON.stringify(apiResponse.data, null, 2));
+            console.log('📦 Paytm API Response Head:', JSON.stringify(apiResponse.data?.head, null, 2));
+            console.log('📦 Paytm API Response Body:', JSON.stringify(apiResponse.data?.body, null, 2));
+            console.log('📦 Paytm API Full Response:', JSON.stringify(apiResponse.data, null, 2));
 
             const responseData = apiResponse.data;
-            const paymentUrl = responseData.body?.txnToken 
-                ? `${PAYTM_FORM_URL}/theia/processTransaction?mid=${PAYTM_MERCHANT_ID}&orderId=${orderId}&txnToken=${responseData.body.txnToken}`
-                : responseData.body?.redirectUrl || `${PAYTM_FORM_URL}/theia/processTransaction`;
-
-            // Update transaction with txnToken if available
-            if (responseData.body?.txnToken) {
-                await Transaction.findOneAndUpdate(
-                    { transactionId: transactionId },
-                    { paytmPaymentId: responseData.body.txnToken }
-                );
+            
+            // Check for errors in response
+            if (responseData.body?.resultInfo) {
+                const resultStatus = responseData.body.resultInfo.resultStatus;
+                const resultCode = responseData.body.resultInfo.resultCode;
+                const resultMsg = responseData.body.resultInfo.resultMsg;
+                
+                console.log('📊 Paytm API Result Info:');
+                console.log('   Status:', resultStatus);
+                console.log('   Code:', resultCode);
+                console.log('   Message:', resultMsg);
+                
+                if (resultStatus === 'F' || resultStatus === 'U') {
+                    console.error('❌ Paytm API returned error:', resultCode, '-', resultMsg);
+                    throw new Error(`Paytm API Error: ${resultCode} - ${resultMsg}`);
+                }
             }
 
-            res.json({
-                success: true,
-                transaction_id: transactionId,
-                payment_link_id: orderId,
-                payment_url: paymentUrl,
-                order_id: orderId,
-                order_amount: parseFloat(amount),
-                order_currency: 'INR',
-                merchant_id: merchantId.toString(),
-                merchant_name: merchantName,
-                reference_id: referenceId,
-                callback_url: finalCallbackUrl,
-                txn_token: responseData.body?.txnToken || null,
-                paytm_params: paytmFormParams, // Keep old format for backward compatibility
-                message: 'Payment link created successfully. Use payment_url to redirect user to payment page.'
-            });
+            // Extract txnToken from response (check multiple possible locations)
+            txnToken = responseData.body?.txnToken 
+                     || responseData.txnToken 
+                     || responseData.body?.data?.txnToken
+                     || null;
+            
+            console.log('🔍 Checking for txnToken in response:');
+            console.log('   responseData.body?.txnToken:', responseData.body?.txnToken ? 'Found' : 'Not found');
+            console.log('   responseData.txnToken:', responseData.txnToken ? 'Found' : 'Not found');
+            console.log('   responseData.body?.data?.txnToken:', responseData.body?.data?.txnToken ? 'Found' : 'Not found');
+            console.log('   Final txnToken:', txnToken ? txnToken.substring(0, 20) + '...' : 'null');
+            
+            if (txnToken) {
+                // Construct payment URL with txnToken (JS Checkout method)
+                // Format: /theia/processTransaction?mid={mid}&orderId={orderId}&txnToken={txnToken}
+                paymentUrl = `${PAYTM_FORM_URL}/theia/processTransaction?mid=${PAYTM_MERCHANT_ID}&orderId=${orderId}&txnToken=${txnToken}`;
+                console.log('✅ txnToken received:', txnToken.substring(0, 20) + '...');
+                console.log('✅ Payment URL constructed:', paymentUrl);
+                
+                // Update transaction with txnToken
+                await Transaction.findOneAndUpdate(
+                    { transactionId: transactionId },
+                    { paytmPaymentId: txnToken }
+                );
+            } else if (responseData.body?.redirectUrl) {
+                // Use redirectUrl if provided
+                paymentUrl = responseData.body.redirectUrl;
+                console.log('✅ Using redirectUrl from response:', paymentUrl);
+            } else {
+                console.warn('⚠️ No txnToken or redirectUrl in Paytm response');
+                console.warn('   Response structure:');
+                console.warn('   - responseData keys:', Object.keys(responseData || {}));
+                console.warn('   - responseData.body keys:', Object.keys(responseData.body || {}));
+                if (responseData.body?.resultInfo) {
+                    console.warn('   - resultInfo:', JSON.stringify(responseData.body.resultInfo, null, 2));
+                }
+                throw new Error('No txnToken or redirectUrl in Paytm response. Check API response structure.');
+            }
 
         } catch (apiError) {
-            console.error('❌ Paytm API Error:', apiError.response?.data || apiError.message);
-            console.error('   Status:', apiError.response?.status);
-            console.error('   Headers:', apiError.response?.headers);
+            console.error('\n❌ Paytm API Error Details:');
+            console.error('   Error Message:', apiError.message);
+            console.error('   Error Code:', apiError.code);
+            console.error('   Response Status:', apiError.response?.status);
+            console.error('   Response Status Text:', apiError.response?.statusText);
+            if (apiError.response?.data) {
+                console.error('   Response Data:', JSON.stringify(apiError.response.data, null, 2));
+            }
+            if (apiError.response?.headers) {
+                console.error('   Response Headers:', JSON.stringify(apiError.response.headers, null, 2));
+            }
             
-            // Fallback: Return form-based payment URL if API call fails
-            console.warn('⚠️ Falling back to form-based payment URL');
-            const fallbackUrl = `${PAYTM_FORM_URL}/theia/processTransaction`;
+            // If API call fails, we cannot create a working payment URL without txnToken
+            // Paytm requires either:
+            // 1. txnToken from initiateTransaction API (JS Checkout)
+            // 2. Form submission with all parameters and checksum (Form-based)
+            // Since form-based requires client-side form submission, we should return an error
+            // with clear instructions, OR we can try to generate a form checksum and return form data
             
-            res.json({
-                success: true,
+            console.warn('\n⚠️ API call failed. Attempting to generate form-based payment checksum...');
+            
+            try {
+                // Generate checksum for form parameters (old format)
+                // For form-based submission, checksum is generated from the parameter object
+                const formChecksum = await PaytmChecksum.generateSignature(
+                    paytmFormParams, // Pass object, not string
+                    PAYTM_MERCHANT_KEY
+                );
+                paytmFormParams.CHECKSUMHASH = formChecksum;
+                
+                console.log('✅ Form checksum generated successfully');
+                
+                // For form-based submission, the URL should point to processTransaction
+                // But it requires POST with all parameters, not a simple redirect
+                // We'll return the form submission details for client-side handling
+                // OR we can create a server-side endpoint that renders a form and auto-submits
+                
+                // Actually, let's create a payment URL that includes all parameters as query string
+                // Some Paytm implementations accept GET requests with all params
+                const queryParams = new URLSearchParams();
+                Object.keys(paytmFormParams).forEach(key => {
+                    queryParams.append(key, paytmFormParams[key]);
+                });
+                const formBasedUrl = `${PAYTM_FORM_URL}/theia/processTransaction?${queryParams.toString()}`;
+                
+                console.log('⚠️ Using form-based payment URL (may require POST, not GET)');
+                console.log('   URL:', formBasedUrl.substring(0, 100) + '...');
+                
+                // Return form-based URL as fallback
+                paymentUrl = formBasedUrl;
+                console.log('✅ Form-based payment URL generated');
+                
+            } catch (checksumError) {
+                console.error('❌ Error generating form checksum:', checksumError);
+                console.error('   Checksum Error Message:', checksumError.message);
+                console.error('   Checksum Error Stack:', checksumError.stack);
+                
+                // If checksum generation also fails, return error
+                return res.status(500).json({
+                    success: false,
+                    error: 'Failed to create Paytm payment link',
+                    error_details: {
+                        api_error: apiError.message,
+                        api_response: apiError.response?.data || null,
+                        checksum_error: checksumError.message
+                    },
+                    transaction_id: transactionId,
+                    order_id: orderId,
+                    message: 'Both Paytm API call and form checksum generation failed. Please check Paytm credentials, website name, and industry type in your .env file. Verify these match your Paytm Dashboard exactly.'
+                });
+            }
+        }
+
+        // Validate payment URL was generated
+        if (!paymentUrl) {
+            console.error('❌ No payment URL generated after all attempts');
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to generate payment URL',
                 transaction_id: transactionId,
-                payment_link_id: orderId,
-                payment_url: fallbackUrl,
-                order_id: orderId,
-                order_amount: parseFloat(amount),
-                order_currency: 'INR',
-                merchant_id: merchantId.toString(),
-                merchant_name: merchantName,
-                reference_id: referenceId,
-                callback_url: finalCallbackUrl,
-                paytm_params: paytmFormParams, // Use old format for form submission
-                message: 'Payment link created. Using form-based payment (API call failed, check logs).'
+                message: 'Payment link creation failed: No payment URL generated after API call and fallback attempts'
             });
         }
+
+        // Ensure payment URL has required parameters
+        if (!paymentUrl.includes('mid=') || !paymentUrl.includes('orderId=')) {
+            console.warn('⚠️ Payment URL missing required parameters, adding them...');
+            const urlObj = new URL(paymentUrl);
+            if (!urlObj.searchParams.has('mid')) {
+                urlObj.searchParams.set('mid', PAYTM_MERCHANT_ID);
+            }
+            if (!urlObj.searchParams.has('orderId')) {
+                urlObj.searchParams.set('orderId', orderId);
+            }
+            paymentUrl = urlObj.toString();
+        }
+
+        console.log('\n✅ Payment URL generated successfully');
+        console.log('   URL:', paymentUrl.substring(0, 150) + (paymentUrl.length > 150 ? '...' : ''));
+        console.log('   Has txnToken:', txnToken ? 'Yes' : 'No');
+        console.log('   Has mid:', paymentUrl.includes('mid=') ? 'Yes' : 'No');
+        console.log('   Has orderId:', paymentUrl.includes('orderId=') ? 'Yes' : 'No');
+
+        res.json({
+            success: true,
+            transaction_id: transactionId,
+            payment_link_id: orderId,
+            payment_url: paymentUrl,
+            order_id: orderId,
+            order_amount: parseFloat(amount),
+            order_currency: 'INR',
+            merchant_id: merchantId.toString(),
+            merchant_name: merchantName,
+            reference_id: referenceId,
+            callback_url: finalCallbackUrl,
+            txn_token: txnToken,
+            paytm_params: paytmFormParams, // Keep old format for backward compatibility
+            message: 'Payment link created successfully. Use payment_url to redirect user to payment page.'
+        });
 
     } catch (error) {
         console.error('❌ Create Paytm Payment Link Error:', error);
