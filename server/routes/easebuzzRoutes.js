@@ -4,6 +4,7 @@ const apiKeyAuth = require('../middleware/apiKeyAuth.js');
 const {
     createEasebuzzPaymentLink,
     getEasebuzzPaymentPage,
+    getEasebuzzCheckoutPage,
     handleEasebuzzCallback,
     handleEasebuzzWebhook,
     handleUPIRedirect
@@ -14,6 +15,9 @@ router.post('/create-payment-link', apiKeyAuth, createEasebuzzPaymentLink);
 
 // Shareable payment page (public - customers visit this link, it auto-submits to Easebuzz)
 router.get('/payment-page/:transactionId', getEasebuzzPaymentPage);
+
+// Custom checkout page with EaseCheckout SDK (public - customers visit this link for UPI payment)
+router.get('/checkout/:transactionId', getEasebuzzCheckoutPage);
 
 // Callback handler (public - called by Easebuzz after payment)
 router.post('/callback', handleEasebuzzCallback);

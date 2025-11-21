@@ -13,43 +13,110 @@ const EASEBUZZ_API_KEY = process.env.EASEBUZZ_API_KEY;
 const EASEBUZZ_ENVIRONMENT = process.env.EASEBUZZ_ENVIRONMENT || 'production'; // 'sandbox' or 'production'
 
 // Easebuzz API URLs
-// Official API endpoint for creating payment links
-// Documentation: https://docs.easebuzz.in/docs/payment-gateway/05be3a890b572-create-update-link
+// Initiate Payment API endpoint for checkout links
+// Documentation: https://docs.easebuzz.in/docs/payment-gateway/8ec545c331e6f-initiate-payment-api
 const EASEBUZZ_API_BASE_URL = 'https://dashboard.easebuzz.in';
-const EASEBUZZ_CREATE_LINK_ENDPOINT = `${EASEBUZZ_API_BASE_URL}/easycollect/v1/create`;
 const EASEBUZZ_PAYMENT_BASE_URL = EASEBUZZ_ENVIRONMENT === 'sandbox'
     ? 'https://testpay.easebuzz.in'
     : 'https://pay.easebuzz.in';
+const EASEBUZZ_INITIATE_PAYMENT_URL = `${EASEBUZZ_PAYMENT_BASE_URL}/payment/initiateLink`;
+
+// ============ HASH GENERATION FOR INITIATE PAYMENT API ============
+// Hash sequence: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|salt
+// IMPORTANT: udf1-udf10 should be included in hash if they're in the payload
+// According to Easebuzz docs, if udf fields are sent, they should be in hash (even if empty)
+function generateInitiatePaymentHash(payload) {
+    // Build hash string exactly as per Easebuzz documentation
+    // Sequence: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|salt
+    // Ensure all values are strings and handle empty/null values
+    // IMPORTANT: Values must match exactly what's sent in the API request
+    const key = String(payload.key || '').trim();
+    const txnid = String(payload.txnid || '').trim();
+    const amount = String(payload.amount || '').trim();
+    const productinfo = String(payload.productinfo || '').trim();
+    const firstname = String(payload.firstname || '').trim();
+    const email = String(payload.email || '').trim();
+    // Include udf1-udf10 from payload if present, otherwise empty
+    const udf1 = String(payload.udf1 || '').trim();
+    const udf2 = String(payload.udf2 || '').trim();
+    const udf3 = String(payload.udf3 || '').trim();
+    const udf4 = String(payload.udf4 || '').trim();
+    const udf5 = String(payload.udf5 || '').trim();
+    const udf6 = String(payload.udf6 || '').trim();
+    const udf7 = String(payload.udf7 || '').trim();
+    const udf8 = String(payload.udf8 || '').trim();
+    const udf9 = String(payload.udf9 || '').trim();
+    const udf10 = String(payload.udf10 || '').trim();
+    const salt = String(EASEBUZZ_SALT_KEY || '').trim();
+    
+    const hashString = [
+        key,
+        txnid,
+        amount,
+        productinfo,
+        firstname,
+        email,
+        udf1, // Include udf1 if present in payload
+        udf2, // Include udf2 if present in payload
+        udf3, // Include udf3 if present in payload
+        udf4, // Include udf4 if present in payload
+        udf5, // Include udf5 if present in payload
+        udf6, // Include udf6 if present in payload
+        udf7, // Include udf7 if present in payload
+        udf8, // Include udf8 if present in payload
+        udf9, // Include udf9 if present in payload
+        udf10, // Include udf10 if present in payload
+        salt
+    ].join('|');
+    
+    // Log hash components for debugging (mask sensitive data)
+    console.log('   🔐 Hash Components:');
+    console.log('      Key:', key.substring(0, 4) + '...' + key.substring(key.length - 4));
+    console.log('      Txn ID:', txnid);
+    console.log('      Amount:', amount);
+    console.log('      Product Info:', productinfo);
+    console.log('      Firstname:', firstname);
+    console.log('      Email:', email);
+    console.log('      UDF1:', udf1 || '(empty)');
+    console.log('      Salt:', salt.substring(0, 4) + '...' + salt.substring(salt.length - 4));
+    console.log('      Hash String Length:', hashString.length);
+    console.log('      Hash String (first 100 chars):', hashString.substring(0, 100) + '...');
+    
+    return crypto.createHash('sha512').update(hashString).digest('hex');
+}
 
 // ============ UPI DEEP LINK GENERATION ============
 // Function to generate UPI deep links for different payment apps
-function generateUPIDeepLinks(paymentData) {
+function generateUPIDeepLinks(checkoutUrl, paymentData, req) {
     const amount = paymentData.amount || '0.00';
-    const merchantName = paymentData.name || 'Merchant';
-    const paymentUrl = paymentData.payment_url || paymentData.short_url || '';
+    const merchantName = paymentData.firstname || paymentData.name || 'Merchant';
     
     // URL encode parameters
     const encode = (str) => encodeURIComponent(str || '');
-    const baseUrl = process.env.FRONTEND_URL || process.env.BASE_URL || 'http://localhost:3000';
+    
+    // Get base URL from request or environment variable
+    let baseUrl = process.env.FRONTEND_URL || process.env.BASE_URL;
+    if (!baseUrl && req) {
+        const protocol = req.protocol || 'http';
+        const host = req.get('host') || 'localhost:3000';
+        baseUrl = `${protocol}://${host}`;
+    }
+    baseUrl = baseUrl || 'http://localhost:3000';
     
     // Generate deep links for popular UPI apps
-    // The smart_link is the main deep link that automatically opens UPI apps
     const deepLinks = {
-        // Direct payment URLs from Easebuzz
-        payment_url: paymentUrl,
-        short_url: paymentData.short_url || null,
+        // Direct checkout URL from Easebuzz
+        checkout_url: checkoutUrl,
         
         // Smart redirect link - automatically detects device and opens UPI app
-        // This is the recommended link to use - it will try to open UPI apps first
-        smart_link: paymentUrl ? `${baseUrl}/upi-redirect?payment_url=${encode(paymentUrl)}&amount=${amount}&merchant=${encode(merchantName)}` : null,
+        smart_link: checkoutUrl ? `${baseUrl}/api/easebuzz/upi-redirect?payment_url=${encode(checkoutUrl)}&amount=${amount}&merchant=${encode(merchantName)}` : null,
         
         // Direct app deep links (for manual use if needed)
-        // These will attempt to open specific UPI apps
-        apps: paymentUrl ? {
-            phonepe: `phonepe://pay?url=${encode(paymentUrl)}`,
-            googlepay: `tez://pay?url=${encode(paymentUrl)}`,
-            paytm: `paytmmp://pay?url=${encode(paymentUrl)}`,
-            bhim: `bhim://pay?url=${encode(paymentUrl)}`
+        apps: checkoutUrl ? {
+            phonepe: `phonepe://pay?url=${encode(checkoutUrl)}`,
+            googlepay: `tez://pay?url=${encode(checkoutUrl)}`,
+            paytm: `paytmmp://pay?url=${encode(checkoutUrl)}`,
+            bhim: `bhim://pay?url=${encode(checkoutUrl)}`
         } : null
     };
     
@@ -58,6 +125,9 @@ function generateUPIDeepLinks(paymentData) {
 
 // ============ CREATE EASEBUZZ PAYMENT LINK ============
 exports.createEasebuzzPaymentLink = async (req, res) => {
+    // Define transactionId at function scope so it's accessible in catch block
+    let transactionId = null;
+    
     try {
         const {
             amount,
@@ -117,10 +187,9 @@ exports.createEasebuzzPaymentLink = async (req, res) => {
             });
         }
 
-        // Generate unique IDs
-        const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        const merchantTxn = `EC${Date.now()}${Math.random().toString(36).substring(2, 8).toUpperCase()}`; // Easebuzz format: EC + timestamp + random
-        const referenceId = `REF_${Date.now()}`;
+        // Generate unique transaction ID
+        transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        const txnid = `EC${Date.now()}${Math.random().toString(36).substring(2, 8).toUpperCase()}`; // Easebuzz format: EC + timestamp + random
 
         // Get merchant's configured URLs or use provided ones
         const merchant = await User.findById(merchantId);
@@ -135,28 +204,49 @@ exports.createEasebuzzPaymentLink = async (req, res) => {
             `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`;
 
         // Easebuzz callback and redirect URLs
-        const easebuzzCallbackUrl = `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/easebuzz/webhook?transaction_id=${transactionId}`;
-        const easebuzzRedirectUrl = `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/easebuzz/callback?transaction_id=${transactionId}`;
+        // IMPORTANT: surl and furl must be valid, accessible URLs
+        // They should be absolute URLs without special characters
+        const backendBaseUrl = (process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000').replace(/\/$/, ''); // Remove trailing slash
+        const easebuzzCallbackUrl = `${backendBaseUrl}/api/easebuzz/webhook?transaction_id=${encodeURIComponent(transactionId)}`;
+        const easebuzzRedirectUrl = `${backendBaseUrl}/api/easebuzz/callback?transaction_id=${encodeURIComponent(transactionId)}`;
+        
+        // For surl and furl, use the merchant's success/failure URLs or default frontend URLs
+        // Easebuzz requires these to be publicly accessible URLs
+        // IMPORTANT: These URLs must be whitelisted in Easebuzz dashboard and must be accessible from internet
+        const surl = success_url || 
+                    finalCallbackUrl || 
+                    `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
+        const furl = failure_url || 
+                    finalFailureUrl || 
+                    `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`;
+        
+        // Validate URLs are absolute and properly formatted
+        const urlPattern = /^https?:\/\/.+/;
+        if (!urlPattern.test(surl)) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid success URL format: ${surl}. Must be an absolute URL starting with http:// or https://`
+            });
+        }
+        if (!urlPattern.test(furl)) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid failure URL format: ${furl}. Must be an absolute URL starting with http:// or https://`
+            });
+        }
+        
+        console.log('\n🔗 URL Configuration:');
+        console.log('   Success URL (surl):', surl);
+        console.log('   Failure URL (furl):', furl);
+        console.log('   Callback URL:', easebuzzCallbackUrl);
+        console.log('   Redirect URL:', easebuzzRedirectUrl);
 
-        // Prepare Easebuzz payment link creation payload (Official API format)
-        // Documentation: https://docs.easebuzz.in/docs/payment-gateway/05be3a890b572-create-update-link
-        // NOTE: The "key" field in Easebuzz API can be:
-        // 1. Merchant ID (most common)
-        // 2. Salt Key (some implementations)
-        // 3. API Key (less common)
-        // IMPORTANT: If you get "Please enter correct key" error, try using SALT KEY as the "key" field
-        // You can test by temporarily setting: const easebuzzKey = EASEBUZZ_SALT_KEY;
-        
-        // IMPORTANT: The "key" field in Easebuzz API should be the API_KEY (as per working implementation)
-        // Based on the working code, API_KEY is used as the "key" field
-        let easebuzzKey = EASEBUZZ_API_KEY; // Use API Key as the "key" field
-        
-        if (!easebuzzKey) {
+        // Validate credentials
+        if (!EASEBUZZ_API_KEY) {
             console.error('❌ Easebuzz API Key not found. Please set EASEBUZZ_API_KEY');
             return res.status(500).json({
                 success: false,
-                error: 'Easebuzz API Key not configured. Please set EASEBUZZ_API_KEY in environment variables.',
-                hint: 'The "key" field in Easebuzz API should be your API Key from the dashboard.'
+                error: 'Easebuzz API Key not configured. Please set EASEBUZZ_API_KEY in environment variables.'
             });
         }
 
@@ -168,95 +258,69 @@ exports.createEasebuzzPaymentLink = async (req, res) => {
             });
         }
 
-        console.log('\n🔑 Easebuzz Key Configuration:');
-        console.log('   EASEBUZZ_MERCHANT_ID:', EASEBUZZ_MERCHANT_ID ? `Set (${EASEBUZZ_MERCHANT_ID.length} chars, starts with: ${EASEBUZZ_MERCHANT_ID.substring(0, 4)}...)` : 'NOT SET');
-        console.log('   EASEBUZZ_SALT_KEY:', EASEBUZZ_SALT_KEY ? `Set (${EASEBUZZ_SALT_KEY.length} chars, starts with: ${EASEBUZZ_SALT_KEY.substring(0, 4)}...)` : 'NOT SET');
-        console.log('   EASEBUZZ_API_KEY:', EASEBUZZ_API_KEY ? `Set (${EASEBUZZ_API_KEY.length} chars, starts with: ${EASEBUZZ_API_KEY.substring(0, 4)}...)` : 'NOT SET');
-        console.log('   ✅ Using as "key" field:', easebuzzKey.substring(0, 4) + '...' + easebuzzKey.substring(easebuzzKey.length - 4));
-        console.log('   Key length:', easebuzzKey.length, 'characters');
+        console.log('\n🔑 Easebuzz Configuration:');
+        console.log('   EASEBUZZ_MERCHANT_ID:', EASEBUZZ_MERCHANT_ID ? `Set (${EASEBUZZ_MERCHANT_ID.length} chars)` : 'NOT SET');
+        console.log('   EASEBUZZ_SALT_KEY:', EASEBUZZ_SALT_KEY ? `Set (${EASEBUZZ_SALT_KEY.length} chars)` : 'NOT SET');
+        console.log('   EASEBUZZ_API_KEY:', EASEBUZZ_API_KEY ? `Set (${EASEBUZZ_API_KEY.length} chars)` : 'NOT SET');
+        console.log('   Environment:', EASEBUZZ_ENVIRONMENT);
 
-        // Easebuzz webhook URL - for payment status updates
-        const easebuzzWebhookUrl = `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/easebuzz/webhook?transaction_id=${transactionId}`;
+        // Prepare payload for Initiate Payment API
+        // Documentation: https://docs.easebuzz.in/docs/payment-gateway/8ec545c331e6f-initiate-payment-api
+        // Hash sequence: key|txnid|amount|productinfo|firstname|email|||||||||||salt
+        // NOTE: udf1-udf10, phone, surl, furl, pg are NOT included in hash, even if sent in payload
+        // Use API_KEY as per provided code example
+        if (!EASEBUZZ_API_KEY) {
+            return res.status(500).json({
+                success: false,
+                error: 'EASEBUZZ_API_KEY is required for Initiate Payment API'
+            });
+        }
         
-        console.log('🔗 Easebuzz Webhook URL:', easebuzzWebhookUrl);
-        console.log('   ⚠️  Make sure to configure this URL in your Easebuzz dashboard:');
-        console.log('      1. Login to Easebuzz Dashboard');
-        console.log('      2. Go to Settings > Webhooks');
-        console.log('      3. Add webhook URL:', easebuzzWebhookUrl);
-        console.log('      4. Enable webhook events: payment.success, payment.failed, payment.pending');
-
-        const paymentLinkData = {
-            merchant_txn: merchantTxn,
-            key: easebuzzKey, // Using API_KEY as per working implementation
-            email: customer_email,
-            name: customer_name,
+        const payload = {
+            key: EASEBUZZ_API_KEY, // Use API_KEY as per provided code example
+            txnid: txnid,
             amount: parseFloat(amount).toFixed(2),
+            productinfo: description || `Payment for ${merchantName}`,
+            firstname: customer_name,
+            email: customer_email,
             phone: customer_phone,
-            udf1: description || `Payment for ${merchantName}`,
-            udf2: transactionId, // Store our transaction ID
-            udf3: '',
-            udf4: '',
-            udf5: '',
-            message: description || `Payment for ${merchantName}`,
-            // Webhook URL for payment status updates
-            webhook_url: easebuzzWebhookUrl,
-            // Optional: expiry_date in DD-MM-YYYY format (30 days from now)
-            expiry_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB').replace(/\//g, '-'),
-            // Optional: operation array for notifications
-            operation: [
-                {
-                    type: "email",
-                    template: "Default email template"
-                }
-            ]
+            surl: surl, // Success URL - must be valid, accessible URL
+            furl: furl,  // Failure URL - must be valid, accessible URL
+            udf1: transactionId, // Store our transaction ID in udf1 (not in hash)
+            pg: 'UPI' // Pre-select UPI payment mode (not in hash)
         };
 
-        console.log('\n📋 Easebuzz Payment Link Request:');
-        console.log('   Merchant Key:', EASEBUZZ_MERCHANT_ID);
-        console.log('   Merchant Txn:', merchantTxn);
-        console.log('   Amount:', paymentLinkData.amount);
-        console.log('   Name:', paymentLinkData.name);
-        console.log('   Email:', paymentLinkData.email);
-        console.log('   Phone:', paymentLinkData.phone);
-        console.log('   Message:', paymentLinkData.message);
-        console.log('   Expiry Date:', paymentLinkData.expiry_date);
+        // Generate hash for Initiate Payment API
+        // Hash sequence: key|txnid|amount|productinfo|firstname|email|||||||||||salt
+        // Only these fields are used in hash - phone, surl, furl, udf1-udf10, pg are NOT in hash
+        const hash = generateInitiatePaymentHash(payload);
+        payload.hash = hash;
+        
+        console.log('\n🔐 Hash Generation Details:');
+        console.log('   Key used (API_KEY):', EASEBUZZ_API_KEY.substring(0, 4) + '...' + EASEBUZZ_API_KEY.substring(EASEBUZZ_API_KEY.length - 4));
+        console.log('   Txn ID:', txnid);
+        console.log('   Amount:', payload.amount);
+        console.log('   Product Info:', payload.productinfo);
+        console.log('   Firstname:', payload.firstname);
+        console.log('   Email:', payload.email);
+        console.log('   Salt Key Length:', EASEBUZZ_SALT_KEY ? EASEBUZZ_SALT_KEY.length : 0);
+        console.log('   Hash (first 30 chars):', hash.substring(0, 30) + '...');
+        console.log('   ⚠️  Note: phone, surl, furl, udf1, pg are NOT included in hash');
 
-        // Generate hash for Easebuzz payment link API
-        // Hash format: SHA512 of concatenated values
-        // Hash sequence: key|merchant_txn|name|email|phone|amount|udf1|udf2|udf3|udf4|udf5|message|salt
-        // IMPORTANT: Use createHash (not createHmac) and append salt at the end
-        const hashPayload = [
-            paymentLinkData.key || easebuzzKey,
-            paymentLinkData.merchant_txn,
-            paymentLinkData.name,
-            paymentLinkData.email,
-            paymentLinkData.phone,
-            paymentLinkData.amount,
-            paymentLinkData.udf1 || '',
-            paymentLinkData.udf2 || '',
-            paymentLinkData.udf3 || '',
-            paymentLinkData.udf4 || '',
-            paymentLinkData.udf5 || '',
-            paymentLinkData.message || '',
-            EASEBUZZ_SALT_KEY
-        ].join('|');
-
-        console.log('\n🔐 Generating Easebuzz Hash...');
-        console.log('   Hash Payload:', hashPayload);
-        console.log('   Salt Key Length:', EASEBUZZ_SALT_KEY ? EASEBUZZ_SALT_KEY.length : 0, 'characters');
-
-        // Easebuzz uses SHA512 hash (not HMAC)
-        const hash = crypto.createHash('sha512').update(hashPayload).digest('hex');
-
-        console.log('   ✅ Hash Generated:', hash.substring(0, 30) + '...');
-
-        // Add hash to payload
-        paymentLinkData.hash = hash;
+        console.log('\n📋 Initiate Payment API Request:');
+        console.log('   Transaction ID:', transactionId);
+        console.log('   Txn ID:', txnid);
+        console.log('   Amount:', payload.amount);
+        console.log('   Customer:', payload.firstname);
+        console.log('   Email:', payload.email);
+        console.log('   Phone:', payload.phone);
+        console.log('   Product Info:', payload.productinfo);
+        console.log('   Payment Mode: UPI (pre-selected)');
 
         // Save transaction to database first
         const transaction = new Transaction({
             transactionId: transactionId,
-            orderId: merchantTxn, // Use Easebuzz merchant_txn as orderId
+            orderId: txnid, // Use Easebuzz txnid as orderId
             merchantId: merchantId,
             merchantName: merchantName,
 
@@ -276,8 +340,7 @@ exports.createEasebuzzPaymentLink = async (req, res) => {
 
             // Easebuzz Data
             paymentGateway: 'easebuzz',
-            easebuzzOrderId: merchantTxn,
-            easebuzzReferenceId: referenceId,
+            easebuzzOrderId: txnid,
 
             // Store callback URLs
             callbackUrl: finalCallbackUrl,
@@ -292,186 +355,269 @@ exports.createEasebuzzPaymentLink = async (req, res) => {
         await transaction.save();
         console.log('💾 Transaction saved:', transactionId);
 
-        // Call Easebuzz Official API to create payment link
-        // Endpoint: https://dashboard.easebuzz.in/easycollect/v1/create
-        console.log('\n📤 Calling Easebuzz Payment Link API...');
-        console.log('   API Endpoint:', EASEBUZZ_CREATE_LINK_ENDPOINT);
-        console.log('   Request Payload:', JSON.stringify(paymentLinkData, null, 2));
+        // Call Easebuzz Initiate Payment API
+        // Endpoint: https://pay.easebuzz.in/payment/initiateLink
+        console.log('\n📤 Calling Easebuzz Initiate Payment API...');
+        console.log('   API Endpoint:', EASEBUZZ_INITIATE_PAYMENT_URL);
+        console.log('   Request Payload:', JSON.stringify({ ...payload, hash: '***' }, null, 2));
 
-        try {
-            const apiResponse = await axios.post(EASEBUZZ_CREATE_LINK_ENDPOINT, paymentLinkData, {
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                timeout: 30000 // 30 second timeout
-            });
-
-            console.log('✅ Easebuzz API Response Status:', apiResponse.status);
-            console.log('📦 Easebuzz API Response:', JSON.stringify(apiResponse.data, null, 2));
-
-            const responseData = apiResponse.data;
-
-            // Check if API call was successful
-            if (!responseData.status || !responseData.data) {
-                throw new Error(responseData.message || 'Easebuzz API returned an error');
-            }
-
-            // Extract payment URL from response
-            const paymentUrl = responseData.data.payment_url || responseData.data.short_url;
-            const linkId = responseData.data.id;
-            const shortUrl = responseData.data.short_url;
-
-            if (!paymentUrl) {
-                throw new Error('Easebuzz API did not return a payment URL. Response: ' + JSON.stringify(responseData));
-            }
-
-            console.log('✅ Payment link created successfully!');
-            console.log('   Link ID:', linkId);
-            console.log('   Payment URL:', paymentUrl);
-            console.log('   Short URL:', shortUrl);
-
-            // Update transaction with Easebuzz response data
-            // IMPORTANT: Store the merchant_txn as easebuzzOrderId - this is what Easebuzz will send back in webhooks
-            const updateResult = await Transaction.findOneAndUpdate(
-                { transactionId: transactionId },
-                { 
-                    easebuzzPaymentId: linkId?.toString(),
-                    easebuzzOrderId: merchantTxn, // This is the merchant_txn we sent to Easebuzz
-                    easebuzzLinkId: linkId?.toString(),
-                    orderId: merchantTxn // Also update orderId to match for easier lookup
-                },
-                { new: true }
-            );
-            
-            console.log('💾 Transaction updated with Easebuzz data:');
-            console.log('   Transaction ID:', transactionId);
-            console.log('   Easebuzz Order ID (merchant_txn):', merchantTxn);
-            console.log('   Easebuzz Link ID:', linkId);
-            console.log('   Update Result:', updateResult ? 'Success' : 'Failed');
-            
-            if (!updateResult) {
-                console.warn('⚠️  WARNING: Failed to update transaction with Easebuzz order ID!');
-                console.warn('   This might cause webhook lookup to fail!');
-            }
-
-            // Generate UPI deep links
-            const deepLinks = generateUPIDeepLinks({
-                payment_url: paymentUrl,
-                short_url: shortUrl,
-                merchant_txn: merchantTxn,
-                name: customer_name,
-                amount: parseFloat(amount).toFixed(2),
-                message: description || `Payment for ${merchantName}`
-            });
-
-            res.json({
-                success: true,
-                transaction_id: transactionId,
-                payment_link_id: merchantTxn,
-                payment_url: paymentUrl, // Direct Easebuzz payment link (shareable)
-                short_url: shortUrl,
-                deep_links: deepLinks, // UPI deep links for mobile apps
-                order_id: merchantTxn,
-                order_amount: parseFloat(amount),
-                order_currency: 'INR',
-                merchant_id: merchantId.toString(),
-                merchant_name: merchantName,
-                reference_id: referenceId,
-                callback_url: finalCallbackUrl,
-                easebuzz_link_id: linkId,
-                payment_data: responseData.data,
-                message: 'Payment link created successfully. Share this URL with your customer.'
-            });
-
-        } catch (apiError) {
-            console.error('❌ Easebuzz API Error:', apiError.message);
-            console.error('   Status:', apiError.response?.status);
-            console.error('   Response Data:', JSON.stringify(apiError.response?.data, null, 2));
-            console.error('   Headers:', apiError.response?.headers);
-            console.error('   URL Attempted:', EASEBUZZ_CREATE_LINK_ENDPOINT);
-            console.error('   Key Used:', easebuzzKey.substring(0, 4) + '...' + easebuzzKey.substring(easebuzzKey.length - 4));
-            
-            // If "Please enter correct key" error, suggest trying Salt Key
-            if (apiError.response?.data?.error?.toLowerCase().includes('key') || 
-                apiError.response?.data?.error?.toLowerCase().includes('correct key')) {
-                console.error('\n   💡 TROUBLESHOOTING TIP:');
-                console.error('      The "key" field might need to be your SALT KEY instead of MERCHANT ID.');
-                console.error('      Try setting the "key" field to EASEBUZZ_SALT_KEY value.');
-                console.error('      Or check your Easebuzz dashboard for the exact "key" value to use.');
-            }
-
-            // If 404, the endpoint might be wrong - return form-based approach
-            if (apiError.response?.status === 404 || apiError.code === 'ENOTFOUND') {
-                console.log('⚠️  Got 404 or DNS error. Easebuzz endpoint might be incorrect.');
-                console.log('   Attempted URL:', apiUrl);
-                console.log('   ⚠️  IMPORTANT: Please verify the correct Easebuzz API endpoint with Easebuzz support.');
-                console.log('   Falling back to form-based submission approach...');
-                
-                // Return form URL and parameters for frontend to submit
-                // Note: The actual endpoint might be different - user needs to verify with Easebuzz
-                const formUrl = `${EASEBUZZ_BASE_URL}/payment/initiate`;
-                console.log('   Form URL:', formUrl);
-                
-                res.json({
-                    success: true,
-                    transaction_id: transactionId,
-                    payment_link_id: merchantOrderId,
-                    payment_url: formUrl,
-                    order_id: merchantOrderId,
-                    order_amount: parseFloat(amount),
-                    order_currency: 'INR',
-                    merchant_id: merchantId.toString(),
-                    merchant_name: merchantName,
-                    reference_id: referenceId,
-                    callback_url: finalCallbackUrl,
-                    // Include payment parameters for form submission
-                    easebuzz_params: paymentData,
-                    message: 'Payment link created. Note: If you see 404, please verify the correct Easebuzz endpoint with their support team.',
-                    warning: 'Endpoint returned 404. Please contact Easebuzz support to verify the correct API endpoint URL.'
-                });
-                return;
-            }
-
-            // Update transaction status to failed
-            await Transaction.findOneAndUpdate(
-                { transactionId: transactionId },
-                { 
-                    status: 'failed',
-                    failureReason: apiError.response?.data?.message || apiError.message || 'Failed to create payment link'
-                }
-            );
-
-            res.status(apiError.response?.status || 500).json({
+        // Try with API_KEY first, if hash mismatch, try with MERCHANT_ID
+        let accessKey = null;
+        let lastError = null;
+        let keysToTry = [];
+        
+        // Determine which keys to try
+        // For Initiate Payment API, the "key" field should be the Merchant Key
+        // Try MERCHANT_ID first (most likely to be the correct key), then API_KEY
+        if (EASEBUZZ_MERCHANT_ID && EASEBUZZ_API_KEY && EASEBUZZ_MERCHANT_ID !== EASEBUZZ_API_KEY) {
+            // Try MERCHANT_ID first (most common), then API_KEY
+            keysToTry = [
+                { key: EASEBUZZ_MERCHANT_ID, name: 'MERCHANT_ID' },
+                { key: EASEBUZZ_API_KEY, name: 'API_KEY' }
+            ];
+        } else if (EASEBUZZ_MERCHANT_ID) {
+            keysToTry = [{ key: EASEBUZZ_MERCHANT_ID, name: 'MERCHANT_ID' }];
+        } else if (EASEBUZZ_API_KEY) {
+            keysToTry = [{ key: EASEBUZZ_API_KEY, name: 'API_KEY' }];
+        } else {
+            return res.status(500).json({
                 success: false,
-                error: apiError.response?.data?.message || apiError.message || 'Failed to create Easebuzz payment link',
-                details: apiError.response?.data,
-                attempted_url: EASEBUZZ_CREATE_LINK_ENDPOINT
+                error: 'EASEBUZZ_MERCHANT_ID or EASEBUZZ_API_KEY must be set'
             });
         }
 
-    } catch (error) {
-        console.error('❌ Create Easebuzz Payment Link Error:', error);
-        console.error('❌ Error details:', {
-            message: error.message,
-            stack: error.stack
+        // Try different hash approaches if hash mismatch occurs
+        const hashApproaches = [
+            { name: 'with_udf', includeUdf: true },
+            { name: 'without_udf', includeUdf: false }
+        ];
+
+        for (const keyConfig of keysToTry) {
+            for (const hashApproach of hashApproaches) {
+                try {
+                    console.log(`\n🔄 Trying with ${keyConfig.name} (hash: ${hashApproach.name})...`);
+                    
+                    // Update payload with current key
+                    payload.key = keyConfig.key;
+                    
+                    // Generate hash based on approach
+                    let hash;
+                    if (hashApproach.includeUdf) {
+                        // Include udf1-udf10 in hash if present in payload
+                        hash = generateInitiatePaymentHash(payload);
+                    } else {
+                        // Use empty udf1-udf10 in hash (original approach)
+                        const hashPayload = { ...payload };
+                        // Temporarily clear udf fields for hash calculation
+                        const tempUdf1 = hashPayload.udf1;
+                        hashPayload.udf1 = '';
+                        hashPayload.udf2 = '';
+                        hashPayload.udf3 = '';
+                        hashPayload.udf4 = '';
+                        hashPayload.udf5 = '';
+                        hashPayload.udf6 = '';
+                        hashPayload.udf7 = '';
+                        hashPayload.udf8 = '';
+                        hashPayload.udf9 = '';
+                        hashPayload.udf10 = '';
+                        hash = generateInitiatePaymentHash(hashPayload);
+                        // Restore udf1 for payload
+                        hashPayload.udf1 = tempUdf1;
+                    }
+                    payload.hash = hash;
+                    
+                    console.log(`   Key: ${keyConfig.key.substring(0, 4)}...${keyConfig.key.substring(keyConfig.key.length - 4)}`);
+                    console.log(`   Hash: ${hash.substring(0, 30)}...`);
+
+                    // Send request as form-encoded data
+                    const formData = new URLSearchParams();
+                    Object.keys(payload).forEach(key => {
+                        if (payload[key] !== undefined && payload[key] !== null) {
+                            formData.append(key, String(payload[key]).trim()); // Trim whitespace
+                        }
+                    });
+
+                    const apiResponse = await axios.post(EASEBUZZ_INITIATE_PAYMENT_URL, formData.toString(), {
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        timeout: 30000
+                    });
+
+                    console.log('✅ Easebuzz API Response Status:', apiResponse.status);
+                    console.log('📦 Easebuzz API Response:', JSON.stringify(apiResponse.data, null, 2));
+
+                    const responseData = apiResponse.data;
+
+                    // Check if API call was successful
+                    if (responseData && responseData.status === 1) {
+                        // Extract access_key from response
+                        accessKey = responseData.data || responseData.access_key || responseData.token;
+                        
+                        if (!accessKey) {
+                            throw new Error('Easebuzz API did not return an access_key. Response: ' + JSON.stringify(responseData));
+                        }
+
+                        console.log(`✅ Success with ${keyConfig.name} (hash: ${hashApproach.name})!`);
+                        console.log('   Access Key:', accessKey.substring(0, 20) + '...' + accessKey.substring(accessKey.length - 10));
+                        break; // Success, exit both loops
+                    } else {
+                        // Check error type
+                        const errorDesc = responseData?.error_desc || responseData?.message || responseData?.data || '';
+                        const errorLower = errorDesc.toLowerCase();
+                        
+                        // If it's "Invalid merchant key", try next key
+                        if (errorLower.includes('invalid merchant key') || errorLower.includes('invalid key')) {
+                            console.warn(`   ❌ Invalid merchant key with ${keyConfig.name}, trying next key...`);
+                            lastError = new Error(errorDesc);
+                            break; // Break hash approach loop, try next key
+                        } 
+                        // If it's a hash mismatch error, try next hash approach or next key
+                        else if (errorLower.includes('hash') || errorLower.includes('mismatch')) {
+                            console.warn(`   ❌ Hash mismatch with ${keyConfig.name} (${hashApproach.name}), trying next approach...`);
+                            lastError = new Error(errorDesc);
+                            continue; // Try next hash approach
+                        } 
+                        // For other errors, throw immediately
+                        else {
+                            throw new Error(errorDesc || 'Easebuzz API returned an error');
+                        }
+                    }
+
+                } catch (apiError) {
+                    // If it's a network error or non-hash error, don't try other approaches
+                    if (apiError.response && apiError.response.data) {
+                        const errorDesc = apiError.response.data?.error_desc || apiError.response.data?.message || '';
+                        const errorLower = errorDesc.toLowerCase();
+                        
+                        if (errorLower.includes('hash') || errorLower.includes('mismatch')) {
+                            console.error(`❌ Hash mismatch with ${keyConfig.name} (${hashApproach.name}):`, errorDesc);
+                            lastError = apiError;
+                            continue; // Try next hash approach
+                        } else {
+                            console.error(`❌ Error with ${keyConfig.name} (${hashApproach.name}):`, apiError.message);
+                            lastError = apiError;
+                            // If this is the last key and last hash approach, throw
+                            if (keyConfig === keysToTry[keysToTry.length - 1] && hashApproach === hashApproaches[hashApproaches.length - 1]) {
+                                throw apiError;
+                            }
+                            continue;
+                        }
+                    } else {
+                        console.error(`❌ Network/Other error with ${keyConfig.name} (${hashApproach.name}):`, apiError.message);
+                        lastError = apiError;
+                        // If this is the last key and last hash approach, throw
+                        if (keyConfig === keysToTry[keysToTry.length - 1] && hashApproach === hashApproaches[hashApproaches.length - 1]) {
+                            throw apiError;
+                        }
+                        continue;
+                    }
+                }
+            }
+            
+            // If we got accessKey, break out of key loop too
+            if (accessKey) {
+                break;
+            }
+        }
+
+        if (!accessKey) {
+            throw lastError || new Error('Failed to get access_key from Easebuzz API');
+        }
+
+        // Construct checkout page URL
+        const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
+        const checkoutPageUrl = `${baseUrl}/api/easebuzz/checkout/${transactionId}`;
+
+        // Update transaction with Easebuzz response data
+        await Transaction.findOneAndUpdate(
+            { transactionId: transactionId },
+            { 
+                easebuzzOrderId: txnid,
+                orderId: txnid
+            },
+            { new: true }
+        );
+
+        // Generate UPI deep links (using checkout page URL)
+        const deepLinks = generateUPIDeepLinks(checkoutPageUrl, {
+            firstname: customer_name,
+            amount: parseFloat(amount).toFixed(2),
+            productinfo: description || `Payment for ${merchantName}`
+        }, req);
+
+        res.json({
+            success: true,
+            transaction_id: transactionId,
+            payment_link_id: txnid,
+            payment_url: checkoutPageUrl, // Custom checkout page URL
+            checkout_page: checkoutPageUrl, // Alias for payment_url
+            access_key: accessKey, // Access key for EaseCheckout SDK
+            short_url: null,
+            deep_links: deepLinks,
+            order_id: txnid,
+            order_amount: parseFloat(amount),
+            order_currency: 'INR',
+            merchant_id: merchantId.toString(),
+            merchant_name: merchantName,
+            callback_url: finalCallbackUrl,
+            message: 'Payment link created successfully. Use the checkout_page URL for payment.'
         });
 
-        res.status(500).json({
+    } catch (error) {
+        console.error('❌ Create Easebuzz Payment Link Error:', error.message);
+        console.error('   Response Data:', error.response?.data);
+        
+        // Update transaction status to failed (only if transactionId was created)
+        if (transactionId) {
+            try {
+                await Transaction.findOneAndUpdate(
+                    { transactionId: transactionId },
+                    { 
+                        status: 'failed',
+                        failureReason: error.response?.data?.error_desc || error.response?.data?.message || error.message || 'Failed to create payment link'
+                    }
+                );
+                console.log('   ✅ Transaction status updated to failed:', transactionId);
+            } catch (updateError) {
+                console.error('   Failed to update transaction status:', updateError.message);
+                console.error('   Transaction ID:', transactionId);
+            }
+        } else {
+            console.warn('   ⚠️  Transaction ID not available - transaction was not created yet');
+        }
+
+        // Provide helpful error message
+        const errorMessage = error.response?.data?.error_desc || error.response?.data?.message || error.message || 'Failed to create Easebuzz payment link';
+        let helpfulMessage = errorMessage;
+        
+        // Add helpful hints for common errors
+        if (errorMessage.toLowerCase().includes('invalid merchant key') || errorMessage.toLowerCase().includes('invalid key')) {
+            helpfulMessage += '. Please verify that EASEBUZZ_MERCHANT_ID or EASEBUZZ_API_KEY is correct in your environment variables.';
+        } else if (errorMessage.toLowerCase().includes('hash') || errorMessage.toLowerCase().includes('mismatch')) {
+            helpfulMessage += '. Please verify that EASEBUZZ_SALT_KEY is correct in your environment variables.';
+        }
+
+        res.status(error.response?.status || 500).json({
             success: false,
-            error: error.message || 'Failed to create payment link'
+            error: helpfulMessage,
+            details: error.response?.data,
+            attempted_url: EASEBUZZ_INITIATE_PAYMENT_URL,
+            hint: 'Check your Easebuzz credentials: EASEBUZZ_MERCHANT_ID, EASEBUZZ_API_KEY, and EASEBUZZ_SALT_KEY'
         });
     }
 };
 
-// ============ EASEBUZZ PAYMENT PAGE (AUTO-SUBMIT FORM) ============
-// This creates a shareable payment link that auto-submits to Easebuzz
-exports.getEasebuzzPaymentPage = async (req, res) => {
+// ============ EASEBUZZ CHECKOUT PAGE (EASECHECKOUT SDK) ============
+// This creates a custom checkout page using EaseCheckout SDK with UPI pre-selected
+// Documentation: https://docs.easebuzz.in/docs/payment-gateway/7zfogdgdwb9c8-i-frame-integration-ease-checkout
+exports.getEasebuzzCheckoutPage = async (req, res) => {
     try {
         const { transactionId } = req.params;
 
         console.log('\n' + '='.repeat(80));
-        console.log('📄 EASEBUZZ PAYMENT PAGE REQUEST');
+        console.log('📄 EASEBUZZ EASE CHECKOUT PAGE REQUEST');
         console.log('='.repeat(80));
         console.log('   Transaction ID:', transactionId);
 
@@ -518,108 +664,357 @@ exports.getEasebuzzPaymentPage = async (req, res) => {
             `);
         }
 
-        // Prepare payment data for Easebuzz
-        const paymentData = {
+        // Validate credentials
+        if (!EASEBUZZ_MERCHANT_ID || !EASEBUZZ_SALT_KEY) {
+            console.error('❌ Easebuzz credentials not configured');
+            return res.status(500).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Payment Error</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                        .error { color: #d32f2f; }
+                    </style>
+                </head>
+                <body>
+                    <h1 class="error">Payment Configuration Error</h1>
+                    <p>Payment gateway is not properly configured. Please contact support.</p>
+                </body>
+                </html>
+            `);
+        }
+
+        // Prepare payment data for Easebuzz Initiate Payment API
+        // Documentation: https://docs.easebuzz.in/docs/payment-gateway/8ec545c331e6f-initiate-payment-api
+        const payload = {
+            key: EASEBUZZ_API_KEY,
+            txnid: transaction.orderId,
             amount: transaction.amount.toFixed(2),
-            delivery_charge: '0',
-            merchant_order_id: transaction.orderId,
-            currency: transaction.currency || 'INR',
-            redirect_url: transaction.callbackUrl || `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/easebuzz/callback?transaction_id=${transactionId}`,
-            callback_url: transaction.callbackUrl || `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/easebuzz/webhook?transaction_id=${transactionId}`,
-            buyer_name: transaction.customerName,
-            buyer_email: transaction.customerEmail,
-            buyer_phone: transaction.customerPhone,
-            description: transaction.description || `Payment for ${transaction.merchantName}`
+            productinfo: transaction.description || `Payment for ${transaction.merchantName}`,
+            firstname: transaction.customerName,
+            email: transaction.customerEmail,
+            phone: transaction.customerPhone,
+            surl: transaction.callbackUrl || `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/easebuzz/callback?transaction_id=${transactionId}`,
+            furl: transaction.failureUrl || `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/easebuzz/callback?transaction_id=${transactionId}`,
+            udf1: transactionId, // Store our transaction ID
+            pg: 'UPI' // Pre-select UPI payment mode
         };
 
-        // Generate checksum
-        const checksumPayload = [
-            paymentData.amount,
-            paymentData.merchant_order_id,
-            paymentData.currency,
-            paymentData.buyer_name,
-            paymentData.buyer_email,
-            paymentData.buyer_phone,
-            paymentData.redirect_url,
-            paymentData.callback_url,
-            paymentData.description
-        ].join('|');
+        // Generate hash for Initiate Payment API
+        const hash = generateInitiatePaymentHash(payload);
+        payload.hash = hash;
 
-        const checksum = crypto.createHmac('sha256', EASEBUZZ_SALT_KEY)
-            .update(checksumPayload)
-            .digest('hex');
+        console.log('✅ Calling Easebuzz Initiate Payment API for transaction:', transactionId);
+        console.log('   API Endpoint:', EASEBUZZ_INITIATE_PAYMENT_URL);
+        console.log('   Amount:', payload.amount);
+        console.log('   Payment Mode: UPI (pre-selected)');
 
-        paymentData.checksum = checksum;
+        // Call Easebuzz Initiate Payment API to get access_key
+        let accessKey = null;
+        try {
+            // Send request as form-encoded data
+            const formData = new URLSearchParams();
+            Object.keys(payload).forEach(key => {
+                if (payload[key] !== undefined && payload[key] !== null) {
+                    formData.append(key, payload[key]);
+                }
+            });
 
-        // Easebuzz payment endpoint
-        const easebuzzPaymentUrl = `${EASEBUZZ_BASE_URL}/payment/initiate`;
+            const apiResponse = await axios.post(EASEBUZZ_INITIATE_PAYMENT_URL, formData.toString(), {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                timeout: 30000
+            });
 
-        console.log('✅ Generating payment page for transaction:', transactionId);
-        console.log('   Easebuzz Payment URL:', easebuzzPaymentUrl);
+            console.log('✅ Easebuzz API Response Status:', apiResponse.status);
+            console.log('📦 Easebuzz API Response:', JSON.stringify(apiResponse.data, null, 2));
 
-        // Return HTML page that auto-submits form to Easebuzz
+            const responseData = apiResponse.data;
+
+            if (responseData && responseData.status === 1) {
+                accessKey = responseData.data || responseData.access_key || responseData.token;
+                
+                if (!accessKey) {
+                    throw new Error('Easebuzz API did not return an access_key. Response: ' + JSON.stringify(responseData));
+                }
+
+                console.log('✅ Access Key received:', accessKey.substring(0, 20) + '...');
+            } else {
+                throw new Error(responseData.message || responseData.error || 'Easebuzz API returned an error');
+            }
+
+        } catch (apiError) {
+            console.error('❌ Easebuzz Initiate Payment API Error:', apiError.message);
+            console.error('   Response Data:', JSON.stringify(apiError.response?.data, null, 2));
+            
+            return res.status(500).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Payment Error</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                        .error { color: #d32f2f; }
+                    </style>
+                </head>
+                <body>
+                    <h1 class="error">Payment Gateway Error</h1>
+                    <p>Failed to initialize payment gateway. Please try again later.</p>
+                    <p>Error: ${apiError.message}</p>
+                </body>
+                </html>
+            `);
+        }
+        
+        const env = EASEBUZZ_ENVIRONMENT === 'sandbox' ? 'test' : 'prod';
+
+        // Return HTML page with Ease Checkout integration
+        // This will directly open UPI payment mode with integrated UPI apps
         res.send(`
             <!DOCTYPE html>
             <html>
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Processing Payment...</title>
+                <title>Complete Payment - ${transaction.merchantName}</title>
                 <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
                     body {
                         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
+                        background: #f5f5f5;
                         min-height: 100vh;
-                        margin: 0;
+                        display: flex;
+                        flex-direction: column;
+                    }
+                    .header {
                         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                         color: white;
-                    }
-                    .container {
+                        padding: 20px;
                         text-align: center;
-                        padding: 40px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    }
+                    .header h1 {
+                        font-size: 24px;
+                        margin-bottom: 5px;
+                    }
+                    .header p {
+                        font-size: 14px;
+                        opacity: 0.9;
+                    }
+                    .checkout-container {
+                        flex: 1;
+                        display: flex;
+                        justify-content: center;
+                        align-items: flex-start;
+                        padding: 20px;
+                    }
+                    .checkout-wrapper {
+                        width: 100%;
+                        max-width: 600px;
+                        background: white;
+                        border-radius: 12px;
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+                        overflow: hidden;
+                    }
+                    .checkout-header {
+                        padding: 20px;
+                        background: #f8f9fa;
+                        border-bottom: 1px solid #e9ecef;
+                    }
+                    .checkout-header h2 {
+                        font-size: 20px;
+                        color: #333;
+                        margin-bottom: 5px;
+                    }
+                    .checkout-header .amount {
+                        font-size: 28px;
+                        font-weight: bold;
+                        color: #667eea;
+                    }
+                    #easebuzz-checkout-container {
+                        width: 100%;
+                        min-height: 600px;
+                        padding: 20px;
+                    }
+                    .loading {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 60px 20px;
+                        text-align: center;
                     }
                     .spinner {
-                        border: 4px solid rgba(255, 255, 255, 0.3);
-                        border-top: 4px solid white;
+                        border: 4px solid rgba(102, 126, 234, 0.2);
+                        border-top: 4px solid #667eea;
                         border-radius: 50%;
                         width: 50px;
                         height: 50px;
                         animation: spin 1s linear infinite;
-                        margin: 0 auto 20px;
+                        margin-bottom: 20px;
                     }
                     @keyframes spin {
                         0% { transform: rotate(0deg); }
                         100% { transform: rotate(360deg); }
                     }
-                    h1 {
-                        margin: 0 0 10px 0;
-                        font-size: 24px;
-                    }
-                    p {
-                        margin: 0;
-                        opacity: 0.9;
+                    .loading-text {
+                        color: #666;
                         font-size: 16px;
+                    }
+                    @media (max-width: 768px) {
+                        .checkout-wrapper {
+                            border-radius: 0;
+                            max-width: 100%;
+                        }
+                        .header h1 {
+                            font-size: 20px;
+                        }
+                        #easebuzz-checkout-container {
+                            min-height: 500px;
+                        }
                     }
                 </style>
             </head>
             <body>
-                <div class="container">
-                    <div class="spinner"></div>
-                    <h1>Redirecting to Payment Gateway...</h1>
-                    <p>Please wait while we redirect you to Easebuzz</p>
+                <div class="header">
+                    <h1>Complete Your Payment</h1>
+                    <p>${transaction.merchantName}</p>
                 </div>
-                <form id="easebuzzForm" method="POST" action="${easebuzzPaymentUrl}">
-                    ${Object.keys(paymentData).map(key => 
-                        `<input type="hidden" name="${key}" value="${paymentData[key]}">`
-                    ).join('')}
-                </form>
+                
+                <div class="checkout-container">
+                    <div class="checkout-wrapper">
+                        <div class="checkout-header">
+                            <h2>Payment Details</h2>
+                            <div class="amount">₹${payload.amount}</div>
+                        </div>
+                        <div id="checkout-loading" class="loading">
+                            <div class="spinner"></div>
+                            <div class="loading-text">Initializing payment gateway...</div>
+                        </div>
+                        <div id="easebuzz-checkout-container" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- Easebuzz EaseCheckout SDK -->
+                <script src="https://ebz-static.s3.ap-south-1.amazonaws.com/easecheckout/v2.0.0/easebuzz-checkout-v2.min.js"></script>
+                
                 <script>
-                    // Auto-submit form after a brief delay
-                    setTimeout(function() {
-                        document.getElementById('easebuzzForm').submit();
-                    }, 500);
+                    // Configuration
+                    const accessKey = ${JSON.stringify(accessKey)};
+                    const merchantKey = ${JSON.stringify(EASEBUZZ_API_KEY)};
+                    const environment = ${JSON.stringify(EASEBUZZ_ENVIRONMENT === 'sandbox' ? 'test' : 'prod')};
+                    const successUrl = ${JSON.stringify(payload.surl)};
+                    const failureUrl = ${JSON.stringify(payload.furl)};
+                    const transactionId = ${JSON.stringify(transactionId)};
+                    
+                    console.log('✅ EaseCheckout Configuration:');
+                    console.log('   Merchant Key:', merchantKey);
+                    console.log('   Environment:', environment);
+                    console.log('   Access Key:', accessKey.substring(0, 20) + '...');
+                    console.log('   UPI Pre-selected: pg=UPI (via Initiate Payment API)');
+                    
+                    // Initialize Easebuzz Checkout SDK
+                    function initEaseCheckout() {
+                        try {
+                            // Check if SDK is loaded
+                            if (typeof EasebuzzCheckout === 'undefined') {
+                                console.error('❌ EasebuzzCheckout SDK not loaded');
+                                document.getElementById('checkout-loading').innerHTML = 
+                                    '<div style="color: #d32f2f; padding: 20px;">Error loading payment gateway SDK. Please refresh the page.</div>';
+                                return;
+                            }
+                            
+                            console.log('✅ EasebuzzCheckout SDK loaded, initializing...');
+                            
+                            // Create EasebuzzCheckout instance
+                            const easebuzzCheckout = new EasebuzzCheckout(merchantKey, environment);
+                            
+                            // Hide loading, show container
+                            document.getElementById('checkout-loading').style.display = 'none';
+                            document.getElementById('easebuzz-checkout-container').style.display = 'block';
+                            
+                            // Auto-initialize payment (no button click needed)
+                            // This will open the checkout directly with UPI options visible
+                            const options = {
+                                access_key: accessKey, // Access key from Initiate Payment API
+                                onResponse: (response) => {
+                                    console.log('✅ Payment Response received:', response);
+                                    
+                                    // Handle payment response
+                                    if (response && response.status) {
+                                        if (response.status === 'success' || response.status === 'Success') {
+                                            // Payment successful - redirect to success URL
+                                            console.log('✅ Payment successful, redirecting...');
+                                            window.location.href = successUrl + '?transaction_id=' + transactionId;
+                                        } else {
+                                            // Payment failed - redirect to failure URL
+                                            console.log('❌ Payment failed, redirecting...');
+                                            window.location.href = failureUrl + '?transaction_id=' + transactionId + '&error=' + encodeURIComponent(response.message || 'Payment failed');
+                                        }
+                                    } else {
+                                        // Unknown response - redirect to failure
+                                        console.warn('⚠️ Unknown payment response:', response);
+                                        window.location.href = failureUrl + '?transaction_id=' + transactionId;
+                                    }
+                                },
+                                theme: '#667eea', // Theme color matching header
+                                // Optional: You can add payment mode pre-selection here if supported
+                                // payment_mode: 'UPI' // This might work depending on SDK version
+                            };
+                            
+                            console.log('✅ Calling initiatePayment() with access_key...');
+                            console.log('   Options:', JSON.stringify(options, null, 2));
+                            
+                            // Initialize payment - this will open checkout directly
+                            // The pg=UPI parameter was already sent in Initiate Payment API, so UPI should be pre-selected
+                            easebuzzCheckout.initiatePayment(options);
+                            
+                            console.log('✅ Payment checkout initialized - UPI options should be visible now');
+                            
+                        } catch (error) {
+                            console.error('❌ Error initializing EaseCheckout:', error);
+                            document.getElementById('checkout-loading').innerHTML = 
+                                '<div style="color: #d32f2f; padding: 20px;">Error initializing payment gateway: ' + error.message + '</div>';
+                        }
+                    }
+                    
+                    // Wait for SDK to load, then initialize
+                    function waitForSDK() {
+                        if (typeof EasebuzzCheckout !== 'undefined') {
+                            // SDK loaded, initialize immediately
+                            setTimeout(initEaseCheckout, 100);
+                        } else {
+                            // SDK not loaded yet, wait a bit and retry
+                            setTimeout(waitForSDK, 100);
+                        }
+                    }
+                    
+                    // Start initialization when DOM is ready
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', function() {
+                            console.log('✅ DOM loaded, waiting for EaseCheckout SDK...');
+                            waitForSDK();
+                        });
+                    } else {
+                        console.log('✅ DOM already loaded, waiting for EaseCheckout SDK...');
+                        waitForSDK();
+                    }
+                    
+                    // Fallback: Try to initialize after window load
+                    window.addEventListener('load', function() {
+                        if (typeof EasebuzzCheckout !== 'undefined' && 
+                            document.getElementById('checkout-loading').style.display !== 'none') {
+                            console.log('✅ Window loaded, initializing EaseCheckout...');
+                            initEaseCheckout();
+                        }
+                    });
                 </script>
             </body>
             </html>
@@ -646,6 +1041,10 @@ exports.getEasebuzzPaymentPage = async (req, res) => {
         `);
     }
 };
+
+// ============ EASEBUZZ PAYMENT PAGE (ALIAS FOR BACKWARD COMPATIBILITY) ============
+// This is an alias to getEasebuzzCheckoutPage for backward compatibility
+exports.getEasebuzzPaymentPage = exports.getEasebuzzCheckoutPage;
 
 // ============ HANDLE EASEBUZZ CALLBACK ============
 exports.handleEasebuzzCallback = async (req, res) => {

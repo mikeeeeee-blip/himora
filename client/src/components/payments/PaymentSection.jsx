@@ -196,25 +196,30 @@ const PaymentSection = () => {
           <h4>Payment Link Created</h4>
           <div className="link-details">
             <div className="link-item">
-              <label>Payment Link:</label>
+              <label>Checkout Page (UPI Payment):</label>
               <div className="link-container">
                 <input 
                   type="text" 
-                  value={createdLink.paymentLink || createdLink.payment_url || createdLink.link || 'Link generated'} 
+                  value={createdLink.checkout_page || createdLink.paymentLink || createdLink.payment_url || createdLink.link || 'Link generated'} 
                   readOnly 
                   className="link-input"
                 />
                 <button 
-                  onClick={() => copyToClipboard(createdLink.paymentLink || createdLink.payment_url || createdLink.link)}
+                  onClick={() => copyToClipboard(createdLink.checkout_page || createdLink.paymentLink || createdLink.payment_url || createdLink.link)}
                   className="action-btn copy"
-                  title="Copy link"
+                  title="Copy checkout link"
                 >
                   <FiCopy />
                 </button>
                 <button 
-                  onClick={() => openPaymentLink(createdLink.paymentLink || createdLink.payment_url || createdLink.paytmPaymentUrl, createdLink.paytmParams)}
+                  onClick={() => {
+                    const url = createdLink.checkout_page || createdLink.paymentLink || createdLink.payment_url;
+                    if (url) {
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }
+                  }}
                   className="action-btn redirect"
-                  title="Open payment link"
+                  title="Open checkout page"
                 >
                   <FiExternalLink />
                 </button>
