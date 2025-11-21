@@ -1418,31 +1418,20 @@ exports.getPaymentGatewaySettings = async (req, res) => {
         const settings = await Settings.getSettings();
         const enabledGateways = settings.getEnabledGateways();
         
-        // Always use transaction-count-based rotation
-        const activeGateway = settings.getActiveGatewayByTime();
-        const remainingTransactions = settings.getRemainingTimeForActiveGateway();
-        const currentCount = settings.timeBasedRotation?.transactionCount || 0;
-        const gatewayLimit = settings.timeBasedRotation?.gatewayIntervals[activeGateway] || 10;
+        // Use round-robin rotation
+        const activeGateway = settings.getCurrentActiveGateway();
+        const lastUsedIndex = settings.roundRobinRotation?.lastUsedGatewayIndex ?? -1;
 
         res.json({
             success: true,
             payment_gateways: settings.paymentGateways,
             enabled_gateways: enabledGateways,
-            rotation_mode: 'transaction-count-based',
-            time_based_rotation: {
+            rotation_mode: 'round-robin',
+            round_robin_rotation: {
                 enabled: true, // Always enabled
-                active_gateway: activeGateway,
-                remaining_transactions: remainingTransactions,
-                current_transaction_count: currentCount,
-                gateway_transaction_limit: gatewayLimit,
-                gateway_intervals: settings.timeBasedRotation?.gatewayIntervals || {
-                    paytm: 10,
-                    easebuzz: 5,
-                    razorpay: 10,
-                    phonepe: 10,
-                    sabpaisa: 10,
-                    cashfree: 10
-                }
+                current_active_gateway: activeGateway,
+                last_used_gateway_index: lastUsedIndex,
+                enabled_gateways: enabledGateways
             },
             updated_at: settings.updatedAt,
             updated_by: settings.updatedBy
@@ -1505,38 +1494,16 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
             }
         }
 
-        // Initialize transaction-count-based rotation if not set (always active)
-        if (!settings.timeBasedRotation) {
-            settings.timeBasedRotation = {
-                activeGateway: null,
-                transactionCount: 0,
-                gatewayIntervals: {
-                    paytm: 10,
-                    easebuzz: 5,
-                    razorpay: 10,
-                    phonepe: 10,
-                    sabpaisa: 10,
-                    cashfree: 10
-                }
+        // Initialize round-robin rotation if not set
+        if (!settings.roundRobinRotation) {
+            settings.roundRobinRotation = {
+                lastUsedGatewayIndex: -1
             };
         }
         
         // Initialize rotation if not started
-        if (settings.timeBasedRotation.transactionCount === undefined || settings.timeBasedRotation.transactionCount === null) {
-            const enabledGateways = settings.getEnabledGateways();
-            if (enabledGateways.length > 0) {
-                settings.timeBasedRotation.activeGateway = enabledGateways[0];
-                settings.timeBasedRotation.transactionCount = 0;
-            }
-        }
-        
-        // Update gateway intervals if provided
-        if (req.body.time_based_rotation?.gateway_intervals && typeof req.body.time_based_rotation.gateway_intervals === 'object') {
-            for (const [gateway, interval] of Object.entries(req.body.time_based_rotation.gateway_intervals)) {
-                if (validGateways.includes(gateway) && typeof interval === 'number' && interval > 0) {
-                    settings.timeBasedRotation.gatewayIntervals[gateway] = interval;
-                }
-            }
+        if (settings.roundRobinRotation.lastUsedGatewayIndex === undefined || settings.roundRobinRotation.lastUsedGatewayIndex === null) {
+            settings.roundRobinRotation.lastUsedGatewayIndex = -1;
         }
 
         // Ensure at least one gateway is enabled
@@ -1556,34 +1523,23 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
 
         await settings.save();
 
-        // Always use transaction-count-based rotation
-        const activeGateway = settings.getActiveGatewayByTime();
-        const remainingTransactions = settings.getRemainingTimeForActiveGateway();
-        const currentCount = settings.timeBasedRotation?.transactionCount || 0;
-        const gatewayLimit = settings.timeBasedRotation?.gatewayIntervals[activeGateway] || 10;
+        // Use round-robin rotation
+        const activeGateway = settings.getCurrentActiveGateway();
+        const lastUsedIndex = settings.roundRobinRotation?.lastUsedGatewayIndex ?? -1;
 
-        console.log(`✅ Payment gateway settings updated. Transaction-count-based rotation active. Enabled: ${enabledGateways.join(', ')}`);
+        console.log(`✅ Payment gateway settings updated. Round-robin rotation active. Enabled: ${enabledGateways.join(', ')}`);
 
         res.json({
             success: true,
-            message: 'Payment gateway settings updated successfully. Transaction-count-based rotation is active.',
+            message: 'Payment gateway settings updated successfully. Round-robin rotation is active.',
             payment_gateways: settings.paymentGateways,
             enabled_gateways: enabledGateways,
-            rotation_mode: 'transaction-count-based',
-            time_based_rotation: {
+            rotation_mode: 'round-robin',
+            round_robin_rotation: {
                 enabled: true, // Always enabled
-                active_gateway: activeGateway,
-                remaining_transactions: remainingTransactions,
-                current_transaction_count: currentCount,
-                gateway_transaction_limit: gatewayLimit,
-                gateway_intervals: settings.timeBasedRotation?.gatewayIntervals || {
-                    paytm: 10,
-                    easebuzz: 5,
-                    razorpay: 10,
-                    phonepe: 10,
-                    sabpaisa: 10,
-                    cashfree: 10
-                }
+                current_active_gateway: activeGateway,
+                last_used_gateway_index: lastUsedIndex,
+                enabled_gateways: enabledGateways
             },
             updated_at: settings.updatedAt,
             updated_by: req.user.name

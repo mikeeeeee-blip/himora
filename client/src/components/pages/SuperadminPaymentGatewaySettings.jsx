@@ -15,48 +15,37 @@ const SuperadminPaymentGatewaySettings = () => {
     sabpaisa: { enabled: false },
     cashfree: { enabled: false }
   });
-  const [timeBasedRotation, setTimeBasedRotation] = useState({
-    activeGateway: null,
-    remainingTransactions: null,
-    currentTransactionCount: null,
-    gatewayTransactionLimit: null,
-    gatewayIntervals: {
-      paytm: 10,
-      easebuzz: 5,
-      razorpay: 10,
-      phonepe: 10,
-      sabpaisa: 10,
-      cashfree: 10
-    }
+  const [roundRobinRotation, setRoundRobinRotation] = useState({
+    currentActiveGateway: null,
+    lastUsedGatewayIndex: null,
+    enabledGateways: []
   });
   const intervalRef = useRef(null);
 
-  // Memoized function to update only transaction count data (lightweight)
-  const updateTransactionCountOnly = useCallback(async () => {
+  // Memoized function to update only rotation data (lightweight)
+  const updateRotationDataOnly = useCallback(async () => {
     try {
       const response = await superadminSettingsService.getPaymentGatewaySettings();
-      if (response.success && response.time_based_rotation) {
-        setTimeBasedRotation(prev => {
+      if (response.success && response.round_robin_rotation) {
+        setRoundRobinRotation(prev => {
           // Only update if values actually changed
           if (
-            prev.activeGateway !== response.time_based_rotation.active_gateway ||
-            prev.remainingTransactions !== response.time_based_rotation.remaining_transactions ||
-            prev.currentTransactionCount !== response.time_based_rotation.current_transaction_count
+            prev.currentActiveGateway !== response.round_robin_rotation.current_active_gateway ||
+            prev.lastUsedGatewayIndex !== response.round_robin_rotation.last_used_gateway_index
           ) {
             return {
               ...prev,
-              activeGateway: response.time_based_rotation.active_gateway || null,
-              remainingTransactions: response.time_based_rotation.remaining_transactions || null,
-              currentTransactionCount: response.time_based_rotation.current_transaction_count || null,
-              gatewayTransactionLimit: response.time_based_rotation.gateway_transaction_limit || null
+              currentActiveGateway: response.round_robin_rotation.current_active_gateway || null,
+              lastUsedGatewayIndex: response.round_robin_rotation.last_used_gateway_index ?? null,
+              enabledGateways: response.round_robin_rotation.enabled_gateways || []
             };
           }
           return prev;
         });
       }
     } catch (err) {
-      // Silently fail for transaction count updates to avoid disrupting UI
-      console.error('Transaction count update error:', err);
+      // Silently fail for rotation updates to avoid disrupting UI
+      console.error('Rotation data update error:', err);
     }
   }, []);
 
@@ -99,15 +88,13 @@ const SuperadminPaymentGatewaySettings = () => {
           return hasChanged ? normalizedGateways : prev;
         });
         
-        // Update transaction-count-based rotation state
-        if (response.time_based_rotation) {
-          setTimeBasedRotation(prev => ({
-            activeGateway: response.time_based_rotation.active_gateway || null,
-            remainingTransactions: response.time_based_rotation.remaining_transactions || null,
-            currentTransactionCount: response.time_based_rotation.current_transaction_count || null,
-            gatewayTransactionLimit: response.time_based_rotation.gateway_transaction_limit || null,
-            gatewayIntervals: response.time_based_rotation.gateway_intervals || prev.gatewayIntervals
-          }));
+        // Update round-robin rotation state
+        if (response.round_robin_rotation) {
+          setRoundRobinRotation({
+            currentActiveGateway: response.round_robin_rotation.current_active_gateway || null,
+            lastUsedGatewayIndex: response.round_robin_rotation.last_used_gateway_index ?? null,
+            enabledGateways: response.round_robin_rotation.enabled_gateways || []
+          });
         }
       }
     } catch (err) {
@@ -124,9 +111,9 @@ const SuperadminPaymentGatewaySettings = () => {
     // Initial load
     fetchSettings(true);
     
-    // Set up interval for lightweight transaction count updates (every 2 seconds)
+    // Set up interval for lightweight rotation data updates (every 2 seconds)
     intervalRef.current = setInterval(() => {
-      updateTransactionCountOnly();
+      updateRotationDataOnly();
     }, 2000);
     
     return () => {
@@ -187,13 +174,11 @@ const SuperadminPaymentGatewaySettings = () => {
       if (response.success) {
         setSuccess('Payment gateway settings updated successfully! Transaction-count-based rotation is active.');
         
-        if (response.time_based_rotation) {
-          setTimeBasedRotation({
-            activeGateway: response.time_based_rotation.active_gateway || null,
-            remainingTransactions: response.time_based_rotation.remaining_transactions || null,
-            currentTransactionCount: response.time_based_rotation.current_transaction_count || null,
-            gatewayTransactionLimit: response.time_based_rotation.gateway_transaction_limit || null,
-            gatewayIntervals: response.time_based_rotation.gateway_intervals || timeBasedRotation.gatewayIntervals
+        if (response.round_robin_rotation) {
+          setRoundRobinRotation({
+            currentActiveGateway: response.round_robin_rotation.current_active_gateway || null,
+            lastUsedGatewayIndex: response.round_robin_rotation.last_used_gateway_index ?? null,
+            enabledGateways: response.round_robin_rotation.enabled_gateways || []
           });
         }
         
@@ -236,7 +221,7 @@ const SuperadminPaymentGatewaySettings = () => {
             Payment Gateway Settings
           </h1>
           <p className="text-white/70 font-['Albert_Sans']">
-            Enable or disable payment gateways. Transaction-count-based rotation automatically switches between gateways at configured transaction limits (Paytm: 10 transactions, Easebuzz: 5 transactions).
+            Enable or disable payment gateways. Round-robin rotation automatically alternates between enabled gateways (1st payment: first gateway, 2nd payment: second gateway, and so on).
           </p>
         </div>
 
@@ -252,8 +237,8 @@ const SuperadminPaymentGatewaySettings = () => {
           </div>
         )}
 
-        {/* Currently In Use Gateway Status Card */}
-        {timeBasedRotation.activeGateway && gateways[timeBasedRotation.activeGateway]?.enabled && (
+        {/* Currently Active Gateway Status Card */}
+        {roundRobinRotation.currentActiveGateway && gateways[roundRobinRotation.currentActiveGateway]?.enabled && (
           <div className="mb-6 p-6 bg-gradient-to-r from-purple-500/20 to-purple-600/20 border-2 border-purple-500/50 rounded-xl shadow-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -262,28 +247,26 @@ const SuperadminPaymentGatewaySettings = () => {
                 </div>
                 <div>
                   <p className="text-purple-300 text-xs mb-1 font-medium uppercase tracking-wide">
-                    Currently In Use (Processing Payments)
+                    Next Payment Will Use
                   </p>
                   <p className="text-white font-bold text-2xl">
-                    {gatewayLabels[timeBasedRotation.activeGateway] || timeBasedRotation.activeGateway}
+                    {gatewayLabels[roundRobinRotation.currentActiveGateway] || roundRobinRotation.currentActiveGateway}
                   </p>
                   <p className="text-purple-300 text-xs mt-1">
-                    This gateway is currently processing payment requests
+                    Round-robin rotation: Gateways alternate with each payment request
                   </p>
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-purple-300 text-xs mb-2 font-medium uppercase tracking-wide">
-                  Transaction Count
+                  Enabled Gateways
                 </p>
-                <p className="text-purple-400 font-mono font-bold text-4xl mb-1">
-                  {timeBasedRotation.currentTransactionCount !== null && timeBasedRotation.gatewayTransactionLimit !== null
-                    ? `${timeBasedRotation.currentTransactionCount}/${timeBasedRotation.gatewayTransactionLimit}`
-                    : '--/--'}
+                <p className="text-purple-400 font-mono font-bold text-2xl mb-1">
+                  {roundRobinRotation.enabledGateways.length || Object.values(gateways).filter(g => g.enabled).length}
                 </p>
                 <div className="flex items-center gap-1 justify-end">
                   <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-                  <p className="text-purple-300 text-xs">Live</p>
+                  <p className="text-purple-300 text-xs">Active</p>
                 </div>
               </div>
             </div>
@@ -292,16 +275,16 @@ const SuperadminPaymentGatewaySettings = () => {
 
         {/* Settings Card */}
         <div className="bg-bg-secondary border border-white/10 rounded-xl p-6">
-          {/* Transaction-Count-Based Rotation Info */}
+          {/* Round-Robin Rotation Info */}
           <div className="mb-6 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
             <div className="flex items-center gap-3">
               <FiRefreshCw className="text-purple-400" />
               <div>
                 <p className="text-purple-400 text-sm font-medium mb-1">
-                  Transaction-Count-Based Rotation (Always Active)
+                  Round-Robin Rotation (Always Active)
                 </p>
                 <p className="text-purple-300 text-xs">
-                  Automatically switches between gateways based on transaction limits (Paytm: 10 transactions, Easebuzz: 5 transactions)
+                  Automatically alternates between enabled gateways with each payment request (1st: first gateway, 2nd: second gateway, 3rd: first gateway again, and so on)
                 </p>
               </div>
             </div>
@@ -310,13 +293,13 @@ const SuperadminPaymentGatewaySettings = () => {
           <div className="space-y-4">
             {Object.entries(gateways).map(([key, gateway]) => {
               const isEnabled = gateway?.enabled === true;
-              const isCurrentlyInUse = timeBasedRotation.activeGateway === key && isEnabled;
+              const isCurrentlyActive = roundRobinRotation.currentActiveGateway === key && isEnabled;
               
               return (
                 <div
                   key={key}
                   className={`p-4 rounded-lg border-2 transition-all ${
-                    isCurrentlyInUse
+                    isCurrentlyActive
                       ? 'border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/20'
                       : isEnabled
                       ? 'border-green-500/30 bg-green-500/5'
@@ -374,10 +357,10 @@ const SuperadminPaymentGatewaySettings = () => {
                           Active
                         </span>
                       )}
-                      {isCurrentlyInUse && (
+                      {isCurrentlyActive && (
                         <span className="text-xs px-3 py-1.5 bg-purple-500/40 text-purple-200 rounded-full font-bold flex items-center gap-1.5 border border-purple-400/50">
                           <div className="w-1.5 h-1.5 bg-purple-300 rounded-full animate-pulse"></div>
-                          IN USE
+                          NEXT
                         </span>
                       )}
                       {!isEnabled && (
@@ -390,11 +373,11 @@ const SuperadminPaymentGatewaySettings = () => {
                       {isEnabled && (
                         <div className="text-right">
                           <span className="text-xs text-white/60 block">
-                            {timeBasedRotation.gatewayIntervals[key] || 10} transaction limit
+                            Round-robin enabled
                           </span>
-                          {isCurrentlyInUse && timeBasedRotation.currentTransactionCount !== null && timeBasedRotation.gatewayTransactionLimit !== null && (
-                            <span className="text-xs text-purple-400 font-mono font-semibold block mt-0.5">
-                              {timeBasedRotation.currentTransactionCount}/{timeBasedRotation.gatewayTransactionLimit} transactions
+                          {isCurrentlyActive && (
+                            <span className="text-xs text-purple-400 font-semibold block mt-0.5">
+                              Next payment
                             </span>
                           )}
                         </div>
@@ -414,9 +397,9 @@ const SuperadminPaymentGatewaySettings = () => {
           {/* Info Box */}
           <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
             <p className="text-blue-400 text-sm">
-              <strong>Transaction-Count-Based Rotation:</strong> All enabled gateways are active and participate in rotation.
-              The system automatically switches between enabled gateways based on configured transaction limits.
-              Paytm is used for 10 transactions, then Easebuzz for 5 transactions, and the cycle repeats.
+              <strong>Round-Robin Rotation:</strong> All enabled gateways are active and participate in rotation.
+              The system automatically alternates between enabled gateways with each payment request.
+              For example: 1st payment uses Easebuzz, 2nd payment uses Paytm, 3rd payment uses Easebuzz again, and so on.
               At least one gateway must be enabled. The rotation starts automatically when the server starts.
             </p>
           </div>

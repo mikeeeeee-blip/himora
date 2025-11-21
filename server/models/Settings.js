@@ -29,18 +29,9 @@ const SettingsSchema = new mongoose.Schema({
         }
     },
     
-    // Transaction-count-based rotation settings (always active)
-    timeBasedRotation: {
-        activeGateway: { type: String, default: null }, // Currently active gateway
-        transactionCount: { type: Number, default: 0 }, // Transaction count for current gateway
-        gatewayIntervals: {
-            paytm: { type: Number, default: 10 }, // 10 transactions
-            easebuzz: { type: Number, default: 5 }, // 5 transactions
-            razorpay: { type: Number, default: 10 }, // Default 10 transactions
-            phonepe: { type: Number, default: 10 }, // Default 10 transactions
-            sabpaisa: { type: Number, default: 10 }, // Default 10 transactions
-            cashfree: { type: Number, default: 10 } // Default 10 transactions
-        }
+    // Round-robin rotation settings (alternating between enabled gateways)
+    roundRobinRotation: {
+        lastUsedGatewayIndex: { type: Number, default: -1 } // Index of last used gateway in enabled gateways array
     },
     
     // Metadata
@@ -70,44 +61,21 @@ SettingsSchema.statics.getSettings = async function() {
                 sabpaisa: { enabled: false, isDefault: false },
                 cashfree: { enabled: false, isDefault: false }
             },
-            timeBasedRotation: {
-                activeGateway: 'paytm',
-                transactionCount: 0,
-                gatewayIntervals: {
-                    paytm: 10,
-                    easebuzz: 5,
-                    razorpay: 10,
-                    phonepe: 10,
-                    sabpaisa: 10,
-                    cashfree: 10
-                }
+            roundRobinRotation: {
+                lastUsedGatewayIndex: -1
             }
         });
     } else {
-        // Initialize transaction-count-based rotation if not set
-        if (!settings.timeBasedRotation) {
-            const enabledGateways = settings.getEnabledGateways();
-            settings.timeBasedRotation = {
-                activeGateway: enabledGateways.length > 0 ? enabledGateways[0] : null,
-                transactionCount: 0,
-                gatewayIntervals: {
-                    paytm: 10,
-                    easebuzz: 5,
-                    razorpay: 10,
-                    phonepe: 10,
-                    sabpaisa: 10,
-                    cashfree: 10
-                }
+        // Initialize round-robin rotation if not set
+        if (!settings.roundRobinRotation) {
+            settings.roundRobinRotation = {
+                lastUsedGatewayIndex: -1
             };
             await settings.save();
-        } else if (settings.timeBasedRotation.transactionCount === undefined || settings.timeBasedRotation.transactionCount === null) {
-            // Initialize transaction count if missing
-            const enabledGateways = settings.getEnabledGateways();
-            if (enabledGateways.length > 0) {
-                settings.timeBasedRotation.activeGateway = enabledGateways[0];
-                settings.timeBasedRotation.transactionCount = 0;
-                await settings.save();
-            }
+        } else if (settings.roundRobinRotation.lastUsedGatewayIndex === undefined || settings.roundRobinRotation.lastUsedGatewayIndex === null) {
+            // Initialize last used gateway index if missing
+            settings.roundRobinRotation.lastUsedGatewayIndex = -1;
+            await settings.save();
         }
     }
     return settings;
@@ -124,155 +92,76 @@ SettingsSchema.methods.getEnabledGateways = function() {
     return enabled;
 };
 
-// Get current active gateway based on transaction-count-based rotation (always active)
-SettingsSchema.methods.getActiveGatewayByTime = function() {
+// Get next gateway using round-robin/alternating logic
+SettingsSchema.methods.getNextGatewayRoundRobin = function() {
     const enabledGateways = this.getEnabledGateways();
     if (enabledGateways.length === 0) {
         return null;
     }
 
-    // Initialize transaction-count-based rotation if not set
-    if (!this.timeBasedRotation) {
-        this.timeBasedRotation = {
-            activeGateway: null,
-            transactionCount: 0,
-            gatewayIntervals: {
-                paytm: 10,
-                easebuzz: 5,
-                razorpay: 10,
-                phonepe: 10,
-                sabpaisa: 10,
-                cashfree: 10
-            }
+    // Initialize round-robin rotation if not set
+    if (!this.roundRobinRotation) {
+        this.roundRobinRotation = {
+            lastUsedGatewayIndex: -1
         };
     }
 
-    const intervals = this.timeBasedRotation.gatewayIntervals || {};
-    
-    // If only one gateway is enabled, always return it
-    if (enabledGateways.length === 1) {
-        const singleGateway = enabledGateways[0];
-        // Initialize if needed
-        if (!this.timeBasedRotation.activeGateway || this.timeBasedRotation.transactionCount === undefined || this.timeBasedRotation.transactionCount === null) {
-            this.timeBasedRotation.activeGateway = singleGateway;
-            this.timeBasedRotation.transactionCount = 0;
-        }
-        return singleGateway;
-    }
-
-    // Multiple gateways - use transaction-count-based rotation
     // Sort enabled gateways for consistent order
     const sortedEnabledGateways = [...enabledGateways].sort();
     
-    // Initialize if not set
-    if (!this.timeBasedRotation.activeGateway || this.timeBasedRotation.transactionCount === undefined || this.timeBasedRotation.transactionCount === null) {
-        this.timeBasedRotation.activeGateway = sortedEnabledGateways[0];
-        this.timeBasedRotation.transactionCount = 0;
+    // If only one gateway is enabled, always return it
+    if (sortedEnabledGateways.length === 1) {
         return sortedEnabledGateways[0];
     }
 
-    // Get current active gateway and its transaction count
-    let currentActiveGateway = this.timeBasedRotation.activeGateway;
-    let transactionCount = this.timeBasedRotation.transactionCount || 0;
-    
-    // Verify current active gateway is still enabled
-    if (!sortedEnabledGateways.includes(currentActiveGateway)) {
-        // Current gateway was disabled, switch to first enabled
-        currentActiveGateway = sortedEnabledGateways[0];
-        transactionCount = 0;
-        this.timeBasedRotation.activeGateway = currentActiveGateway;
-        this.timeBasedRotation.transactionCount = 0;
-        return currentActiveGateway;
-    }
-
-    // Get transaction limit for current active gateway
-    const currentGatewayLimit = intervals[currentActiveGateway] || 10;
-    
-    // Check if current gateway's transaction limit has been reached
-    if (transactionCount >= currentGatewayLimit) {
-        // Current gateway limit reached, switch to next gateway
-        const currentIndex = sortedEnabledGateways.indexOf(currentActiveGateway);
-        const nextIndex = (currentIndex + 1) % sortedEnabledGateways.length;
-        const nextGateway = sortedEnabledGateways[nextIndex];
-        
-        // Update to next gateway and reset transaction count
-        this.timeBasedRotation.activeGateway = nextGateway;
-        this.timeBasedRotation.transactionCount = 0;
-        
-        console.log(`🔄 Gateway rotation: ${currentActiveGateway} → ${nextGateway}`);
-        console.log(`   ${currentActiveGateway} processed ${transactionCount} transactions (limit: ${currentGatewayLimit})`);
-        
-        return nextGateway;
+    // Get last used index
+    let lastIndex = this.roundRobinRotation.lastUsedGatewayIndex;
+    if (lastIndex === undefined || lastIndex === null) {
+        lastIndex = -1;
     }
     
-    // Current gateway is still active (transaction limit not reached)
-    return currentActiveGateway;
+    console.log(`📋 Round-robin calculation:`);
+    console.log(`   Enabled gateways (sorted): ${sortedEnabledGateways.join(', ')}`);
+    console.log(`   Current lastUsedGatewayIndex: ${lastIndex}`);
+    
+    // Calculate next index (round-robin)
+    const nextIndex = (lastIndex + 1) % sortedEnabledGateways.length;
+    const nextGateway = sortedEnabledGateways[nextIndex];
+    
+    // Update last used index
+    this.roundRobinRotation.lastUsedGatewayIndex = nextIndex;
+    
+    console.log(`🔄 Round-robin gateway selection: ${nextGateway} (index: ${nextIndex}/${sortedEnabledGateways.length - 1})`);
+    console.log(`   Index progression: ${lastIndex} → ${nextIndex}`);
+    
+    // Mark the field as modified to ensure it's saved
+    this.markModified('roundRobinRotation');
+    
+    return nextGateway;
 };
 
-// Increment transaction count for current active gateway
-SettingsSchema.methods.incrementTransactionCount = function() {
-    if (!this.timeBasedRotation) {
-        this.timeBasedRotation = {
-            activeGateway: null,
-            transactionCount: 0,
-            gatewayIntervals: {
-                paytm: 10,
-                easebuzz: 5,
-                razorpay: 10,
-                phonepe: 10,
-                sabpaisa: 10,
-                cashfree: 10
-            }
-        };
-    }
-    
-    // Get current active gateway (this may trigger rotation if limit reached)
-    const activeGateway = this.getActiveGatewayByTime();
-    
-    // Increment transaction count for current gateway
-    this.timeBasedRotation.transactionCount = (this.timeBasedRotation.transactionCount || 0) + 1;
-    
-    return activeGateway;
-};
-
-// Get remaining transaction count for current active gateway
-SettingsSchema.methods.getRemainingTimeForActiveGateway = function() {
+// Get current active gateway (for display purposes)
+SettingsSchema.methods.getCurrentActiveGateway = function() {
     const enabledGateways = this.getEnabledGateways();
     if (enabledGateways.length === 0) {
         return null;
     }
 
-    // Get current active gateway (this will update if needed)
-    const activeGateway = this.getActiveGatewayByTime();
-    if (!activeGateway) {
-        return null;
+    if (!this.roundRobinRotation || this.roundRobinRotation.lastUsedGatewayIndex === undefined || this.roundRobinRotation.lastUsedGatewayIndex === null) {
+        const sortedEnabledGateways = [...enabledGateways].sort();
+        return sortedEnabledGateways[0];
     }
 
-    // Initialize if not set
-    if (!this.timeBasedRotation) {
-        this.timeBasedRotation = {
-            activeGateway: null,
-            transactionCount: 0,
-            gatewayIntervals: {
-                paytm: 10,
-                easebuzz: 5,
-                razorpay: 10,
-                phonepe: 10,
-                sabpaisa: 10,
-                cashfree: 10
-            }
-        };
+    const sortedEnabledGateways = [...enabledGateways].sort();
+    const lastIndex = this.roundRobinRotation.lastUsedGatewayIndex;
+    
+    // Return the gateway that will be used next (which is the one after last used)
+    if (lastIndex === -1) {
+        return sortedEnabledGateways[0];
     }
-
-    const intervals = this.timeBasedRotation.gatewayIntervals || {};
-    const gatewayLimit = intervals[activeGateway] || 10;
-    const currentCount = this.timeBasedRotation.transactionCount || 0;
     
-    // Calculate remaining transactions before rotation
-    const remainingTransactions = Math.max(0, gatewayLimit - currentCount);
-    
-    // Return as "remaining transactions" (we'll use this field for transaction count)
-    return remainingTransactions;
+    const nextIndex = (lastIndex + 1) % sortedEnabledGateways.length;
+    return sortedEnabledGateways[nextIndex];
 };
 
 module.exports = mongoose.model('Settings', SettingsSchema);

@@ -276,11 +276,24 @@ exports.createEasebuzzPaymentLink = async (req, res) => {
             });
         }
         
+        // Sanitize productinfo for Easebuzz (remove invalid characters)
+        // Easebuzz doesn't accept: backticks, quotes, angle brackets, control characters
+        const sanitizeProductInfo = (text) => {
+            if (!text) return '';
+            return String(text)
+                .replace(/[`"'<>]/g, '') // Remove backticks, quotes, angle brackets
+                .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+                .trim()
+                .substring(0, 100); // Limit length to 100 characters
+        };
+        
+        const sanitizedProductInfo = sanitizeProductInfo(description || `Payment for ${merchantName}`);
+        
         const payload = {
             key: EASEBUZZ_API_KEY, // Use API_KEY as per provided code example
             txnid: txnid,
             amount: parseFloat(amount).toFixed(2),
-            productinfo: description || `Payment for ${merchantName}`,
+            productinfo: sanitizedProductInfo,
             firstname: customer_name,
             email: customer_email,
             phone: customer_phone,
