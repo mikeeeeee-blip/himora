@@ -26,6 +26,7 @@ const TransactionSchema = new mongoose.Schema({
     // Paytm Fields
     paytmOrderId: String,
     paytmPaymentId: String,
+    paytmPaymentUrl: String, // Store Paytm payment URL for checkout page
     paytmReferenceId: String,
  
     // Easebuzz Fields

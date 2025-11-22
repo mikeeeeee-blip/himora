@@ -5,11 +5,20 @@ const apiKeyAuth = require('../middleware/apiKeyAuth.js');
 const {
     createPaytmPaymentLink,
     handlePaytmWebhook,
-    handlePaytmCallback
+    handlePaytmCallback,
+    getPaytmCheckoutPage,
+    handlePaytmUPIRedirect
 } = require('../controllers/paytmController.js');
 
 // ============ MERCHANT APIs (API Key Auth) ============
 router.post('/create-payment-link', apiKeyAuth, createPaytmPaymentLink);
+
+// ============ CHECKOUT PAGE (Public - customers visit this link) ============
+router.get('/checkout/:transactionId', getPaytmCheckoutPage);
+router.post('/checkout/:transactionId', getPaytmCheckoutPage); // Support POST as fallback
+
+// ============ UPI REDIRECT (Public - smart UPI app detection and redirect) ============
+router.get('/upi-redirect', handlePaytmUPIRedirect);
 
 // ============ CALLBACK (No Auth - POST/GET from Paytm) ============
 router.post('/callback', handlePaytmCallback);

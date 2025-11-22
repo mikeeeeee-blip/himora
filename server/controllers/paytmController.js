@@ -36,6 +36,44 @@ const PAYTM_FORM_URL = PAYTM_ENVIRONMENT === 'staging'
     ? 'https://securestage.paytmpayments.com'
     : 'https://secure.paytmpayments.com';
 
+// ============ UPI DEEP LINK GENERATION FOR PAYTM ============
+// Function to generate UPI deep links for different payment apps
+function generatePaytmUPIDeepLinks(paymentUrl, paymentData, req) {
+    const amount = paymentData.amount || '0.00';
+    const merchantName = paymentData.merchant_name || paymentData.customer_name || 'Merchant';
+    
+    // URL encode parameters
+    const encode = (str) => encodeURIComponent(str || '');
+    
+    // Get base URL from request or environment variable
+    let baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
+    if (!baseUrl && req) {
+        const protocol = req.protocol || 'http';
+        const host = req.get('host') || 'localhost:5000';
+        baseUrl = `${protocol}://${host}`;
+    }
+    baseUrl = baseUrl || 'http://localhost:5000';
+    
+    // Generate deep links for popular UPI apps
+    const deepLinks = {
+        // Direct Paytm payment URL
+        paytm_payment_url: paymentUrl,
+        
+        // Smart redirect link - automatically detects device and opens UPI app
+        smart_link: paymentUrl ? `${baseUrl}/api/paytm/upi-redirect?payment_url=${encode(paymentUrl)}&amount=${amount}&merchant=${encode(merchantName)}` : null,
+        
+        // Direct app deep links (for manual use if needed)
+        apps: paymentUrl ? {
+            phonepe: `phonepe://pay?url=${encode(paymentUrl)}`,
+            googlepay: `tez://pay?url=${encode(paymentUrl)}`,
+            paytm: `paytmmp://pay?url=${encode(paymentUrl)}`,
+            bhim: `bhim://pay?url=${encode(paymentUrl)}`
+        } : null
+    };
+    
+    return deepLinks;
+}
+
 // ============ CREATE PAYTM PAYMENT LINK ============
 exports.createPaytmPaymentLink = async (req, res) => {
     try {
@@ -465,11 +503,33 @@ exports.createPaytmPaymentLink = async (req, res) => {
         console.log('   Has mid:', paymentUrl.includes('mid=') ? 'Yes' : 'No');
         console.log('   Has orderId:', paymentUrl.includes('orderId=') ? 'Yes' : 'No');
 
+        // Store the actual Paytm payment URL in transaction for checkout page
+        await Transaction.findOneAndUpdate(
+            { transactionId: transactionId },
+            { 
+                paytmPaymentUrl: paymentUrl,
+                paytmPaymentId: txnToken
+            }
+        );
+
+        // Construct checkout page URL (similar to Easebuzz approach)
+        const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
+        const checkoutPageUrl = `${baseUrl}/api/paytm/checkout/${transactionId}`;
+
+        // Generate UPI deep links
+        const deepLinks = generatePaytmUPIDeepLinks(paymentUrl, {
+            amount: parseFloat(amount).toFixed(2),
+            customer_name: customer_name,
+            merchant_name: merchantName
+        }, req);
+
         res.json({
             success: true,
             transaction_id: transactionId,
             payment_link_id: orderId,
-            payment_url: paymentUrl,
+            payment_url: checkoutPageUrl, // Return checkout page URL instead of direct Paytm URL
+            checkout_page: checkoutPageUrl, // Alias for payment_url
+            paytm_payment_url: paymentUrl, // Store actual Paytm URL for reference
             order_id: orderId,
             order_amount: parseFloat(amount),
             order_currency: 'INR',
@@ -478,8 +538,9 @@ exports.createPaytmPaymentLink = async (req, res) => {
             reference_id: referenceId,
             callback_url: finalCallbackUrl,
             txn_token: txnToken,
+            deep_links: deepLinks,
             paytm_params: paytmFormParams, // Keep old format for backward compatibility
-            message: 'Payment link created successfully. Use payment_url to redirect user to payment page.'
+            message: 'Payment link created successfully. Use the checkout_page URL for payment.'
         });
 
     } catch (error) {
@@ -1192,4 +1253,435 @@ async function verifyPaytmPayment(orderId) {
         throw error;
     }
 }
+
+// ============ PAYTM CHECKOUT PAGE (CUSTOM UPI SELECTION) ============
+// This creates a custom checkout page with UPI app selection options
+// Similar to Easebuzz approach - user selects UPI app and jumps to mobile
+exports.getPaytmCheckoutPage = async (req, res) => {
+    try {
+        const { transactionId } = req.params;
+
+        console.log('\n' + '='.repeat(80));
+        console.log('📄 PAYTM CHECKOUT PAGE REQUEST');
+        console.log('='.repeat(80));
+        console.log('   Method:', req.method);
+        console.log('   Transaction ID:', transactionId);
+        console.log('   URL:', req.url);
+        console.log('   Params:', req.params);
+
+        // Find transaction
+        const transaction = await Transaction.findOne({ transactionId: transactionId });
+
+        if (!transaction) {
+            console.warn('❌ Transaction not found:', transactionId);
+            return res.status(404).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Payment Link Not Found</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                        .error { color: #d32f2f; }
+                    </style>
+                </head>
+                <body>
+                    <h1 class="error">Payment Link Not Found</h1>
+                    <p>The payment link you're looking for doesn't exist or has expired.</p>
+                </body>
+                </html>
+            `);
+        }
+
+        if (transaction.status !== 'created' && transaction.status !== 'pending') {
+            console.warn('⚠️  Transaction already processed:', transaction.status);
+            return res.status(400).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Payment Already Processed</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                        .info { color: #1976d2; }
+                    </style>
+                </head>
+                <body>
+                    <h1 class="info">Payment Already Processed</h1>
+                    <p>This payment link has already been used. Status: ${transaction.status}</p>
+                </body>
+                </html>
+            `);
+        }
+
+        // Get Paytm payment URL from transaction, or reconstruct it
+        let paytmPaymentUrl = transaction.paytmPaymentUrl;
+        
+        // If URL not stored, try to reconstruct it from stored data
+        if (!paytmPaymentUrl) {
+            console.warn('⚠️ Paytm payment URL not found in transaction, attempting to reconstruct...');
+            
+            const orderId = transaction.paytmOrderId || transaction.orderId;
+            const txnToken = transaction.paytmPaymentId;
+            
+            if (orderId && txnToken) {
+                // Reconstruct Paytm payment URL
+                paytmPaymentUrl = `${PAYTM_BASE_URL}/theia/processTransaction?mid=${PAYTM_MERCHANT_ID}&orderId=${orderId}&txnToken=${txnToken}`;
+                console.log('✅ Reconstructed Paytm payment URL from orderId and txnToken');
+                
+                // Store it for future use
+                await Transaction.findOneAndUpdate(
+                    { transactionId: transactionId },
+                    { paytmPaymentUrl: paytmPaymentUrl }
+                );
+            } else {
+                console.error('❌ Cannot reconstruct Paytm payment URL - missing orderId or txnToken');
+                console.error('   orderId:', orderId ? 'Found' : 'Missing');
+                console.error('   txnToken:', txnToken ? 'Found' : 'Missing');
+                return res.status(500).send(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Payment Error</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                            .error { color: #d32f2f; }
+                        </style>
+                    </head>
+                    <body>
+                        <h1 class="error">Payment Configuration Error</h1>
+                        <p>Payment URL not found. Please contact support.</p>
+                    </body>
+                    </html>
+                `);
+            }
+        }
+
+        const amount = transaction.amount.toFixed(2);
+        const merchantName = transaction.merchantName || 'Merchant';
+
+        console.log('✅ Generating simplified checkout page');
+        console.log('   Paytm Payment URL:', paytmPaymentUrl.substring(0, 100) + '...');
+        console.log('   Amount: ₹' + amount);
+
+        // Return simplified HTML page with just "Pay with UPI" and "Open Paytm Payment Page"
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Complete Payment - ${merchantName}</title>
+                <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        min-height: 100vh;
+                        display: flex;
+                        flex-direction: column;
+                        padding: 20px;
+                    }
+                    .header {
+                        background: white;
+                        color: #333;
+                        padding: 20px;
+                        text-align: center;
+                        border-radius: 12px 12px 0 0;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    }
+                    .header h1 {
+                        font-size: 24px;
+                        margin-bottom: 5px;
+                    }
+                    .header p {
+                        font-size: 14px;
+                        color: #666;
+                    }
+                    .amount-display {
+                        font-size: 36px;
+                        font-weight: bold;
+                        color: #667eea;
+                        margin-top: 10px;
+                    }
+                    .checkout-container {
+                        flex: 1;
+                        display: flex;
+                        justify-content: center;
+                        align-items: flex-start;
+                        padding: 20px 0;
+                    }
+                    .checkout-wrapper {
+                        width: 100%;
+                        max-width: 500px;
+                        background: white;
+                        border-radius: 12px;
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                        overflow: hidden;
+                    }
+                    .checkout-content {
+                        padding: 30px 20px;
+                    }
+                    .checkout-title {
+                        font-size: 20px;
+                        color: #333;
+                        margin-bottom: 30px;
+                        text-align: center;
+                    }
+                    .payment-options {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 15px;
+                    }
+                    .payment-button {
+                        display: block;
+                        width: 100%;
+                        padding: 18px 24px;
+                        border: none;
+                        border-radius: 12px;
+                        font-size: 18px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        text-decoration: none;
+                        text-align: center;
+                        color: white;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+                    }
+                    .payment-button:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+                    }
+                    .payment-button:active {
+                        transform: translateY(0);
+                    }
+                    .payment-button.secondary {
+                        background: white;
+                        color: #667eea;
+                        border: 2px solid #667eea;
+                        box-shadow: none;
+                    }
+                    .payment-button.secondary:hover {
+                        background: #f8f9ff;
+                        border-color: #764ba2;
+                    }
+                    @media (max-width: 768px) {
+                        .checkout-wrapper {
+                            border-radius: 0;
+                            max-width: 100%;
+                        }
+                        .header h1 {
+                            font-size: 20px;
+                        }
+                        .amount-display {
+                            font-size: 28px;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="checkout-container">
+                    <div class="checkout-wrapper">
+                        <div class="header">
+                            <h1>Complete Your Payment</h1>
+                            <p>${merchantName}</p>
+                            <div class="amount-display">₹${amount}</div>
+                        </div>
+                        
+                        <div class="checkout-content">
+                            <h2 class="checkout-title">Payment Options</h2>
+                            
+                            <div class="payment-options">
+                                <a href="${paytmPaymentUrl}" class="payment-button" onclick="handlePaymentClick(event)">
+                                    Pay with UPI
+                                </a>
+                                
+                                <a href="${paytmPaymentUrl}" target="_blank" class="payment-button secondary">
+                                    Open Paytm Payment Page
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <script>
+                    function handlePaymentClick(event) {
+                        console.log('Opening Paytm payment page...');
+                        // The link will open the Paytm payment URL directly
+                    }
+                </script>
+            </body>
+            </html>
+        `);
+
+    } catch (error) {
+        console.error('❌ Paytm Checkout Page Error:', error);
+        res.status(500).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Payment Error</title>
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                    .error { color: #d32f2f; }
+                </style>
+            </head>
+            <body>
+                <h1 class="error">Payment Error</h1>
+                <p>An error occurred while processing your payment request.</p>
+                <p>${error.message}</p>
+            </body>
+            </html>
+        `);
+    }
+};
+
+// ============ PAYTM UPI REDIRECT (SMART UPI APP DETECTION) ============
+// This handles smart redirect to UPI apps - similar to Easebuzz approach
+exports.handlePaytmUPIRedirect = async (req, res) => {
+    try {
+        const { payment_url, amount, merchant } = req.query;
+        
+        if (!payment_url) {
+            return res.status(400).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Invalid Request</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                        .error { color: #d32f2f; }
+                    </style>
+                </head>
+                <body>
+                    <h1 class="error">Invalid Request</h1>
+                    <p>Payment URL is required.</p>
+                </body>
+                </html>
+            `);
+        }
+
+        // Generate UPI deep links
+        const encode = (str) => encodeURIComponent(str || '');
+        const encodedPaymentUrl = encode(payment_url);
+        const upiLinks = {
+            phonepe: `phonepe://pay?url=${encodedPaymentUrl}`,
+            googlepay: `tez://pay?url=${encodedPaymentUrl}`,
+            paytm: `paytmmp://pay?url=${encodedPaymentUrl}`,
+            bhim: `bhim://pay?url=${encodedPaymentUrl}`
+        };
+
+        // Return HTML page that tries to open UPI apps
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Opening UPI Payment...</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                    }
+                    .container {
+                        text-align: center;
+                        padding: 20px;
+                    }
+                    .spinner {
+                        border: 4px solid rgba(255,255,255,0.3);
+                        border-radius: 50%;
+                        border-top: 4px solid white;
+                        width: 40px;
+                        height: 40px;
+                        animation: spin 1s linear infinite;
+                        margin: 20px auto;
+                    }
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                    .upi-buttons {
+                        margin-top: 30px;
+                    }
+                    .upi-btn {
+                        display: inline-block;
+                        margin: 10px;
+                        padding: 12px 24px;
+                        background: white;
+                        color: #667eea;
+                        text-decoration: none;
+                        border-radius: 8px;
+                        font-weight: bold;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    }
+                    .upi-btn:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 6px 8px rgba(0,0,0,0.2);
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2>Opening Payment...</h2>
+                    <div class="spinner"></div>
+                    <p>If payment app doesn't open automatically, choose an option below:</p>
+                    <div class="upi-buttons">
+                        <a href="${upiLinks.phonepe}" class="upi-btn">PhonePe</a>
+                        <a href="${upiLinks.googlepay}" class="upi-btn">Google Pay</a>
+                        <a href="${upiLinks.paytm}" class="upi-btn">Paytm</a>
+                        <a href="${upiLinks.bhim}" class="upi-btn">BHIM</a>
+                        <a href="${payment_url}" class="upi-btn">Paytm Page</a>
+                    </div>
+                </div>
+                <script>
+                    const paymentUrl = ${JSON.stringify(payment_url)};
+                    const userAgent = navigator.userAgent.toLowerCase();
+                    const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+                    
+                    if (isMobile) {
+                        // Try PhonePe first
+                        window.location.href = ${JSON.stringify(upiLinks.phonepe)};
+                        
+                        // Fallback to payment URL after 2 seconds
+                        setTimeout(() => {
+                            window.location.href = paymentUrl;
+                        }, 2000);
+                    } else {
+                        // Desktop - redirect to payment page
+                        window.location.href = paymentUrl;
+                    }
+                </script>
+            </body>
+            </html>
+        `);
+    } catch (error) {
+        console.error('❌ Paytm UPI Redirect Error:', error);
+        res.status(500).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Error</title>
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                    .error { color: #d32f2f; }
+                </style>
+            </head>
+            <body>
+                <h1 class="error">Error</h1>
+                <p>${error.message}</p>
+            </body>
+            </html>
+        `);
+    }
+};
 
