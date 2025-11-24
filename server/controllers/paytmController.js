@@ -36,6 +36,47 @@ const PAYTM_FORM_URL = PAYTM_ENVIRONMENT === 'staging'
     ? 'https://securestage.paytmpayments.com'
     : 'https://secure.paytmpayments.com';
 
+// ============ GENERATE UPI DEEP LINKS FOR PAYTM ============
+/**
+ * Generate UPI deep links from Paytm payment URL
+ * Similar to Easebuzz implementation
+ */
+function generatePaytmUPIDeepLinks(paymentUrl, paymentData, req) {
+    const amount = paymentData.amount || '0.00';
+    const merchantName = paymentData.merchantName || 'Merchant';
+    
+    // URL encode parameters
+    const encode = (str) => encodeURIComponent(str || '');
+    
+    // Get base URL from request or environment variable
+    let baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
+    if (!baseUrl && req) {
+        const protocol = req.protocol || 'http';
+        const host = req.get('host') || 'localhost:5000';
+        baseUrl = `${protocol}://${host}`;
+    }
+    baseUrl = baseUrl || 'http://localhost:5000';
+    
+    // Generate deep links for popular UPI apps
+    const deepLinks = {
+        // Direct Paytm payment URL
+        checkout_url: paymentUrl,
+        
+        // Smart redirect link - automatically detects device and opens UPI app
+        smart_link: paymentUrl ? `${baseUrl}/api/paytm/upi-redirect?payment_url=${encode(paymentUrl)}&amount=${amount}&merchant=${encode(merchantName)}` : null,
+        
+        // Direct app deep links (for manual use if needed)
+        apps: paymentUrl ? {
+            phonepe: `phonepe://pay?url=${encode(paymentUrl)}`,
+            googlepay: `tez://pay?url=${encode(paymentUrl)}`,
+            paytm: `paytmmp://pay?url=${encode(paymentUrl)}`,
+            bhim: `bhim://pay?url=${encode(paymentUrl)}`
+        } : null
+    };
+    
+    return deepLinks;
+}
+
 // ============ CREATE PAYTM PAYMENT LINK ============
 exports.createPaytmPaymentLink = async (req, res) => {
     try {
@@ -465,11 +506,36 @@ exports.createPaytmPaymentLink = async (req, res) => {
         console.log('   Has mid:', paymentUrl.includes('mid=') ? 'Yes' : 'No');
         console.log('   Has orderId:', paymentUrl.includes('orderId=') ? 'Yes' : 'No');
 
+        // Store the payment URL in the transaction for checkout page
+        if (paymentUrl) {
+            await Transaction.findOneAndUpdate(
+                { transactionId: transactionId },
+                { paytmPaymentUrl: paymentUrl },
+                { new: true }
+            );
+            console.log('💾 Stored Paytm payment URL in transaction');
+        }
+
+        // Generate UPI deep links (similar to Easebuzz)
+        const deepLinks = generatePaytmUPIDeepLinks(paymentUrl, {
+            amount: parseFloat(amount).toFixed(2),
+            merchantName: merchantName
+        }, req);
+
+        // Use smart_link as primary payment_url (for deep link functionality)
+        const primaryPaymentUrl = deepLinks.smart_link || paymentUrl;
+
+        console.log('🔗 Generated deep links for Paytm payment');
+        console.log('   Smart Link:', deepLinks.smart_link ? deepLinks.smart_link.substring(0, 100) + '...' : 'Not available');
+        console.log('   Primary Payment URL:', primaryPaymentUrl.substring(0, 100) + '...');
+
         res.json({
             success: true,
             transaction_id: transactionId,
             payment_link_id: orderId,
-            payment_url: paymentUrl,
+            payment_url: primaryPaymentUrl, // Smart link for deep link functionality
+            checkout_page: paymentUrl, // Original Paytm payment URL (for checkout page)
+            deep_links: deepLinks, // All deep links including smart_link and app-specific links
             order_id: orderId,
             order_amount: parseFloat(amount),
             order_currency: 'INR',
@@ -479,7 +545,7 @@ exports.createPaytmPaymentLink = async (req, res) => {
             callback_url: finalCallbackUrl,
             txn_token: txnToken,
             paytm_params: paytmFormParams, // Keep old format for backward compatibility
-            message: 'Payment link created successfully. Use payment_url to redirect user to payment page.'
+            message: 'Payment link created successfully. Use payment_url (deep link) to redirect user to payment.'
         });
 
     } catch (error) {
@@ -508,6 +574,144 @@ exports.createPaytmPaymentLink = async (req, res) => {
             success: false,
             error: errorMessage,
             details: errorDetails
+        });
+    }
+};
+
+// ============ PAYTM UPI REDIRECT HANDLER ============
+/**
+ * Handle UPI redirect for Paytm payments
+ * Similar to Easebuzz implementation - automatically detects and opens UPI apps
+ */
+exports.handlePaytmUPIRedirect = (req, res) => {
+    try {
+        const { payment_url, amount, merchant } = req.query;
+        
+        if (!payment_url) {
+            return res.status(400).json({ error: 'Payment URL is required' });
+        }
+        
+        // Create an HTML page that tries to open UPI apps and falls back to payment URL
+        const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting to Payment...</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #00BAF2 0%, #0078D4 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .upi-buttons {
+            margin-top: 30px;
+        }
+        .upi-btn {
+            display: inline-block;
+            margin: 10px;
+            padding: 12px 24px;
+            background: white;
+            color: #00BAF2;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .upi-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Opening Payment...</h2>
+        <div class="spinner"></div>
+        <p>If payment app doesn't open automatically, choose an option below:</p>
+        <div class="upi-buttons">
+            <a href="phonepe://pay?url=${encodeURIComponent(payment_url)}" class="upi-btn">PhonePe</a>
+            <a href="tez://pay?url=${encodeURIComponent(payment_url)}" class="upi-btn">Google Pay</a>
+            <a href="paytmmp://pay?url=${encodeURIComponent(payment_url)}" class="upi-btn">Paytm</a>
+            <a href="${payment_url}" class="upi-btn">Open Payment Page</a>
+        </div>
+    </div>
+    <script>
+        // Try to open UPI apps in order of preference
+        const paymentUrl = "${payment_url}";
+        const userAgent = navigator.userAgent.toLowerCase();
+        
+        // Detect if mobile device
+        const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+        
+        if (isMobile) {
+            // Try to open UPI apps
+            const upiApps = [
+                'phonepe://pay?url=' + encodeURIComponent(paymentUrl),
+                'tez://pay?url=' + encodeURIComponent(paymentUrl),
+                'paytmmp://pay?url=' + encodeURIComponent(paymentUrl),
+                'bhim://pay?url=' + encodeURIComponent(paymentUrl)
+            ];
+            
+            let appIndex = 0;
+            const tryNextApp = () => {
+                if (appIndex < upiApps.length) {
+                    window.location.href = upiApps[appIndex];
+                    appIndex++;
+                    setTimeout(tryNextApp, 1000);
+                } else {
+                    // Fallback to payment URL
+                    window.location.href = paymentUrl;
+                }
+            };
+            
+            // Start trying apps
+            tryNextApp();
+        } else {
+            // Desktop - redirect to payment URL
+            window.location.href = paymentUrl;
+        }
+        
+        // Fallback after 3 seconds
+        setTimeout(() => {
+            if (document.hasFocus && document.hasFocus()) {
+                window.location.href = paymentUrl;
+            }
+        }, 3000);
+    </script>
+</body>
+</html>
+        `;
+        
+        res.send(html);
+    } catch (error) {
+        console.error('❌ handlePaytmUPIRedirect error:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to redirect'
         });
     }
 };

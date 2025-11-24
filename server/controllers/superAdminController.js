@@ -1422,16 +1422,30 @@ exports.getPaymentGatewaySettings = async (req, res) => {
         const activeGateway = settings.getCurrentActiveGateway();
         const lastUsedIndex = settings.roundRobinRotation?.lastUsedGatewayIndex ?? -1;
 
+        // Convert Map to object for JSON response
+        const customCountsObj = {};
+        if (settings.roundRobinRotation?.customCounts) {
+            settings.roundRobinRotation.customCounts.forEach((value, key) => {
+                customCountsObj[key] = value;
+            });
+        }
+
         res.json({
             success: true,
             payment_gateways: settings.paymentGateways,
             enabled_gateways: enabledGateways,
             rotation_mode: 'round-robin',
             round_robin_rotation: {
-                enabled: true, // Always enabled
+                enabled: settings.roundRobinRotation?.enabled !== false, // Default to true
                 current_active_gateway: activeGateway,
                 last_used_gateway_index: lastUsedIndex,
-                enabled_gateways: enabledGateways
+                enabled_gateways: enabledGateways,
+                custom_counts: customCountsObj,
+                current_rotation_state: settings.roundRobinRotation?.currentRotationState || {
+                    currentGateway: null,
+                    countUsed: 0,
+                    rotationCycle: 0
+                }
             },
             updated_at: settings.updatedAt,
             updated_by: settings.updatedBy
@@ -1450,9 +1464,11 @@ exports.getPaymentGatewaySettings = async (req, res) => {
 // ============ UPDATE PAYMENT GATEWAY SETTINGS ============
 exports.updatePaymentGatewaySettings = async (req, res) => {
     try {
-        const { payment_gateways } = req.body;
+        const { payment_gateways, round_robin_enabled, custom_counts } = req.body;
 
         console.log(`⚙️ SuperAdmin ${req.user.name} updating payment gateway settings`);
+        console.log('   Round-robin enabled:', round_robin_enabled);
+        console.log('   Custom counts:', custom_counts);
 
         if (!payment_gateways || typeof payment_gateways !== 'object') {
             return res.status(400).json({
@@ -1472,10 +1488,17 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
                 const gatewayConfig = payment_gateways[gateway];
                 
                 if (typeof gatewayConfig.enabled === 'boolean') {
+                    const wasEnabled = settings.paymentGateways[gateway].enabled;
                     settings.paymentGateways[gateway].enabled = gatewayConfig.enabled;
+                    
                     // Clear isDefault when disabling (for backward compatibility)
                     if (!gatewayConfig.enabled) {
                         settings.paymentGateways[gateway].isDefault = false;
+                        
+                        // Edge case: Clear custom count if gateway is disabled
+                        if (settings.roundRobinRotation?.customCounts && settings.roundRobinRotation.customCounts.has(gateway)) {
+                            settings.roundRobinRotation.customCounts.delete(gateway);
+                        }
                     }
                 }
                 
@@ -1497,8 +1520,20 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
         // Initialize round-robin rotation if not set
         if (!settings.roundRobinRotation) {
             settings.roundRobinRotation = {
-                lastUsedGatewayIndex: -1
+                enabled: true,
+                lastUsedGatewayIndex: -1,
+                customCounts: new Map(),
+                currentRotationState: {
+                    currentGateway: null,
+                    countUsed: 0,
+                    rotationCycle: 0
+                }
             };
+        }
+        
+        // Update round-robin enabled status
+        if (typeof round_robin_enabled === 'boolean') {
+            settings.roundRobinRotation.enabled = round_robin_enabled;
         }
         
         // Initialize rotation if not started
@@ -1506,7 +1541,58 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
             settings.roundRobinRotation.lastUsedGatewayIndex = -1;
         }
 
-        // Ensure at least one gateway is enabled
+        // Update custom counts
+        if (custom_counts && typeof custom_counts === 'object') {
+            const enabledGateways = settings.getEnabledGateways();
+            const newCustomCounts = new Map();
+            
+            // Only set counts for enabled gateways
+            for (const [gateway, count] of Object.entries(custom_counts)) {
+                if (validGateways.includes(gateway) && enabledGateways.includes(gateway)) {
+                    const numCount = parseInt(count);
+                    if (!isNaN(numCount) && numCount > 0) {
+                        newCustomCounts.set(gateway, numCount);
+                    }
+                }
+            }
+            
+            // Edge case: If all custom counts are cleared, reset to default round-robin
+            if (newCustomCounts.size === 0) {
+                settings.roundRobinRotation.customCounts = new Map();
+                // Reset rotation state to default round-robin
+                settings.roundRobinRotation.currentRotationState = {
+                    currentGateway: null,
+                    countUsed: 0,
+                    rotationCycle: 0
+                };
+            } else {
+                settings.roundRobinRotation.customCounts = newCustomCounts;
+                
+                // Edge case: If current gateway in rotation state is disabled or not in custom counts, reset
+                const currentState = settings.roundRobinRotation.currentRotationState;
+                if (currentState && currentState.currentGateway) {
+                    if (!enabledGateways.includes(currentState.currentGateway) || !newCustomCounts.has(currentState.currentGateway)) {
+                        settings.roundRobinRotation.currentRotationState = {
+                            currentGateway: null,
+                            countUsed: 0,
+                            rotationCycle: 0
+                        };
+                    }
+                }
+            }
+        } else {
+            // If custom_counts is not provided but was previously set, clear it
+            if (settings.roundRobinRotation.customCounts && settings.roundRobinRotation.customCounts.size > 0) {
+                settings.roundRobinRotation.customCounts = new Map();
+                settings.roundRobinRotation.currentRotationState = {
+                    currentGateway: null,
+                    countUsed: 0,
+                    rotationCycle: 0
+                };
+            }
+        }
+        
+        // Ensure at least one gateway is enabled (get enabled gateways once)
         const enabledGateways = settings.getEnabledGateways();
         if (enabledGateways.length === 0) {
             return res.status(400).json({
@@ -1514,12 +1600,26 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
                 error: 'At least one payment gateway must be enabled'
             });
         }
-
-        // Time-based rotation handles gateway selection automatically
+        
+        // Edge case: If only one gateway is enabled, reset rotation state
+        if (enabledGateways.length === 1) {
+            settings.roundRobinRotation.currentRotationState = {
+                currentGateway: null,
+                countUsed: 0,
+                rotationCycle: 0
+            };
+            settings.roundRobinRotation.lastUsedGatewayIndex = -1;
+        }
 
         // Update metadata
         settings.updatedBy = req.user.id;
         settings.updatedAt = new Date();
+
+        // Mark as modified
+        settings.markModified('roundRobinRotation');
+        if (settings.roundRobinRotation.customCounts) {
+            settings.markModified('roundRobinRotation.customCounts');
+        }
 
         await settings.save();
 
@@ -1527,19 +1627,37 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
         const activeGateway = settings.getCurrentActiveGateway();
         const lastUsedIndex = settings.roundRobinRotation?.lastUsedGatewayIndex ?? -1;
 
-        console.log(`✅ Payment gateway settings updated. Round-robin rotation active. Enabled: ${enabledGateways.join(', ')}`);
+        // Convert Map to object for JSON response
+        const customCountsObj = {};
+        if (settings.roundRobinRotation?.customCounts) {
+            settings.roundRobinRotation.customCounts.forEach((value, key) => {
+                customCountsObj[key] = value;
+            });
+        }
+
+        const rotationMode = settings.roundRobinRotation.enabled 
+            ? (customCountsObj && Object.keys(customCountsObj).length > 0 ? 'custom-rotation' : 'round-robin')
+            : 'disabled';
+
+        console.log(`✅ Payment gateway settings updated. Rotation mode: ${rotationMode}. Enabled: ${enabledGateways.join(', ')}`);
 
         res.json({
             success: true,
-            message: 'Payment gateway settings updated successfully. Round-robin rotation is active.',
+            message: `Payment gateway settings updated successfully. Rotation mode: ${rotationMode}.`,
             payment_gateways: settings.paymentGateways,
             enabled_gateways: enabledGateways,
-            rotation_mode: 'round-robin',
+            rotation_mode: rotationMode,
             round_robin_rotation: {
-                enabled: true, // Always enabled
+                enabled: settings.roundRobinRotation.enabled !== false,
                 current_active_gateway: activeGateway,
                 last_used_gateway_index: lastUsedIndex,
-                enabled_gateways: enabledGateways
+                enabled_gateways: enabledGateways,
+                custom_counts: customCountsObj,
+                current_rotation_state: settings.roundRobinRotation?.currentRotationState || {
+                    currentGateway: null,
+                    countUsed: 0,
+                    rotationCycle: 0
+                }
             },
             updated_at: settings.updatedAt,
             updated_by: req.user.name

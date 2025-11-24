@@ -39,15 +39,18 @@ class SuperadminSettingsService {
   }
 
   // Update payment gateway settings
-  async updatePaymentGatewaySettings(paymentGateways) {
+  async updatePaymentGatewaySettings(paymentGateways, roundRobinEnabled, customCounts) {
     try {
       const token = authService.getToken();
       if (!token) {
         throw new Error('No authentication token found');
       }
 
-      const payload = { payment_gateways: paymentGateways };
-      // Time-based rotation is always active, no need to send it
+      const payload = { 
+        payment_gateways: paymentGateways,
+        round_robin_enabled: roundRobinEnabled,
+        custom_counts: customCounts
+      };
 
       const response = await axios.put(
         API_ENDPOINTS.UPDATE_PAYMENT_GATEWAY_SETTINGS,

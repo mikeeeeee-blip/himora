@@ -16,10 +16,18 @@ const SuperadminPaymentGatewaySettings = () => {
     cashfree: { enabled: false }
   });
   const [roundRobinRotation, setRoundRobinRotation] = useState({
+    enabled: true,
     currentActiveGateway: null,
     lastUsedGatewayIndex: null,
-    enabledGateways: []
+    enabledGateways: [],
+    customCounts: {},
+    currentRotationState: {
+      currentGateway: null,
+      countUsed: 0,
+      rotationCycle: 0
+    }
   });
+  const [customCounts, setCustomCounts] = useState({});
   const intervalRef = useRef(null);
 
   // Memoized function to update only rotation data (lightweight)
@@ -31,10 +39,12 @@ const SuperadminPaymentGatewaySettings = () => {
           // Only update if values actually changed
           if (
             prev.currentActiveGateway !== response.round_robin_rotation.current_active_gateway ||
-            prev.lastUsedGatewayIndex !== response.round_robin_rotation.last_used_gateway_index
+            prev.lastUsedGatewayIndex !== response.round_robin_rotation.last_used_gateway_index ||
+            prev.enabled !== (response.round_robin_rotation.enabled !== false)
           ) {
             return {
               ...prev,
+              enabled: response.round_robin_rotation.enabled !== false,
               currentActiveGateway: response.round_robin_rotation.current_active_gateway || null,
               lastUsedGatewayIndex: response.round_robin_rotation.last_used_gateway_index ?? null,
               enabledGateways: response.round_robin_rotation.enabled_gateways || []
@@ -91,10 +101,32 @@ const SuperadminPaymentGatewaySettings = () => {
         // Update round-robin rotation state
         if (response.round_robin_rotation) {
           setRoundRobinRotation({
+            enabled: response.round_robin_rotation.enabled !== false,
             currentActiveGateway: response.round_robin_rotation.current_active_gateway || null,
             lastUsedGatewayIndex: response.round_robin_rotation.last_used_gateway_index ?? null,
-            enabledGateways: response.round_robin_rotation.enabled_gateways || []
+            enabledGateways: response.round_robin_rotation.enabled_gateways || [],
+            customCounts: response.round_robin_rotation.custom_counts || {},
+            currentRotationState: response.round_robin_rotation.current_rotation_state || {
+              currentGateway: null,
+              countUsed: 0,
+              rotationCycle: 0
+            }
           });
+          
+          // Set custom counts state (ensure it's an object)
+          if (response.round_robin_rotation.custom_counts && typeof response.round_robin_rotation.custom_counts === 'object') {
+            // Filter out any invalid values
+            const validCounts = {};
+            Object.entries(response.round_robin_rotation.custom_counts).forEach(([key, value]) => {
+              const numValue = parseInt(value);
+              if (!isNaN(numValue) && numValue > 0) {
+                validCounts[key] = numValue;
+              }
+            });
+            setCustomCounts(validCounts);
+          } else {
+            setCustomCounts({});
+          }
         }
       }
     } catch (err) {
@@ -143,6 +175,7 @@ const SuperadminPaymentGatewaySettings = () => {
       };
       
       const currentGateway = updated[gatewayName];
+      const wasEnabled = currentGateway.enabled;
       console.log('Current gateway state before toggle:', gatewayName, currentGateway);
       
       // Simple toggle
@@ -150,10 +183,46 @@ const SuperadminPaymentGatewaySettings = () => {
         enabled: !currentGateway.enabled
       };
       
+      // If gateway is being disabled, clear its custom count
+      if (wasEnabled && !updated[gatewayName].enabled) {
+        setCustomCounts(prev => {
+          const updated = { ...prev };
+          delete updated[gatewayName];
+          return updated;
+        });
+      }
+      
       console.log('✅ Toggled gateway:', gatewayName, 'to', updated[gatewayName].enabled);
       console.log('✅ Updated gateways after toggle:', JSON.stringify(updated, null, 2));
       return updated;
     });
+  };
+
+  const handleCustomCountChange = (gatewayName, value) => {
+    // Allow empty string for clearing, or valid numbers
+    if (value === '' || value === null || value === undefined) {
+      setCustomCounts(prev => {
+        const updated = { ...prev };
+        delete updated[gatewayName];
+        return updated;
+      });
+      return;
+    }
+    
+    const numValue = parseInt(value);
+    if (!isNaN(numValue) && numValue > 0) {
+      setCustomCounts(prev => ({
+        ...prev,
+        [gatewayName]: numValue
+      }));
+    } else if (numValue === 0 || isNaN(numValue)) {
+      // Remove invalid values
+      setCustomCounts(prev => {
+        const updated = { ...prev };
+        delete updated[gatewayName];
+        return updated;
+      });
+    }
   };
 
   const handleSave = async () => {
@@ -169,20 +238,66 @@ const SuperadminPaymentGatewaySettings = () => {
       return;
     }
 
+    // Validate custom counts: if any count is set, all enabled gateways should have counts
+    const enabledGateways = Object.keys(gateways).filter(key => gateways[key].enabled);
+    const hasCustomCounts = Object.keys(customCounts).length > 0 && Object.values(customCounts).some(count => count > 0);
+    
+    if (hasCustomCounts && roundRobinRotation.enabled) {
+      // Check if all enabled gateways have valid counts
+      const missingCounts = enabledGateways.filter(gw => {
+        const count = customCounts[gw];
+        return !count || count <= 0 || isNaN(count);
+      });
+      
+      if (missingCounts.length > 0) {
+        setError(`Custom rotation requires counts for all enabled gateways. Missing or invalid counts for: ${missingCounts.map(g => gatewayLabels[g]).join(', ')}`);
+        setSaving(false);
+        return;
+      }
+      
+      // Validate all counts are positive integers
+      const invalidCounts = Object.entries(customCounts).filter(([gw, count]) => {
+        return enabledGateways.includes(gw) && (isNaN(count) || count <= 0 || !Number.isInteger(count));
+      });
+      
+      if (invalidCounts.length > 0) {
+        setError(`Invalid counts detected. All counts must be positive integers (1-100).`);
+        setSaving(false);
+        return;
+      }
+    }
+
     try {
-      const response = await superadminSettingsService.updatePaymentGatewaySettings(gateways);
+      const response = await superadminSettingsService.updatePaymentGatewaySettings(
+        gateways,
+        roundRobinRotation.enabled,
+        hasCustomCounts ? customCounts : {}
+      );
+      
       if (response.success) {
-        setSuccess('Payment gateway settings updated successfully! Transaction-count-based rotation is active.');
+        const rotationMode = response.rotation_mode || 'round-robin';
+        setSuccess(`Payment gateway settings updated successfully! Rotation mode: ${rotationMode}.`);
         
         if (response.round_robin_rotation) {
           setRoundRobinRotation({
+            enabled: response.round_robin_rotation.enabled !== false,
             currentActiveGateway: response.round_robin_rotation.current_active_gateway || null,
             lastUsedGatewayIndex: response.round_robin_rotation.last_used_gateway_index ?? null,
-            enabledGateways: response.round_robin_rotation.enabled_gateways || []
+            enabledGateways: response.round_robin_rotation.enabled_gateways || [],
+            customCounts: response.round_robin_rotation.custom_counts || {},
+            currentRotationState: response.round_robin_rotation.current_rotation_state || {
+              currentGateway: null,
+              countUsed: 0,
+              rotationCycle: 0
+            }
           });
+          
+          if (response.round_robin_rotation.custom_counts) {
+            setCustomCounts(response.round_robin_rotation.custom_counts);
+          }
         }
         
-        setTimeout(() => setSuccess(''), 3000);
+        setTimeout(() => setSuccess(''), 5000);
       }
     } catch (err) {
       setError(err.message || 'Failed to update settings');
@@ -238,7 +353,7 @@ const SuperadminPaymentGatewaySettings = () => {
         )}
 
         {/* Currently Active Gateway Status Card */}
-        {roundRobinRotation.currentActiveGateway && gateways[roundRobinRotation.currentActiveGateway]?.enabled && (
+        {roundRobinRotation.currentActiveGateway && gateways[roundRobinRotation.currentActiveGateway]?.enabled && roundRobinRotation.enabled && (
           <div className="mb-6 p-6 bg-gradient-to-r from-purple-500/20 to-purple-600/20 border-2 border-purple-500/50 rounded-xl shadow-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -253,7 +368,9 @@ const SuperadminPaymentGatewaySettings = () => {
                     {gatewayLabels[roundRobinRotation.currentActiveGateway] || roundRobinRotation.currentActiveGateway}
                   </p>
                   <p className="text-purple-300 text-xs mt-1">
-                    Round-robin rotation: Gateways alternate with each payment request
+                    {Object.values(customCounts).some(c => c > 0) 
+                      ? `Custom rotation: ${roundRobinRotation.currentRotationState?.countUsed || 0}/${customCounts[roundRobinRotation.currentActiveGateway] || 1} (Cycle #${roundRobinRotation.currentRotationState?.rotationCycle || 0})`
+                      : 'Round-robin rotation: Gateways alternate with each payment request'}
                   </p>
                 </div>
               </div>
@@ -275,20 +392,138 @@ const SuperadminPaymentGatewaySettings = () => {
 
         {/* Settings Card */}
         <div className="bg-bg-secondary border border-white/10 rounded-xl p-6">
-          {/* Round-Robin Rotation Info */}
+          {/* Round-Robin Rotation Toggle */}
           <div className="mb-6 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-            <div className="flex items-center gap-3">
-              <FiRefreshCw className="text-purple-400" />
-              <div>
-                <p className="text-purple-400 text-sm font-medium mb-1">
-                  Round-Robin Rotation (Always Active)
-                </p>
-                <p className="text-purple-300 text-xs">
-                  Automatically alternates between enabled gateways with each payment request (1st: first gateway, 2nd: second gateway, 3rd: first gateway again, and so on)
-                </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FiRefreshCw className="text-purple-400" />
+                <div>
+                  <p className="text-purple-400 text-sm font-medium mb-1">
+                    Round-Robin Rotation
+                  </p>
+                  <p className="text-purple-300 text-xs">
+                    {roundRobinRotation.enabled 
+                      ? 'Automatically rotates between enabled gateways with each payment request'
+                      : 'Rotation is disabled. First enabled gateway will be used for all payments.'}
+                  </p>
+                </div>
+              </div>
+              <div
+                onClick={() => setRoundRobinRotation(prev => ({ ...prev, enabled: !prev.enabled }))}
+                className={`relative w-14 h-7 rounded-full transition-colors cursor-pointer ${
+                  roundRobinRotation.enabled ? 'bg-purple-500' : 'bg-white/20'
+                }`}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setRoundRobinRotation(prev => ({ ...prev, enabled: !prev.enabled }));
+                  }
+                }}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full transition-transform duration-200 ${
+                    roundRobinRotation.enabled ? 'translate-x-7' : 'translate-x-0'
+                  }`}
+                />
               </div>
             </div>
           </div>
+
+          {/* Custom Rotation Counts (only show if round-robin is enabled) */}
+          {roundRobinRotation.enabled && Object.values(gateways).some(g => g.enabled) && (
+            <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-blue-400 text-sm font-medium">
+                  Custom Rotation Counts (Optional)
+                </p>
+                {Object.keys(customCounts).length > 0 && (
+                  <span className="text-xs px-2 py-1 bg-blue-500/30 text-blue-200 rounded">
+                    {Object.keys(customCounts).length} gateway(s) configured
+                  </span>
+                )}
+              </div>
+              <p className="text-blue-300 text-xs mb-4">
+                Set how many times each gateway should be used before switching to the next one. 
+                <strong> Leave empty for default (1:1 alternation).</strong> Example: Paytm: 3, Easebuzz: 2 means 3 Paytm links, then 2 Easebuzz links, then repeat the cycle.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {Object.entries(gateways)
+                  .filter(([_, gateway]) => gateway.enabled)
+                  .map(([key, _]) => {
+                    const currentCount = customCounts[key];
+                    const hasCustomCount = currentCount !== undefined && currentCount > 0;
+                    
+                    return (
+                      <div key={key} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/10">
+                        <label className="text-white text-sm font-medium w-28 flex-shrink-0">
+                          {gatewayLabels[key]}:
+                        </label>
+                        <div className="flex-1 flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            step="1"
+                            value={currentCount !== undefined ? currentCount : ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              handleCustomCountChange(key, val);
+                            }}
+                            onBlur={(e) => {
+                              // Ensure value is valid on blur
+                              const val = e.target.value;
+                              if (val) {
+                                const numVal = parseInt(val);
+                                if (isNaN(numVal) || numVal < 1 || numVal > 100) {
+                                  setError(`Count must be between 1 and 100 for ${gatewayLabels[key]}`);
+                                  setTimeout(() => setError(''), 3000);
+                                  // Reset to empty if invalid
+                                  handleCustomCountChange(key, '');
+                                }
+                              }
+                            }}
+                            placeholder="Default: 1"
+                            className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                          />
+                          <span className="text-white/60 text-xs w-12">times</span>
+                          {hasCustomCount && (
+                            <span className="text-xs px-2 py-1 bg-blue-500/30 text-blue-200 rounded">
+                              Set
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+              {Object.keys(customCounts).length > 0 && Object.values(customCounts).some(count => count > 0) && (
+                <div className="mt-4 p-3 bg-blue-500/20 rounded-lg border border-blue-500/30">
+                  <p className="text-blue-300 text-xs font-medium mb-2">
+                    <strong>Custom Rotation Active:</strong>
+                  </p>
+                  <div className="text-blue-200 text-xs space-y-1">
+                    {Object.entries(customCounts)
+                      .filter(([_, count]) => count > 0)
+                      .map(([gw, count]) => (
+                        <div key={gw} className="flex items-center gap-2">
+                          <span className="font-mono">•</span>
+                          <span>{gatewayLabels[gw]}: {count} time{count > 1 ? 's' : ''}</span>
+                        </div>
+                      ))}
+                  </div>
+                  {roundRobinRotation.currentRotationState?.currentGateway && (
+                    <div className="mt-2 pt-2 border-t border-blue-500/30 text-blue-300 text-xs">
+                      <strong>Current Cycle:</strong> {gatewayLabels[roundRobinRotation.currentRotationState.currentGateway]} 
+                      {' '}({roundRobinRotation.currentRotationState.countUsed}/{customCounts[roundRobinRotation.currentRotationState.currentGateway] || 1}) 
+                      | Cycle #{roundRobinRotation.currentRotationState.rotationCycle || 0}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="space-y-4">
             {Object.entries(gateways).map(([key, gateway]) => {
@@ -373,11 +608,16 @@ const SuperadminPaymentGatewaySettings = () => {
                       {isEnabled && (
                         <div className="text-right">
                           <span className="text-xs text-white/60 block">
-                            Round-robin enabled
+                            {roundRobinRotation.enabled ? 'Round-robin enabled' : 'Rotation disabled'}
                           </span>
-                          {isCurrentlyActive && (
+                          {isCurrentlyActive && roundRobinRotation.enabled && (
                             <span className="text-xs text-purple-400 font-semibold block mt-0.5">
                               Next payment
+                            </span>
+                          )}
+                          {customCounts[key] && customCounts[key] > 0 && roundRobinRotation.enabled && (
+                            <span className="text-xs text-blue-400 font-semibold block mt-0.5">
+                              Custom: {customCounts[key]}x
                             </span>
                           )}
                         </div>
@@ -397,11 +637,14 @@ const SuperadminPaymentGatewaySettings = () => {
           {/* Info Box */}
           <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
             <p className="text-blue-400 text-sm">
-              <strong>Round-Robin Rotation:</strong> All enabled gateways are active and participate in rotation.
-              The system automatically alternates between enabled gateways with each payment request.
-              For example: 1st payment uses Easebuzz, 2nd payment uses Paytm, 3rd payment uses Easebuzz again, and so on.
-              At least one gateway must be enabled. The rotation starts automatically when the server starts.
+              <strong>Rotation Modes:</strong>
             </p>
+            <ul className="text-blue-300 text-xs mt-2 space-y-1 list-disc list-inside">
+              <li><strong>Round-Robin Disabled:</strong> First enabled gateway is used for all payments.</li>
+              <li><strong>Round-Robin Enabled (Default):</strong> Gateways alternate 1:1 (Easebuzz → Paytm → Easebuzz → Paytm...)</li>
+              <li><strong>Custom Rotation:</strong> Set custom counts (e.g., Paytm: 3, Easebuzz: 2) to use Paytm 3 times, then Easebuzz 2 times, then repeat the cycle.</li>
+              <li>At least one gateway must be enabled. Custom counts require values for all enabled gateways.</li>
+            </ul>
           </div>
 
           {/* Actions */}
