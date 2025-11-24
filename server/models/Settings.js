@@ -31,7 +31,21 @@ const SettingsSchema = new mongoose.Schema({
     
     // Round-robin rotation settings (alternating between enabled gateways)
     roundRobinRotation: {
-        lastUsedGatewayIndex: { type: Number, default: -1 } // Index of last used gateway in enabled gateways array
+        enabled: { type: Boolean, default: true }, // Whether round-robin is enabled
+        lastUsedGatewayIndex: { type: Number, default: -1 }, // Index of last used gateway in enabled gateways array
+        // Custom rotation counts per gateway (e.g., { paytm: 3, easebuzz: 2 })
+        // If set, each gateway will be used N times before moving to next
+        customCounts: {
+            type: Map,
+            of: Number,
+            default: new Map()
+        },
+        // Current rotation state for custom counts
+        currentRotationState: {
+            currentGateway: { type: String, default: null }, // Current gateway in rotation
+            countUsed: { type: Number, default: 0 }, // How many times current gateway has been used
+            rotationCycle: { type: Number, default: 0 } // Current rotation cycle number
+        }
     },
     
     // Metadata
@@ -62,19 +76,48 @@ SettingsSchema.statics.getSettings = async function() {
                 cashfree: { enabled: false, isDefault: false }
             },
             roundRobinRotation: {
-                lastUsedGatewayIndex: -1
+                enabled: true,
+                lastUsedGatewayIndex: -1,
+                customCounts: new Map(),
+                currentRotationState: {
+                    currentGateway: null,
+                    countUsed: 0,
+                    rotationCycle: 0
+                }
             }
         });
     } else {
         // Initialize round-robin rotation if not set
         if (!settings.roundRobinRotation) {
             settings.roundRobinRotation = {
-                lastUsedGatewayIndex: -1
+                enabled: true,
+                lastUsedGatewayIndex: -1,
+                customCounts: new Map(),
+                currentRotationState: {
+                    currentGateway: null,
+                    countUsed: 0,
+                    rotationCycle: 0
+                }
             };
             await settings.save();
-        } else if (settings.roundRobinRotation.lastUsedGatewayIndex === undefined || settings.roundRobinRotation.lastUsedGatewayIndex === null) {
-            // Initialize last used gateway index if missing
-            settings.roundRobinRotation.lastUsedGatewayIndex = -1;
+        } else {
+            // Initialize missing fields
+            if (settings.roundRobinRotation.enabled === undefined) {
+                settings.roundRobinRotation.enabled = true;
+            }
+            if (settings.roundRobinRotation.lastUsedGatewayIndex === undefined || settings.roundRobinRotation.lastUsedGatewayIndex === null) {
+                settings.roundRobinRotation.lastUsedGatewayIndex = -1;
+            }
+            if (!settings.roundRobinRotation.customCounts) {
+                settings.roundRobinRotation.customCounts = new Map();
+            }
+            if (!settings.roundRobinRotation.currentRotationState) {
+                settings.roundRobinRotation.currentRotationState = {
+                    currentGateway: null,
+                    countUsed: 0,
+                    rotationCycle: 0
+                };
+            }
             await settings.save();
         }
     }
@@ -102,8 +145,21 @@ SettingsSchema.methods.getNextGatewayRoundRobin = function() {
     // Initialize round-robin rotation if not set
     if (!this.roundRobinRotation) {
         this.roundRobinRotation = {
-            lastUsedGatewayIndex: -1
+            enabled: true,
+            lastUsedGatewayIndex: -1,
+            customCounts: new Map(),
+            currentRotationState: {
+                currentGateway: null,
+                countUsed: 0,
+                rotationCycle: 0
+            }
         };
+    }
+
+    // If round-robin is disabled, return the first enabled gateway
+    if (this.roundRobinRotation.enabled === false) {
+        const sortedEnabledGateways = [...enabledGateways].sort();
+        return sortedEnabledGateways[0];
     }
 
     // Sort enabled gateways for consistent order
@@ -114,13 +170,34 @@ SettingsSchema.methods.getNextGatewayRoundRobin = function() {
         return sortedEnabledGateways[0];
     }
 
+    // Check if custom counts are configured
+    const customCounts = this.roundRobinRotation.customCounts;
+    const hasCustomCounts = customCounts && customCounts.size > 0;
+    
+    // Filter custom counts to only include enabled gateways
+    const enabledCustomCounts = new Map();
+    if (hasCustomCounts) {
+        sortedEnabledGateways.forEach(gateway => {
+            const count = customCounts.get(gateway);
+            if (count && count > 0) {
+                enabledCustomCounts.set(gateway, count);
+            }
+        });
+    }
+
+    // If custom counts are configured and valid, use custom rotation logic
+    if (enabledCustomCounts.size > 0) {
+        return this.getNextGatewayCustomRotation(sortedEnabledGateways, enabledCustomCounts);
+    }
+
+    // Default round-robin logic (alternating)
     // Get last used index
     let lastIndex = this.roundRobinRotation.lastUsedGatewayIndex;
     if (lastIndex === undefined || lastIndex === null) {
         lastIndex = -1;
     }
     
-    console.log(`📋 Round-robin calculation:`);
+    console.log(`📋 Round-robin calculation (default alternating):`);
     console.log(`   Enabled gateways (sorted): ${sortedEnabledGateways.join(', ')}`);
     console.log(`   Current lastUsedGatewayIndex: ${lastIndex}`);
     
@@ -140,6 +217,57 @@ SettingsSchema.methods.getNextGatewayRoundRobin = function() {
     return nextGateway;
 };
 
+// Get next gateway using custom rotation counts
+SettingsSchema.methods.getNextGatewayCustomRotation = function(sortedEnabledGateways, customCounts) {
+    // Initialize rotation state if not set
+    if (!this.roundRobinRotation.currentRotationState) {
+        this.roundRobinRotation.currentRotationState = {
+            currentGateway: null,
+            countUsed: 0,
+            rotationCycle: 0
+        };
+    }
+
+    const state = this.roundRobinRotation.currentRotationState;
+    let currentGateway = state.currentGateway;
+    let countUsed = state.countUsed || 0;
+    let rotationCycle = state.rotationCycle || 0;
+
+    // If no current gateway or count reached, move to next gateway
+    if (!currentGateway || !customCounts.has(currentGateway) || countUsed >= customCounts.get(currentGateway)) {
+        // Find next gateway in sorted order
+        const currentIndex = currentGateway ? sortedEnabledGateways.indexOf(currentGateway) : -1;
+        const nextIndex = (currentIndex + 1) % sortedEnabledGateways.length;
+        currentGateway = sortedEnabledGateways[nextIndex];
+        countUsed = 0;
+        
+        // If we've cycled back to the first gateway, increment rotation cycle
+        if (nextIndex === 0 && currentGateway !== null) {
+            rotationCycle = (rotationCycle || 0) + 1;
+        }
+    }
+
+    // Increment count used for current gateway
+    countUsed += 1;
+    
+    // Update rotation state
+    state.currentGateway = currentGateway;
+    state.countUsed = countUsed;
+    state.rotationCycle = rotationCycle;
+
+    const gatewayCount = customCounts.get(currentGateway);
+    console.log(`📋 Custom rotation calculation:`);
+    console.log(`   Enabled gateways: ${sortedEnabledGateways.join(', ')}`);
+    console.log(`   Custom counts: ${Array.from(customCounts.entries()).map(([g, c]) => `${g}:${c}`).join(', ')}`);
+    console.log(`   Current gateway: ${currentGateway} (${countUsed}/${gatewayCount})`);
+    console.log(`   Rotation cycle: ${rotationCycle}`);
+    
+    // Mark as modified
+    this.markModified('roundRobinRotation');
+    
+    return currentGateway;
+};
+
 // Get current active gateway (for display purposes)
 SettingsSchema.methods.getCurrentActiveGateway = function() {
     const enabledGateways = this.getEnabledGateways();
@@ -147,6 +275,35 @@ SettingsSchema.methods.getCurrentActiveGateway = function() {
         return null;
     }
 
+    // If round-robin is disabled, return first enabled gateway
+    if (this.roundRobinRotation?.enabled === false) {
+        const sortedEnabledGateways = [...enabledGateways].sort();
+        return sortedEnabledGateways[0];
+    }
+
+    // Check for custom rotation
+    const customCounts = this.roundRobinRotation?.customCounts;
+    if (customCounts && customCounts.size > 0) {
+        const sortedEnabledGateways = [...enabledGateways].sort();
+        const enabledCustomCounts = new Map();
+        sortedEnabledGateways.forEach(gateway => {
+            const count = customCounts.get(gateway);
+            if (count && count > 0) {
+                enabledCustomCounts.set(gateway, count);
+            }
+        });
+        
+        if (enabledCustomCounts.size > 0) {
+            const state = this.roundRobinRotation?.currentRotationState;
+            if (state && state.currentGateway && enabledCustomCounts.has(state.currentGateway)) {
+                return state.currentGateway;
+            }
+            // Return first gateway with custom count
+            return sortedEnabledGateways.find(g => enabledCustomCounts.has(g)) || sortedEnabledGateways[0];
+        }
+    }
+
+    // Default round-robin logic
     if (!this.roundRobinRotation || this.roundRobinRotation.lastUsedGatewayIndex === undefined || this.roundRobinRotation.lastUsedGatewayIndex === null) {
         const sortedEnabledGateways = [...enabledGateways].sort();
         return sortedEnabledGateways[0];

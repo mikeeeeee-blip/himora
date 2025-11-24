@@ -27,38 +27,55 @@ exports.createPaymentLink = async (req, res) => {
             });
         }
 
-        // Gateway selection logic - Use round-robin/alternating rotation
+        // Gateway selection logic - Use round-robin/alternating rotation or first gateway if disabled
         const sortedEnabledGateways = [...enabledGateways].sort();
+        const isRoundRobinEnabled = settings.roundRobinRotation?.enabled !== false;
         
-        console.log(`🔍 Round-Robin Debug Info:`);
+        console.log(`🔍 Gateway Selection Debug Info:`);
         console.log(`   Enabled gateways: ${sortedEnabledGateways.join(', ')}`);
+        console.log(`   Round-robin enabled: ${isRoundRobinEnabled}`);
         console.log(`   Current roundRobinRotation state:`, JSON.stringify(settings.roundRobinRotation));
         
         // Get current active gateway (before rotation) for display
         const currentActiveGateway = settings.getCurrentActiveGateway();
         console.log(`   Current active gateway (before): ${currentActiveGateway}`);
         
-        // Get next gateway using round-robin (alternates between enabled gateways)
-        // This will update the lastUsedGatewayIndex
-        let selectedGateway = settings.getNextGatewayRoundRobin();
+        let selectedGateway;
+        let rotationMode;
+        
+        if (isRoundRobinEnabled) {
+            // Get next gateway using round-robin (alternates between enabled gateways or custom rotation)
+            // This will update the lastUsedGatewayIndex or currentRotationState
+            selectedGateway = settings.getNextGatewayRoundRobin();
+            rotationMode = settings.roundRobinRotation?.customCounts?.size > 0 ? 'custom-rotation' : 'round-robin';
+        } else {
+            // Round-robin disabled - use first enabled gateway
+            selectedGateway = sortedEnabledGateways[0];
+            rotationMode = 'disabled';
+            console.log(`⚠️ Round-robin disabled - using first enabled gateway: ${selectedGateway}`);
+        }
         
         if (!selectedGateway) {
             return res.status(503).json({
                 success: false,
-                error: 'No gateway selected. Round-robin rotation failed.',
-                message: 'Failed to select a payment gateway for rotation.'
+                error: 'No gateway selected. Gateway selection failed.',
+                message: 'Failed to select a payment gateway.'
             });
         }
         
-        // Mark as modified and save settings to persist rotation state
-        settings.markModified('roundRobinRotation');
-        await settings.save();
+        // Mark as modified and save settings to persist rotation state (only if round-robin is enabled)
+        if (isRoundRobinEnabled) {
+            settings.markModified('roundRobinRotation');
+            await settings.save();
+        }
         
-        console.log(`🔄 Round-Robin Selection: Using gateway ${selectedGateway}`);
+        console.log(`🔄 Gateway Selection: Using gateway ${selectedGateway} (Mode: ${rotationMode})`);
         console.log(`   Enabled gateways: ${sortedEnabledGateways.join(', ')}`);
-        console.log(`   Rotation: Alternating between ${sortedEnabledGateways.length} enabled gateway(s)`);
-        console.log(`   Previous gateway: ${currentActiveGateway || 'N/A'} → Selected gateway: ${selectedGateway}`);
-        console.log(`   Saved roundRobinRotation state:`, JSON.stringify(settings.roundRobinRotation));
+        if (isRoundRobinEnabled) {
+            console.log(`   Rotation: ${rotationMode === 'custom-rotation' ? 'Custom counts' : 'Alternating'} between ${sortedEnabledGateways.length} enabled gateway(s)`);
+            console.log(`   Previous gateway: ${currentActiveGateway || 'N/A'} → Selected gateway: ${selectedGateway}`);
+            console.log(`   Saved roundRobinRotation state:`, JSON.stringify(settings.roundRobinRotation));
+        }
 
         console.log(`🔀 Routing payment link creation to ${selectedGateway} gateway`);
         console.log(`   Enabled gateways: ${sortedEnabledGateways.join(', ')}`);
@@ -73,13 +90,17 @@ exports.createPaymentLink = async (req, res) => {
                 data.gateway_used = selectedGateway;
                 data.gateway_name = gatewayName;
                 
-                // Round-robin rotation information
-                // Get the next gateway that will be used (after current one)
+                // Rotation information
+                const isRoundRobinEnabled = settings.roundRobinRotation?.enabled !== false;
                 const nextActiveGateway = settings.getCurrentActiveGateway();
                 const lastUsedIndex = settings.roundRobinRotation?.lastUsedGatewayIndex ?? -1;
+                const currentRotationMode = isRoundRobinEnabled 
+                    ? (settings.roundRobinRotation?.customCounts?.size > 0 ? 'custom-rotation' : 'round-robin')
+                    : 'disabled';
                 
-                data.gateway_message = `Payment link created using ${gatewayName} gateway (round-robin rotation)`;
-                data.rotation_mode = 'round-robin';
+                data.gateway_message = `Payment link created using ${gatewayName} gateway${isRoundRobinEnabled ? ` (${currentRotationMode})` : ' (rotation disabled)'}`;
+                data.rotation_mode = currentRotationMode;
+                data.rotation_enabled = isRoundRobinEnabled;
                 data.current_active_gateway = selectedGateway; // Currently used gateway
                 data.next_active_gateway = nextActiveGateway; // Next gateway that will be used
                 data.last_used_gateway_index = lastUsedIndex;
@@ -93,8 +114,16 @@ exports.createPaymentLink = async (req, res) => {
                     data.message = `Payment link created successfully using ${gatewayName}. Share this URL with customer.`;
                 }
                 
-                // Add helpful note about round-robin rotation
-                data.note = `Round-robin rotation: Payment gateways alternate between enabled gateways. Next payment will use a different gateway.`;
+                // Add helpful note about rotation
+                if (isRoundRobinEnabled) {
+                    if (currentRotationMode === 'custom-rotation') {
+                        data.note = `Custom rotation: Gateways are used according to configured counts.`;
+                    } else {
+                        data.note = `Round-robin rotation: Payment gateways alternate between enabled gateways. Next payment will use a different gateway.`;
+                    }
+                } else {
+                    data.note = `Rotation disabled: All payments will use the first enabled gateway.`;
+                }
             }
             return originalJson(data);
         };
@@ -143,19 +172,37 @@ exports.getAvailableGateways = async (req, res) => {
         const settings = await Settings.getSettings();
         const enabledGateways = settings.getEnabledGateways();
         
-        // Use round-robin rotation
+        // Get rotation status
         const activeGateway = settings.getCurrentActiveGateway();
         const lastUsedIndex = settings.roundRobinRotation?.lastUsedGatewayIndex ?? -1;
+        const isRoundRobinEnabled = settings.roundRobinRotation?.enabled !== false;
+        const rotationMode = isRoundRobinEnabled 
+            ? (settings.roundRobinRotation?.customCounts?.size > 0 ? 'custom-rotation' : 'round-robin')
+            : 'disabled';
+        
+        // Convert Map to object for JSON response
+        const customCountsObj = {};
+        if (settings.roundRobinRotation?.customCounts) {
+            settings.roundRobinRotation.customCounts.forEach((value, key) => {
+                customCountsObj[key] = value;
+            });
+        }
 
         res.json({
             success: true,
             enabled_gateways: enabledGateways,
-            rotation_mode: 'round-robin',
+            rotation_mode: rotationMode,
             round_robin_rotation: {
-                enabled: true, // Always enabled
+                enabled: isRoundRobinEnabled,
                 current_active_gateway: activeGateway,
                 last_used_gateway_index: lastUsedIndex,
-                enabled_gateways: enabledGateways
+                enabled_gateways: enabledGateways,
+                custom_counts: customCountsObj,
+                current_rotation_state: settings.roundRobinRotation?.currentRotationState || {
+                    currentGateway: null,
+                    countUsed: 0,
+                    rotationCycle: 0
+                }
             },
             all_gateways: {
                 razorpay: {

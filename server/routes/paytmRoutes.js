@@ -17,7 +17,7 @@ router.post('/create-payment-link', apiKeyAuth, createPaytmPaymentLink);
 router.get('/checkout/:transactionId', getPaytmCheckoutPage);
 router.post('/checkout/:transactionId', getPaytmCheckoutPage); // Support POST as fallback
 
-// ============ UPI REDIRECT (Public - smart UPI app detection and redirect) ============
+// ============ UPI REDIRECT (No Auth - Smart UPI app detection) ============
 router.get('/upi-redirect', handlePaytmUPIRedirect);
 
 // ============ CALLBACK (No Auth - POST/GET from Paytm) ============
