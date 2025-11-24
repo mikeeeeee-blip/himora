@@ -507,42 +507,29 @@ exports.createPaytmPaymentLink = async (req, res) => {
         console.log('   Has mid:', paymentUrl.includes('mid=') ? 'Yes' : 'No');
         console.log('   Has orderId:', paymentUrl.includes('orderId=') ? 'Yes' : 'No');
 
-<<<<<<< HEAD
-        // Store the actual Paytm payment URL in transaction for checkout page
-        await Transaction.findOneAndUpdate(
-            { transactionId: transactionId },
-            { 
-                paytmPaymentUrl: paymentUrl,
-                paytmPaymentId: txnToken
-            }
-        );
-
-        // Construct checkout page URL (similar to Easebuzz approach)
-        const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
-        const checkoutPageUrl = `${baseUrl}/api/paytm/checkout/${transactionId}`;
-
-        // Generate UPI deep links
-        const deepLinks = generatePaytmUPIDeepLinks(paymentUrl, {
-            amount: parseFloat(amount).toFixed(2),
-            customer_name: customer_name,
-            merchant_name: merchantName
-        }, req);
-
-=======
         // Store the payment URL in the transaction for checkout page
         if (paymentUrl) {
             await Transaction.findOneAndUpdate(
                 { transactionId: transactionId },
-                { paytmPaymentUrl: paymentUrl },
+                { 
+                    paytmPaymentUrl: paymentUrl,
+                    paytmPaymentId: txnToken
+                },
                 { new: true }
             );
             console.log('💾 Stored Paytm payment URL in transaction');
         }
 
+        // Construct checkout page URL (similar to Easebuzz approach)
+        const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
+        const checkoutPageUrl = `${baseUrl}/api/paytm/checkout/${transactionId}`;
+
         // Generate UPI deep links (similar to Easebuzz)
         const deepLinks = generatePaytmUPIDeepLinks(paymentUrl, {
             amount: parseFloat(amount).toFixed(2),
-            merchantName: merchantName
+            customer_name: customer_name,
+            merchantName: merchantName,
+            merchant_name: merchantName
         }, req);
 
         // Use smart_link as primary payment_url (for deep link functionality)
@@ -551,21 +538,15 @@ exports.createPaytmPaymentLink = async (req, res) => {
         console.log('🔗 Generated deep links for Paytm payment');
         console.log('   Smart Link:', deepLinks.smart_link ? deepLinks.smart_link.substring(0, 100) + '...' : 'Not available');
         console.log('   Primary Payment URL:', primaryPaymentUrl.substring(0, 100) + '...');
-
->>>>>>> 42d28e4 (feat: add round-robin toggle and custom rotation counts for payment gateways)
+        console.log('   Checkout Page URL:', checkoutPageUrl);
         res.json({
             success: true,
             transaction_id: transactionId,
             payment_link_id: orderId,
-<<<<<<< HEAD
-            payment_url: checkoutPageUrl, // Return checkout page URL instead of direct Paytm URL
-            checkout_page: checkoutPageUrl, // Alias for payment_url
-            paytm_payment_url: paymentUrl, // Store actual Paytm URL for reference
-=======
             payment_url: primaryPaymentUrl, // Smart link for deep link functionality
-            checkout_page: paymentUrl, // Original Paytm payment URL (for checkout page)
+            checkout_page: checkoutPageUrl, // Custom checkout page URL
+            paytm_payment_url: paymentUrl, // Original Paytm payment URL (for direct access)
             deep_links: deepLinks, // All deep links including smart_link and app-specific links
->>>>>>> 42d28e4 (feat: add round-robin toggle and custom rotation counts for payment gateways)
             order_id: orderId,
             order_amount: parseFloat(amount),
             order_currency: 'INR',
@@ -574,13 +555,8 @@ exports.createPaytmPaymentLink = async (req, res) => {
             reference_id: referenceId,
             callback_url: finalCallbackUrl,
             txn_token: txnToken,
-            deep_links: deepLinks,
             paytm_params: paytmFormParams, // Keep old format for backward compatibility
-<<<<<<< HEAD
-            message: 'Payment link created successfully. Use the checkout_page URL for payment.'
-=======
-            message: 'Payment link created successfully. Use payment_url (deep link) to redirect user to payment.'
->>>>>>> 42d28e4 (feat: add round-robin toggle and custom rotation counts for payment gateways)
+            message: 'Payment link created successfully. Use payment_url (deep link) for mobile apps or checkout_page for web browser.'
         });
 
     } catch (error) {
