@@ -28,13 +28,15 @@ cd himora
 git branch
 
 # Pull latest changes from the branch you want to deploy
-# For fix#15 branch:
-git checkout fix#15
-git pull origin fix#15
+# For fix#15 branch (development/staging):
+git checkout 'fix#15'
+git pull origin 'fix#15'
 
 # For ptmversion(1.0.0) branch (production):
-# git checkout ptmversion\(1.0.0\)
-# git pull origin ptmversion\(1.0.0\)
+# git checkout 'ptmversion(1.0.0)'
+# git pull origin 'ptmversion(1.0.0)'
+
+# Note: Use quotes around branch names with special characters (#, parentheses)
 ```
 
 ### 4. Install/Update Dependencies (if needed)
@@ -185,37 +187,22 @@ pm2 logs --err
 pm2 restart all --max-memory-restart 1G
 ```
 
-## Automated Deployment Script
+## Quick Deploy Script
 
-An automated deployment script is available at `scripts/deploy-fix15.sh` that handles the entire deployment process.
+A deployment script is available at `scripts/deploy-fix15.sh` that automates the entire deployment process.
 
-### Using the Automated Script (Recommended)
+### Using the Deployment Script
 
 **From your local machine:**
 ```bash
-# Make sure you're in the project root directory
+# Make sure you're in the project root
 cd /path/to/himora
-
-# Ensure the script is executable
-chmod +x scripts/deploy-fix15.sh
 
 # Run the deployment script
 ./scripts/deploy-fix15.sh
 ```
 
-The script will:
-1. Connect to the server via SSH
-2. Switch to fix#15 branch
-3. Pull latest changes
-4. Install/update dependencies
-5. Build the client application
-6. Restart PM2 processes
-7. Show deployment status and logs
-
-### Manual Deployment (On Server)
-
-If you prefer to deploy manually on the server:
-
+**Manual deployment (on server):**
 ```bash
 #!/bin/bash
 # deploy.sh
@@ -223,8 +210,8 @@ If you prefer to deploy manually on the server:
 echo "🚀 Starting deployment..."
 
 # Pull latest code
-git checkout 'fix#15'
-git pull origin 'fix#15'
+git checkout fix#15
+git pull origin fix#15
 
 # Install dependencies (if needed)
 cd server && npm install --production && cd ..
