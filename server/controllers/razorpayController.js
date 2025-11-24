@@ -532,44 +532,15 @@ async function handlePhonePePaymentSuccess(payload) {
     console.log(`   - Paid at: ${paidAt.toISOString()}`);
     console.log(`   - Expected settlement: ${expectedSettlement.toISOString()}`);
 
-    // Prepare webhook payload for merchant
-    const webhookPayload = {
-      event: 'payment.success',
-      timestamp: new Date().toISOString(),
-      transaction_id: transaction.transactionId,
-      order_id: transaction.orderId,
-      merchant_id: transaction.merchantId._id.toString(),
-      data: {
-        transaction_id: transaction.transactionId,
-        order_id: transaction.orderId,
-        phonepe_reference_id: transaction.phonepeReferenceId,
-        payment_id: transaction.phonepePaymentId,
-        amount: transaction.amount,
-        currency: transaction.currency,
-        status: transaction.status,
-        payment_method: transaction.paymentMethod,
-        paid_at: transaction.paidAt.toISOString(),
-        settlement_status: transaction.settlementStatus,
-        expected_settlement_date: transaction.expectedSettlementDate.toISOString(),
-        acquirer_data: transaction.acquirerData,
-        customer: {
-          customer_id: transaction.customerId,
-          name: transaction.customerName,
-          email: transaction.customerEmail,
-          phone: transaction.customerPhone
-        },
-        merchant: {
-          merchant_id: transaction.merchantId._id.toString(),
-          merchant_name: transaction.merchantName
-        },
-        description: transaction.description,
-        created_at: transaction.createdAt.toISOString(),
-        updated_at: transaction.updatedAt.toISOString()
-      }
-    };
-
-    // Send merchant webhook if enabled
+    // Prepare webhook payload for merchant using universal format
     if (transaction.merchantId.webhookEnabled) {
+      const { createSuccessPayload } = require('../utils/universalCallbackPayload');
+      const webhookPayload = createSuccessPayload(transaction, {
+        phonepe_reference_id: transaction.phonepeReferenceId,
+        phonepe_payment_id: transaction.phonepePaymentId,
+        phonepe_order_id: transaction.phonepeOrderId
+      });
+
       await sendMerchantWebhook(transaction.merchantId, webhookPayload);
     }
 
@@ -673,41 +644,12 @@ exports.handleRazorpayCallback = async (req, res) => {
                         ).populate('merchantId');
 
                         if (updatedTransaction && updatedTransaction.merchantId.webhookEnabled) {
-                            const webhookPayload = {
-                                event: 'payment.success',
-                                timestamp: new Date().toISOString(),
-                                transaction_id: updatedTransaction.transactionId,
-                                order_id: updatedTransaction.orderId,
-                                merchant_id: updatedTransaction.merchantId._id.toString(),
-                                data: {
-                                    transaction_id: updatedTransaction.transactionId,
-                                    order_id: updatedTransaction.orderId,
-                                    razorpay_payment_link_id: updatedTransaction.razorpayPaymentLinkId,
-                                    razorpay_payment_id: updatedTransaction.razorpayPaymentId,
-                                    razorpay_reference_id: updatedTransaction.razorpayReferenceId,
-                                    amount: updatedTransaction.amount,
-                                    currency: updatedTransaction.currency,
-                                    status: updatedTransaction.status,
-                                    payment_method: updatedTransaction.paymentMethod,
-                                    paid_at: updatedTransaction.paidAt.toISOString(),
-                                    settlement_status: updatedTransaction.settlementStatus,
-                                    expected_settlement_date: updatedTransaction.expectedSettlementDate.toISOString(),
-                                    acquirer_data: updatedTransaction.acquirerData,
-                                    customer: {
-                                        customer_id: updatedTransaction.customerId,
-                                        name: updatedTransaction.customerName,
-                                        email: updatedTransaction.customerEmail,
-                                        phone: updatedTransaction.customerPhone
-                                    },
-                                    merchant: {
-                                        merchant_id: updatedTransaction.merchantId._id.toString(),
-                                        merchant_name: updatedTransaction.merchantName
-                                    },
-                                    description: updatedTransaction.description,
-                                    created_at: updatedTransaction.createdAt.toISOString(),
-                                    updated_at: updatedTransaction.updatedAt.toISOString()
-                                }
-                            };
+                            const { createSuccessPayload } = require('../utils/universalCallbackPayload');
+                            const webhookPayload = createSuccessPayload(updatedTransaction, {
+                                razorpay_payment_link_id: updatedTransaction.razorpayPaymentLinkId,
+                                razorpay_payment_id: updatedTransaction.razorpayPaymentId,
+                                razorpay_reference_id: updatedTransaction.razorpayReferenceId
+                            });
 
                             await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
                         }
@@ -1086,45 +1028,15 @@ async function handleRazorpayPaymentSuccess(payload) {
         console.log(`   - Paid at: ${paidAt.toISOString()}`);
         console.log(`   - Expected settlement: ${expectedSettlement.toISOString()}`);
 
-        // Prepare webhook payload for merchant (following PhonePe pattern)
-        const webhookPayload = {
-            event: 'payment.success',
-            timestamp: new Date().toISOString(),
-            transaction_id: updatedTransaction.transactionId,
-            order_id: updatedTransaction.orderId,
-            merchant_id: updatedTransaction.merchantId._id.toString(),
-            data: {
-                transaction_id: updatedTransaction.transactionId,
-                order_id: updatedTransaction.orderId,
+        // Prepare webhook payload for merchant using universal format
+        if (updatedTransaction.merchantId.webhookEnabled) {
+            const { createSuccessPayload } = require('../utils/universalCallbackPayload');
+            const webhookPayload = createSuccessPayload(updatedTransaction, {
                 razorpay_payment_link_id: updatedTransaction.razorpayPaymentLinkId,
                 razorpay_payment_id: updatedTransaction.razorpayPaymentId,
-                razorpay_reference_id: updatedTransaction.razorpayReferenceId,
-                amount: updatedTransaction.amount,
-                currency: updatedTransaction.currency,
-                status: updatedTransaction.status,
-                payment_method: updatedTransaction.paymentMethod,
-                paid_at: updatedTransaction.paidAt.toISOString(),
-                settlement_status: updatedTransaction.settlementStatus,
-                expected_settlement_date: updatedTransaction.expectedSettlementDate.toISOString(),
-                acquirer_data: updatedTransaction.acquirerData,
-                customer: {
-                    customer_id: updatedTransaction.customerId,
-                    name: updatedTransaction.customerName,
-                    email: updatedTransaction.customerEmail,
-                    phone: updatedTransaction.customerPhone
-                },
-                merchant: {
-                    merchant_id: updatedTransaction.merchantId._id.toString(),
-                    merchant_name: updatedTransaction.merchantName
-                },
-                description: updatedTransaction.description,
-                created_at: updatedTransaction.createdAt.toISOString(),
-                updated_at: updatedTransaction.updatedAt.toISOString()
-            }
-        };
+                razorpay_reference_id: updatedTransaction.razorpayReferenceId
+            });
 
-        // Send merchant webhook if enabled (following PhonePe pattern)
-        if (updatedTransaction.merchantId.webhookEnabled) {
             await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
         }
 
@@ -1223,23 +1135,12 @@ async function handleRazorpayPaymentFailed(payload) {
 
         // Send merchant webhook if enabled (following PhonePe pattern)
         if (updatedTransaction.merchantId.webhookEnabled) {
-            const webhookPayload = {
-                event: 'payment.failed',
-                timestamp: new Date().toISOString(),
-                transaction_id: updatedTransaction.transactionId,
-                order_id: updatedTransaction.orderId,
-                merchant_id: updatedTransaction.merchantId._id.toString(),
-                data: {
-                    transaction_id: updatedTransaction.transactionId,
-                    order_id: updatedTransaction.orderId,
-                    razorpay_payment_link_id: updatedTransaction.razorpayPaymentLinkId,
-                    razorpay_payment_id: updatedTransaction.razorpayPaymentId,
-                    status: updatedTransaction.status,
-                    failure_reason: updatedTransaction.failureReason,
-                    created_at: updatedTransaction.createdAt.toISOString(),
-                    updated_at: updatedTransaction.updatedAt.toISOString()
-                }
-            };
+            const { createFailedPayload } = require('../utils/universalCallbackPayload');
+            const webhookPayload = createFailedPayload(updatedTransaction, {
+                razorpay_payment_link_id: updatedTransaction.razorpayPaymentLinkId,
+                razorpay_payment_id: updatedTransaction.razorpayPaymentId,
+                razorpay_reference_id: updatedTransaction.razorpayReferenceId
+            });
 
             await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
         }

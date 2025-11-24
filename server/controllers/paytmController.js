@@ -963,41 +963,12 @@ async function handlePaytmPaymentSuccess(transaction, payload) {
 
         // Send merchant webhook if enabled
         if (updatedTransaction.merchantId.webhookEnabled) {
-            const webhookPayload = {
-                event: 'payment.success',
-                timestamp: new Date().toISOString(),
-                transaction_id: updatedTransaction.transactionId,
-                order_id: updatedTransaction.orderId,
-                merchant_id: updatedTransaction.merchantId._id.toString(),
-                data: {
-                    transaction_id: updatedTransaction.transactionId,
-                    order_id: updatedTransaction.orderId,
-                    paytm_order_id: updatedTransaction.paytmOrderId,
-                    paytm_payment_id: updatedTransaction.paytmPaymentId,
-                    paytm_reference_id: updatedTransaction.paytmReferenceId,
-                    amount: updatedTransaction.amount,
-                    currency: updatedTransaction.currency,
-                    status: updatedTransaction.status,
-                    payment_method: updatedTransaction.paymentMethod,
-                    paid_at: updatedTransaction.paidAt.toISOString(),
-                    settlement_status: updatedTransaction.settlementStatus,
-                    expected_settlement_date: updatedTransaction.expectedSettlementDate.toISOString(),
-                    acquirer_data: updatedTransaction.acquirerData,
-                    customer: {
-                        customer_id: updatedTransaction.customerId,
-                        name: updatedTransaction.customerName,
-                        email: updatedTransaction.customerEmail,
-                        phone: updatedTransaction.customerPhone
-                    },
-                    merchant: {
-                        merchant_id: updatedTransaction.merchantId._id.toString(),
-                        merchant_name: updatedTransaction.merchantName
-                    },
-                    description: updatedTransaction.description,
-                    created_at: updatedTransaction.createdAt.toISOString(),
-                    updated_at: updatedTransaction.updatedAt.toISOString()
-                }
-            };
+            const { createSuccessPayload } = require('../utils/universalCallbackPayload');
+            const webhookPayload = createSuccessPayload(updatedTransaction, {
+                paytm_order_id: updatedTransaction.paytmOrderId,
+                paytm_payment_id: updatedTransaction.paytmPaymentId,
+                paytm_reference_id: updatedTransaction.paytmReferenceId
+            });
 
             await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
         }
@@ -1044,23 +1015,12 @@ async function handlePaytmPaymentFailed(transaction, payload) {
 
         // Send merchant webhook if enabled
         if (updatedTransaction.merchantId.webhookEnabled) {
-            const webhookPayload = {
-                event: 'payment.failed',
-                timestamp: new Date().toISOString(),
-                transaction_id: updatedTransaction.transactionId,
-                order_id: updatedTransaction.orderId,
-                merchant_id: updatedTransaction.merchantId._id.toString(),
-                data: {
-                    transaction_id: updatedTransaction.transactionId,
-                    order_id: updatedTransaction.orderId,
-                    paytm_order_id: updatedTransaction.paytmOrderId,
-                    paytm_payment_id: updatedTransaction.paytmPaymentId,
-                    status: updatedTransaction.status,
-                    failure_reason: updatedTransaction.failureReason,
-                    created_at: updatedTransaction.createdAt.toISOString(),
-                    updated_at: updatedTransaction.updatedAt.toISOString()
-                }
-            };
+            const { createFailedPayload } = require('../utils/universalCallbackPayload');
+            const webhookPayload = createFailedPayload(updatedTransaction, {
+                paytm_order_id: updatedTransaction.paytmOrderId,
+                paytm_payment_id: updatedTransaction.paytmPaymentId,
+                paytm_reference_id: updatedTransaction.paytmReferenceId
+            });
 
             await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
         }

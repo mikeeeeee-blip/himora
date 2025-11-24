@@ -451,19 +451,19 @@ exports.createEasebuzzPaymentLink = async (req, res) => {
                     });
 
                     const apiResponse = await axios.post(EASEBUZZ_INITIATE_PAYMENT_URL, formData.toString(), {
-                        headers: {
-                            'Accept': 'application/json',
+                headers: {
+                    'Accept': 'application/json',
                             'Content-Type': 'application/x-www-form-urlencoded'
-                        },
+                },
                         timeout: 30000
-                    });
+            });
 
-                    console.log('✅ Easebuzz API Response Status:', apiResponse.status);
-                    console.log('📦 Easebuzz API Response:', JSON.stringify(apiResponse.data, null, 2));
+            console.log('✅ Easebuzz API Response Status:', apiResponse.status);
+            console.log('📦 Easebuzz API Response:', JSON.stringify(apiResponse.data, null, 2));
 
-                    const responseData = apiResponse.data;
+            const responseData = apiResponse.data;
 
-                    // Check if API call was successful
+            // Check if API call was successful
                     if (responseData && responseData.status === 1) {
                         // Extract access_key from response
                         accessKey = responseData.data || responseData.access_key || responseData.token;
@@ -543,26 +543,26 @@ exports.createEasebuzzPaymentLink = async (req, res) => {
         const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
         const checkoutPageUrl = `${baseUrl}/api/easebuzz/checkout/${transactionId}`;
 
-        // Update transaction with Easebuzz response data
+            // Update transaction with Easebuzz response data
         await Transaction.findOneAndUpdate(
-            { transactionId: transactionId },
-            { 
+                { transactionId: transactionId },
+                { 
                 easebuzzOrderId: txnid,
                 orderId: txnid
-            },
-            { new: true }
-        );
-
+                },
+                { new: true }
+            );
+            
         // Generate UPI deep links (using checkout page URL)
         const deepLinks = generateUPIDeepLinks(checkoutPageUrl, {
             firstname: customer_name,
-            amount: parseFloat(amount).toFixed(2),
+                amount: parseFloat(amount).toFixed(2),
             productinfo: description || `Payment for ${merchantName}`
         }, req);
 
-        res.json({
-            success: true,
-            transaction_id: transactionId,
+            res.json({
+                success: true,
+                transaction_id: transactionId,
             payment_link_id: txnid,
             payment_url: checkoutPageUrl, // Custom checkout page URL
             checkout_page: checkoutPageUrl, // Alias for payment_url
@@ -570,11 +570,11 @@ exports.createEasebuzzPaymentLink = async (req, res) => {
             short_url: null,
             deep_links: deepLinks,
             order_id: txnid,
-            order_amount: parseFloat(amount),
-            order_currency: 'INR',
-            merchant_id: merchantId.toString(),
-            merchant_name: merchantName,
-            callback_url: finalCallbackUrl,
+                order_amount: parseFloat(amount),
+                order_currency: 'INR',
+                merchant_id: merchantId.toString(),
+                merchant_name: merchantName,
+                callback_url: finalCallbackUrl,
             message: 'Payment link created successfully. Use the checkout_page URL for payment.'
         });
 
@@ -585,10 +585,10 @@ exports.createEasebuzzPaymentLink = async (req, res) => {
         // Update transaction status to failed (only if transactionId was created)
         if (transactionId) {
             try {
-                await Transaction.findOneAndUpdate(
-                    { transactionId: transactionId },
-                    { 
-                        status: 'failed',
+            await Transaction.findOneAndUpdate(
+                { transactionId: transactionId },
+                { 
+                    status: 'failed',
                         failureReason: error.response?.data?.error_desc || error.response?.data?.message || error.message || 'Failed to create payment link'
                     }
                 );
@@ -908,9 +908,9 @@ exports.getEasebuzzCheckoutPage = async (req, res) => {
                             <div class="amount">₹${payload.amount}</div>
                         </div>
                         <div id="checkout-loading" class="loading">
-                            <div class="spinner"></div>
+                    <div class="spinner"></div>
                             <div class="loading-text">Initializing payment gateway...</div>
-                        </div>
+                </div>
                         <div id="easebuzz-checkout-container" style="display: none;"></div>
                     </div>
                 </div>
@@ -1620,7 +1620,7 @@ exports.handleUPIRedirect = (req, res) => {
 // ============ HANDLE EASEBUZZ PAYMENT SUCCESS ============
 async function handleEasebuzzPaymentSuccess(transaction, payload) {
     try {
-       
+
         // Prevent duplicate processing
         if (transaction.status === 'paid') {
             console.log('⚠️ Transaction already marked as paid, skipping update');
@@ -1966,7 +1966,7 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
         }
 
         if (!updatedTransaction) {
-           
+            
             // Try to find the transaction again to see its current state
             const currentTransaction = await Transaction.findById(transaction._id);
             if (currentTransaction) {
@@ -1982,7 +1982,7 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
         }
         
         // Verify the update actually persisted
-       
+        
         // Double-check by querying the database again
         const verifyTransaction = await Transaction.findById(transaction._id);
         if (verifyTransaction) {
@@ -2019,31 +2019,12 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
 
         // Send merchant webhook if enabled
         if (updatedTransaction.merchantId.webhookEnabled) {
-            const webhookPayload = {
-                event: 'payment.success',
-                timestamp: new Date().toISOString(),
-                transaction_id: updatedTransaction.transactionId,
-                order_id: updatedTransaction.orderId,
-                merchant_id: updatedTransaction.merchantId._id.toString(),
-                data: {
-                    transaction_id: updatedTransaction.transactionId,
-                    order_id: updatedTransaction.orderId,
+            const { createSuccessPayload } = require('../utils/universalCallbackPayload');
+            const webhookPayload = createSuccessPayload(updatedTransaction, {
                     easebuzz_order_id: updatedTransaction.easebuzzOrderId,
                     easebuzz_payment_id: updatedTransaction.easebuzzPaymentId,
-                    amount: updatedTransaction.amount,
-                    commission: updatedTransaction.commission,
-                    net_amount: updatedTransaction.netAmount,
-                    status: updatedTransaction.status,
-                    payment_method: updatedTransaction.paymentMethod,
-                    description: updatedTransaction.description,
-                    utr: updatedTransaction.acquirerData?.utr || null,
-                    rrn: updatedTransaction.acquirerData?.rrn || null,
-                    bank_transaction_id: updatedTransaction.acquirerData?.bank_transaction_id || null,
-                    paid_at: updatedTransaction.paidAt.toISOString(),
-                    created_at: updatedTransaction.createdAt.toISOString(),
-                    updated_at: updatedTransaction.updatedAt.toISOString()
-                }
-            };
+                easebuzz_reference_id: updatedTransaction.easebuzzReferenceId
+            });
 
             await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
         }
@@ -2086,28 +2067,12 @@ async function handleEasebuzzPaymentFailed(transaction, payload) {
 
         // Send merchant webhook if enabled
         if (updatedTransaction.merchantId.webhookEnabled) {
-            const webhookPayload = {
-                event: 'payment.failed',
-                timestamp: new Date().toISOString(),
-                transaction_id: updatedTransaction.transactionId,
-                order_id: updatedTransaction.orderId,
-                merchant_id: updatedTransaction.merchantId._id.toString(),
-                data: {
-                    transaction_id: updatedTransaction.transactionId,
-                    order_id: updatedTransaction.orderId,
+            const { createFailedPayload } = require('../utils/universalCallbackPayload');
+            const webhookPayload = createFailedPayload(updatedTransaction, {
                     easebuzz_order_id: updatedTransaction.easebuzzOrderId,
                     easebuzz_payment_id: updatedTransaction.easebuzzPaymentId,
-                    amount: updatedTransaction.amount,
-                    status: updatedTransaction.status,
-                    failure_reason: updatedTransaction.failureReason,
-                    description: updatedTransaction.description,
-                    utr: updatedTransaction.acquirerData?.utr || null,
-                    rrn: updatedTransaction.acquirerData?.rrn || null,
-                    bank_transaction_id: updatedTransaction.acquirerData?.bank_transaction_id || null,
-                    created_at: updatedTransaction.createdAt.toISOString(),
-                    updated_at: updatedTransaction.updatedAt.toISOString()
-                }
-            };
+                easebuzz_reference_id: updatedTransaction.easebuzzReferenceId
+            });
 
             await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
         }
@@ -2151,27 +2116,12 @@ async function handleEasebuzzPaymentPending(transaction, payload) {
 
         // Send merchant webhook if enabled
         if (updatedTransaction.merchantId.webhookEnabled) {
-            const webhookPayload = {
-                event: 'payment.pending',
-                timestamp: new Date().toISOString(),
-                transaction_id: updatedTransaction.transactionId,
-                order_id: updatedTransaction.orderId,
-                merchant_id: updatedTransaction.merchantId._id.toString(),
-                data: {
-                    transaction_id: updatedTransaction.transactionId,
-                    order_id: updatedTransaction.orderId,
+            const { createPendingPayload } = require('../utils/universalCallbackPayload');
+            const webhookPayload = createPendingPayload(updatedTransaction, {
                     easebuzz_order_id: updatedTransaction.easebuzzOrderId,
                     easebuzz_payment_id: updatedTransaction.easebuzzPaymentId,
-                    amount: updatedTransaction.amount,
-                    status: updatedTransaction.status,
-                    description: updatedTransaction.description,
-                    utr: updatedTransaction.acquirerData?.utr || null,
-                    rrn: updatedTransaction.acquirerData?.rrn || null,
-                    bank_transaction_id: updatedTransaction.acquirerData?.bank_transaction_id || null,
-                    created_at: updatedTransaction.createdAt.toISOString(),
-                    updated_at: updatedTransaction.updatedAt.toISOString()
-                }
-            };
+                easebuzz_reference_id: updatedTransaction.easebuzzReferenceId
+            });
 
             await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
         }
@@ -2219,28 +2169,13 @@ async function handleEasebuzzPaymentCancelled(transaction, payload) {
 
         // Send merchant webhook if enabled
         if (updatedTransaction.merchantId.webhookEnabled) {
-            const webhookPayload = {
-                event: 'payment.cancelled',
-                timestamp: new Date().toISOString(),
-                transaction_id: updatedTransaction.transactionId,
-                order_id: updatedTransaction.orderId,
-                merchant_id: updatedTransaction.merchantId._id.toString(),
-                data: {
-                    transaction_id: updatedTransaction.transactionId,
-                    order_id: updatedTransaction.orderId,
+            const { createCancelledPayload } = require('../utils/universalCallbackPayload');
+            const webhookPayload = createCancelledPayload(updatedTransaction, {
                     easebuzz_order_id: updatedTransaction.easebuzzOrderId,
                     easebuzz_payment_id: updatedTransaction.easebuzzPaymentId,
-                    amount: updatedTransaction.amount,
-                    status: updatedTransaction.status,
-                    cancellation_reason: cancellationReason,
-                    description: updatedTransaction.description,
-                    utr: updatedTransaction.acquirerData?.utr || null,
-                    rrn: updatedTransaction.acquirerData?.rrn || null,
-                    bank_transaction_id: updatedTransaction.acquirerData?.bank_transaction_id || null,
-                    created_at: updatedTransaction.createdAt.toISOString(),
-                    updated_at: updatedTransaction.updatedAt.toISOString()
-                }
-            };
+                easebuzz_reference_id: updatedTransaction.easebuzzReferenceId,
+                cancellation_reason: cancellationReason
+            });
 
             await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
         }
