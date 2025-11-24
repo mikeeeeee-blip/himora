@@ -523,7 +523,10 @@ exports.createPaytmPaymentLink = async (req, res) => {
         }, req);
 
         // Use smart_link as primary payment_url (for deep link functionality)
-        const primaryPaymentUrl = deepLinks.smart_link || paymentUrl;
+        // Pass deep links as query param for the redirect handler
+        const primaryPaymentUrl = deepLinks.smart_link 
+            ? `${deepLinks.smart_link}&deep_links=${encodeURIComponent(JSON.stringify(deepLinks))}`
+            : paymentUrl;
 
         console.log('🔗 Generated deep links for Paytm payment');
         console.log('   Smart Link:', deepLinks.smart_link ? deepLinks.smart_link.substring(0, 100) + '...' : 'Not available');
@@ -583,124 +586,377 @@ exports.createPaytmPaymentLink = async (req, res) => {
  * Handle UPI redirect for Paytm payments
  * Similar to Easebuzz implementation - automatically detects and opens UPI apps
  */
+// ============ PAYTM UPI REDIRECT (SMART UPI APP DETECTION) ============
+// This handles smart redirect to UPI apps with proper fallback and safe deep link handling
 exports.handlePaytmUPIRedirect = (req, res) => {
     try {
-        const { payment_url, amount, merchant } = req.query;
+        const { payment_url, amount, merchant, deep_links } = req.query;
         
+        // Validate payment URL exists
         if (!payment_url) {
-            return res.status(400).json({ error: 'Payment URL is required' });
+            return res.status(400).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Invalid Request</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
+                        .error { color: #d32f2f; background: white; padding: 30px; border-radius: 8px; max-width: 500px; margin: 0 auto; }
+                    </style>
+                </head>
+                <body>
+                    <div class="error">
+                        <h1>Invalid Request</h1>
+                        <p>Payment URL is required.</p>
+                    </div>
+                </body>
+                </html>
+            `);
         }
+
+        // Safely parse deep links if provided
+        let parsedDeepLinks = null;
+        if (deep_links) {
+            try {
+                parsedDeepLinks = typeof deep_links === 'string' ? JSON.parse(decodeURIComponent(deep_links)) : deep_links;
+            } catch (e) {
+                console.warn('⚠️ Could not parse deep_links, using defaults');
+            }
+        }
+
+        const displayAmount = amount ? `₹${parseFloat(amount).toFixed(2)}` : '';
+        const merchantName = merchant || 'Merchant';
+        const encodedPaymentUrl = encodeURIComponent(payment_url);
         
-        // Create an HTML page that tries to open UPI apps and falls back to payment URL
+        // Safely generate deep links only if payment_url is valid
+        const generateDeepLink = (scheme, url) => {
+            if (!url || !scheme) return null;
+            try {
+                return `${scheme}://pay?url=${encodeURIComponent(url)}`;
+            } catch (e) {
+                return null;
+            }
+        };
+
+        // Build UPI app deep links safely
+        const upiDeepLinks = {
+            paytm: parsedDeepLinks?.apps?.paytm || generateDeepLink('paytmmp', payment_url),
+            phonepe: parsedDeepLinks?.apps?.phonepe || generateDeepLink('phonepe', payment_url),
+            googlepay: parsedDeepLinks?.apps?.googlepay || parsedDeepLinks?.apps?.tez || generateDeepLink('tez', payment_url),
+            bhim: parsedDeepLinks?.apps?.bhim || generateDeepLink('bhim', payment_url)
+        };
+
+        // Create an HTML page that intelligently handles UPI app selection
         const html = `
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redirecting to Payment...</title>
+    <title>Complete Payment - ${merchantName}</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #00BAF2 0%, #0078D4 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
             color: white;
         }
-        .container {
-            text-align: center;
+        .header {
+            background: white;
+            color: #333;
             padding: 20px;
+            text-align: center;
+            border-radius: 12px 12px 0 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
         }
-        .spinner {
-            border: 4px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top: 4px solid white;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .header p {
+            font-size: 14px;
+            color: #666;
         }
-        .upi-buttons {
-            margin-top: 30px;
+        .amount-display {
+            font-size: 36px;
+            font-weight: bold;
+            color: #00BAF2;
+            margin-top: 10px;
         }
-        .upi-btn {
-            display: inline-block;
-            margin: 10px;
-            padding: 12px 24px;
+        .checkout-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px 0;
+        }
+        .checkout-wrapper {
+            width: 100%;
+            max-width: 500px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .checkout-content {
+            padding: 30px 20px;
+        }
+        .checkout-title {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .payment-options {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .payment-button {
+            display: block;
+            width: 100%;
+            padding: 18px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            text-align: center;
+            color: white;
+            background: linear-gradient(135deg, #00BAF2 0%, #0078D4 100%);
+            box-shadow: 0 4px 15px rgba(0, 186, 242, 0.4);
+        }
+        .payment-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 186, 242, 0.5);
+        }
+        .payment-button:active {
+            transform: translateY(0);
+        }
+        .payment-button.secondary {
             background: white;
             color: #00BAF2;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border: 2px solid #00BAF2;
+            box-shadow: none;
         }
-        .upi-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 8px rgba(0,0,0,0.2);
+        .payment-button.secondary:hover {
+            background: #f0f9ff;
+            border-color: #0078D4;
+        }
+        .payment-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .upi-apps {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .upi-apps-title {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .upi-apps-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .upi-app-btn {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+            color: #333;
+            text-decoration: none;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: block;
+        }
+        .upi-app-btn:hover {
+            border-color: #00BAF2;
+            color: #00BAF2;
+            background: #f0f9ff;
+        }
+        .upi-app-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .info-text {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+            margin-top: 15px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+        @media (max-width: 768px) {
+            .checkout-wrapper {
+                border-radius: 0;
+                max-width: 100%;
+            }
+            .header h1 {
+                font-size: 20px;
+            }
+            .amount-display {
+                font-size: 28px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Opening Payment...</h2>
-        <div class="spinner"></div>
-        <p>If payment app doesn't open automatically, choose an option below:</p>
-        <div class="upi-buttons">
-            <a href="phonepe://pay?url=${encodeURIComponent(payment_url)}" class="upi-btn">PhonePe</a>
-            <a href="tez://pay?url=${encodeURIComponent(payment_url)}" class="upi-btn">Google Pay</a>
-            <a href="paytmmp://pay?url=${encodeURIComponent(payment_url)}" class="upi-btn">Paytm</a>
-            <a href="${payment_url}" class="upi-btn">Open Payment Page</a>
+    <div class="checkout-container">
+        <div class="checkout-wrapper">
+            <div class="header">
+                <h1>Complete Your Payment</h1>
+                <p>${merchantName}</p>
+                ${displayAmount ? `<div class="amount-display">${displayAmount}</div>` : ''}
+            </div>
+            
+            <div class="checkout-content">
+                <h2 class="checkout-title">Choose Payment Method</h2>
+                
+                <div class="payment-options">
+                    <button onclick="openPaytmApp()" class="payment-button" id="paytmBtn">
+                        Pay with Paytm App
+                    </button>
+                    
+                    <a href="${payment_url}" target="_blank" class="payment-button secondary">
+                        Open Payment Page
+                    </a>
+                </div>
+                
+                <div class="upi-apps">
+                    <div class="upi-apps-title">Or select your UPI app:</div>
+                    <div class="upi-apps-grid">
+                        ${upiDeepLinks.paytm ? `<a href="${upiDeepLinks.paytm}" onclick="handleUPIClick(event, 'paytm')" class="upi-app-btn">Paytm</a>` : '<button class="upi-app-btn" disabled>Paytm (N/A)</button>'}
+                        ${upiDeepLinks.phonepe ? `<a href="${upiDeepLinks.phonepe}" onclick="handleUPIClick(event, 'phonepe')" class="upi-app-btn">PhonePe</a>` : '<button class="upi-app-btn" disabled>PhonePe (N/A)</button>'}
+                        ${upiDeepLinks.googlepay ? `<a href="${upiDeepLinks.googlepay}" onclick="handleUPIClick(event, 'googlepay')" class="upi-app-btn">Google Pay</a>` : '<button class="upi-app-btn" disabled>Google Pay (N/A)</button>'}
+                        ${upiDeepLinks.bhim ? `<a href="${upiDeepLinks.bhim}" onclick="handleUPIClick(event, 'bhim')" class="upi-app-btn">BHIM</a>` : '<button class="upi-app-btn" disabled>BHIM (N/A)</button>'}
+                    </div>
+                    <div class="info-text">
+                        Note: If your UPI app doesn't open, use "Open Payment Page" to complete payment on web where you can select any UPI app.
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+    
     <script>
-        // Try to open UPI apps in order of preference
-        const paymentUrl = "${payment_url}";
-        const userAgent = navigator.userAgent.toLowerCase();
+        const paymentUrl = ${JSON.stringify(payment_url)};
+        const upiDeepLinks = ${JSON.stringify(upiDeepLinks)};
+        let appOpened = false;
+        let fallbackTimer = null;
         
-        // Detect if mobile device
-        const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
-        
-        if (isMobile) {
-            // Try to open UPI apps
-            const upiApps = [
-                'phonepe://pay?url=' + encodeURIComponent(paymentUrl),
-                'tez://pay?url=' + encodeURIComponent(paymentUrl),
-                'paytmmp://pay?url=' + encodeURIComponent(paymentUrl),
-                'bhim://pay?url=' + encodeURIComponent(paymentUrl)
-            ];
+        // Function to safely open Paytm app first, then fallback to web
+        function openPaytmApp() {
+            const btn = document.getElementById('paytmBtn');
+            if (!btn || btn.disabled) return;
             
-            let appIndex = 0;
-            const tryNextApp = () => {
-                if (appIndex < upiApps.length) {
-                    window.location.href = upiApps[appIndex];
-                    appIndex++;
-                    setTimeout(tryNextApp, 1000);
-                } else {
-                    // Fallback to payment URL
+            btn.disabled = true;
+            btn.textContent = 'Opening Paytm...';
+            
+            // Try to open Paytm app if deep link is available
+            if (upiDeepLinks.paytm) {
+                try {
+                    window.location.href = upiDeepLinks.paytm;
+                    appOpened = true;
+                } catch (e) {
+                    console.error('Error opening Paytm app:', e);
+                }
+            }
+            
+            // Fallback to web payment page after 2 seconds if app didn't open
+            fallbackTimer = setTimeout(() => {
+                if (appOpened === false || (document.hasFocus && document.hasFocus())) {
+                    // If we're still on the page, app didn't open - redirect to web
                     window.location.href = paymentUrl;
                 }
-            };
-            
-            // Start trying apps
-            tryNextApp();
-        } else {
-            // Desktop - redirect to payment URL
-            window.location.href = paymentUrl;
+            }, 2000);
         }
         
-        // Fallback after 3 seconds
-        setTimeout(() => {
-            if (document.hasFocus && document.hasFocus()) {
+        // Function to handle UPI app clicks safely
+        function handleUPIClick(event, appName) {
+            event.preventDefault();
+            
+            const deepLink = upiDeepLinks[appName];
+            if (!deepLink) {
+                // If no deep link, redirect to web payment page
+                window.location.href = paymentUrl;
+                return;
+            }
+            
+            try {
+                appOpened = true;
+                window.location.href = deepLink;
+                
+                // Fallback to web payment page after 2 seconds
+                setTimeout(() => {
+                    if (appOpened && (document.hasFocus && document.hasFocus())) {
+                        window.location.href = paymentUrl;
+                    }
+                }, 2000);
+            } catch (e) {
+                console.error('Error opening UPI app:', e);
                 window.location.href = paymentUrl;
             }
-        }, 3000);
+        }
+        
+        // Detect if user left the page (app opened successfully)
+        let pageHidden = false;
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                pageHidden = true;
+                appOpened = true;
+                if (fallbackTimer) {
+                    clearTimeout(fallbackTimer);
+                }
+            }
+        });
+        
+        // Also detect blur (user switched apps)
+        window.addEventListener('blur', function() {
+            pageHidden = true;
+            appOpened = true;
+            if (fallbackTimer) {
+                clearTimeout(fallbackTimer);
+            }
+        });
+        
+        // Auto-try Paytm app on mobile devices if deep link is available
+        const userAgent = navigator.userAgent.toLowerCase();
+        const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+        
+        if (isMobile && upiDeepLinks.paytm) {
+            // On mobile, try to auto-open Paytm app after a short delay
+            setTimeout(() => {
+                if (!appOpened) {
+                    openPaytmApp();
+                }
+            }, 500);
+        } else if (!isMobile) {
+            // Desktop - redirect to web payment page after short delay
+            setTimeout(() => {
+                if (!appOpened) {
+                    window.location.href = paymentUrl;
+                }
+            }, 1000);
+        }
     </script>
 </body>
 </html>
@@ -709,10 +965,24 @@ exports.handlePaytmUPIRedirect = (req, res) => {
         res.send(html);
     } catch (error) {
         console.error('❌ handlePaytmUPIRedirect error:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to redirect'
-        });
+        res.status(500).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Error</title>
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
+                    .error { color: #d32f2f; background: white; padding: 30px; border-radius: 8px; max-width: 500px; margin: 0 auto; }
+                </style>
+            </head>
+            <body>
+                <div class="error">
+                    <h1>Error</h1>
+                    <p>${error.message || 'An error occurred while processing your payment request.'}</p>
+                </div>
+            </body>
+            </html>
+        `);
     }
 };
 
