@@ -36,46 +36,16 @@ const PAYTM_FORM_URL = PAYTM_ENVIRONMENT === 'staging'
     ? 'https://securestage.paytmpayments.com'
     : 'https://secure.paytmpayments.com';
 
-// ============ GENERATE UPI DEEP LINKS FOR PAYTM ============
+// ============ GENERATE PAYTM PAYMENT URL ============
 /**
- * Generate UPI deep links from Paytm payment URL
- * Similar to Easebuzz implementation
+ * Generate Paytm payment URL (no intent links, just direct browser URL)
  */
-function generatePaytmUPIDeepLinks(paymentUrl, paymentData, req) {
-    const amount = paymentData.amount || '0.00';
-    const merchantName = paymentData.merchantName || paymentData.merchant_name || paymentData.customer_name || 'Merchant';
-    
-    // URL encode parameters
-    const encode = (str) => encodeURIComponent(str || '');
-    
-    // Get base URL from request or environment variable
-    let baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
-    if (!baseUrl && req) {
-        const protocol = req.protocol || 'http';
-        const host = req.get('host') || 'localhost:5000';
-        baseUrl = `${protocol}://${host}`;
-    }
-    baseUrl = baseUrl || 'http://localhost:5000';
-    
-    // Generate deep links for popular UPI apps
-    const deepLinks = {
-        // Direct Paytm payment URL
+function generatePaytmPaymentUrl(paymentUrl, paymentData, req) {
+    // Simply return the payment URL - no intent links, just direct browser routing
+    return {
         checkout_url: paymentUrl,
-        paytm_payment_url: paymentUrl, // Alias for backward compatibility
-        
-        // Smart redirect link - automatically detects device and opens UPI app
-        smart_link: paymentUrl ? `${baseUrl}/api/paytm/upi-redirect?payment_url=${encode(paymentUrl)}&amount=${amount}&merchant=${encode(merchantName)}` : null,
-        
-        // Direct app deep links (for manual use if needed)
-        apps: paymentUrl ? {
-            phonepe: `phonepe://pay?url=${encode(paymentUrl)}`,
-            googlepay: `tez://pay?url=${encode(paymentUrl)}`,
-            paytm: `paytmmp://pay?url=${encode(paymentUrl)}`,
-            bhim: `bhim://pay?url=${encode(paymentUrl)}`
-        } : null
+        paytm_payment_url: paymentUrl
     };
-    
-    return deepLinks;
 }
 
 // ============ CREATE PAYTM PAYMENT LINK ============
@@ -524,29 +494,19 @@ exports.createPaytmPaymentLink = async (req, res) => {
         const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
         const checkoutPageUrl = `${baseUrl}/api/paytm/checkout/${transactionId}`;
 
-        // Generate UPI deep links (similar to Easebuzz)
-        const deepLinks = generatePaytmUPIDeepLinks(paymentUrl, {
-            amount: parseFloat(amount).toFixed(2),
-            customer_name: customer_name,
-            merchantName: merchantName,
-            merchant_name: merchantName
-        }, req);
+        // Use direct payment URL (no intent links, just browser routing)
+        const primaryPaymentUrl = paymentUrl;
 
-        // Use smart_link as primary payment_url (for deep link functionality)
-        const primaryPaymentUrl = deepLinks.smart_link || paymentUrl;
-
-        console.log('🔗 Generated deep links for Paytm payment');
-        console.log('   Smart Link:', deepLinks.smart_link ? deepLinks.smart_link.substring(0, 100) + '...' : 'Not available');
-        console.log('   Primary Payment URL:', primaryPaymentUrl.substring(0, 100) + '...');
+        console.log('🔗 Generated Paytm payment URL');
+        console.log('   Payment URL:', primaryPaymentUrl.substring(0, 100) + '...');
         console.log('   Checkout Page URL:', checkoutPageUrl);
         res.json({
             success: true,
             transaction_id: transactionId,
             payment_link_id: orderId,
-            payment_url: primaryPaymentUrl, // Smart link for deep link functionality
-            checkout_page: checkoutPageUrl, // Custom checkout page URL
-            paytm_payment_url: paymentUrl, // Original Paytm payment URL (for direct access)
-            deep_links: deepLinks, // All deep links including smart_link and app-specific links
+            payment_url: primaryPaymentUrl, // Direct Paytm payment URL (browser routing)
+            checkout_page: checkoutPageUrl, // Custom checkout page URL (redirects to Paytm)
+            paytm_payment_url: paymentUrl, // Original Paytm payment URL
             order_id: orderId,
             order_amount: parseFloat(amount),
             order_currency: 'INR',
@@ -556,7 +516,7 @@ exports.createPaytmPaymentLink = async (req, res) => {
             callback_url: finalCallbackUrl,
             txn_token: txnToken,
             paytm_params: paytmFormParams, // Keep old format for backward compatibility
-            message: 'Payment link created successfully. Use payment_url (deep link) for mobile apps or checkout_page for web browser.'
+            message: 'Payment link created successfully. Use payment_url or checkout_page to redirect users to Paytm checkout page in browser.'
         });
 
     } catch (error) {
@@ -1607,11 +1567,11 @@ exports.getPaytmCheckoutPage = async (req, res) => {
     }
 };
 
-// ============ PAYTM UPI REDIRECT (SMART UPI APP DETECTION) ============
-// This handles smart redirect to UPI apps - similar to Easebuzz approach
+// ============ PAYTM UPI REDIRECT (DEPRECATED - Just redirects to Paytm checkout) ============
+// This now simply redirects to Paytm's web checkout page (no intent links)
 exports.handlePaytmUPIRedirect = async (req, res) => {
     try {
-        const { payment_url, amount, merchant } = req.query;
+        const { payment_url } = req.query;
         
         if (!payment_url) {
             return res.status(400).send(`
@@ -1632,106 +1592,8 @@ exports.handlePaytmUPIRedirect = async (req, res) => {
             `);
         }
 
-        // Generate UPI deep links
-        const encode = (str) => encodeURIComponent(str || '');
-        const encodedPaymentUrl = encode(payment_url);
-        const upiLinks = {
-            phonepe: `phonepe://pay?url=${encodedPaymentUrl}`,
-            googlepay: `tez://pay?url=${encodedPaymentUrl}`,
-            paytm: `paytmmp://pay?url=${encodedPaymentUrl}`,
-            bhim: `bhim://pay?url=${encodedPaymentUrl}`
-        };
-
-        // Return HTML page that tries to open UPI apps
-        res.send(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Opening UPI Payment...</title>
-                <style>
-                    body {
-                        font-family: Arial, sans-serif;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        height: 100vh;
-                        margin: 0;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        color: white;
-                    }
-                    .container {
-                        text-align: center;
-                        padding: 20px;
-                    }
-                    .spinner {
-                        border: 4px solid rgba(255,255,255,0.3);
-                        border-radius: 50%;
-                        border-top: 4px solid white;
-                        width: 40px;
-                        height: 40px;
-                        animation: spin 1s linear infinite;
-                        margin: 20px auto;
-                    }
-                    @keyframes spin {
-                        0% { transform: rotate(0deg); }
-                        100% { transform: rotate(360deg); }
-                    }
-                    .upi-buttons {
-                        margin-top: 30px;
-                    }
-                    .upi-btn {
-                        display: inline-block;
-                        margin: 10px;
-                        padding: 12px 24px;
-                        background: white;
-                        color: #667eea;
-                        text-decoration: none;
-                        border-radius: 8px;
-                        font-weight: bold;
-                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-                    }
-                    .upi-btn:hover {
-                        transform: translateY(-2px);
-                        box-shadow: 0 6px 8px rgba(0,0,0,0.2);
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h2>Opening Payment...</h2>
-                    <div class="spinner"></div>
-                    <p>If payment app doesn't open automatically, choose an option below:</p>
-                    <div class="upi-buttons">
-                        <a href="${upiLinks.phonepe}" class="upi-btn">PhonePe</a>
-                        <a href="${upiLinks.googlepay}" class="upi-btn">Google Pay</a>
-                        <a href="${upiLinks.paytm}" class="upi-btn">Paytm</a>
-                        <a href="${upiLinks.bhim}" class="upi-btn">BHIM</a>
-                        <a href="${payment_url}" class="upi-btn">Paytm Page</a>
-                    </div>
-                </div>
-                <script>
-                    const paymentUrl = ${JSON.stringify(payment_url)};
-                    const userAgent = navigator.userAgent.toLowerCase();
-                    const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
-                    
-                    if (isMobile) {
-                        // Try PhonePe first
-                        window.location.href = ${JSON.stringify(upiLinks.phonepe)};
-                        
-                        // Fallback to payment URL after 2 seconds
-                        setTimeout(() => {
-                            window.location.href = paymentUrl;
-                        }, 2000);
-                    } else {
-                        // Desktop - redirect to payment page
-                        window.location.href = paymentUrl;
-                    }
-                </script>
-            </body>
-            </html>
-        `);
+        // Simply redirect to Paytm's web checkout page (no intent links)
+        return res.redirect(payment_url);
     } catch (error) {
         console.error('❌ Paytm UPI Redirect Error:', error);
         res.status(500).send(`
