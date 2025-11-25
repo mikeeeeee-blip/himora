@@ -1513,9 +1513,77 @@ exports.getPaytmCheckoutPage = async (req, res) => {
         console.log('   Paytm Payment URL:', paytmPaymentUrl.substring(0, 100) + '...');
         console.log('   Amount: ₹' + transaction.amount.toFixed(2));
 
-        // Directly redirect to Paytm's checkout page
+        // Auto-redirect to Paytm's checkout page with multiple fallbacks
+        // This ensures it works on both mobile and desktop
         // Paytm will handle all UPI app selection and payment processing
-        return res.redirect(paytmPaymentUrl);
+        const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting to Paytm...</title>
+    <meta http-equiv="refresh" content="0;url=${paytmPaymentUrl}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #00BAF2 0%, #0078D4 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .link {
+            color: white;
+            text-decoration: underline;
+            margin-top: 20px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Redirecting to Paytm Payment...</h2>
+        <div class="spinner"></div>
+        <p>If you are not redirected automatically, <a href="${paytmPaymentUrl}" class="link">click here</a></p>
+    </div>
+    <script>
+        // Immediate redirect (works on all devices)
+        window.location.href = ${JSON.stringify(paytmPaymentUrl)};
+        
+        // Fallback after 1 second if redirect didn't work
+        setTimeout(function() {
+            if (document.hasFocus && document.hasFocus()) {
+                window.location.href = ${JSON.stringify(paytmPaymentUrl)};
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
+        `;
+        
+        // Set redirect header and send HTML with fallbacks
+        res.setHeader('Location', paytmPaymentUrl);
+        res.status(302).send(html);
 
     } catch (error) {
         console.error('❌ Paytm Checkout Page Error:', error);
