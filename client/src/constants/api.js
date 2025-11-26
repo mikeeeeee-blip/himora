@@ -32,6 +32,7 @@ export const API_ENDPOINTS = {
   CREATE_LINK_PAYTM: `${BASE_URL}/paytm/create-payment-link`,
   CREATE_LINK_EASEBUZZ: `${BASE_URL}/easebuzz/create-payment-link`,
   CREATE_LINK_RAZORPAY: `${BASE_URL}/razorpay/create-payment-link`,
+  CREATE_LINK_SUBPAISA: `${BASE_URL}/sabpaisa/create-payment-link`, // SubPaisa specific endpoint
   AVAILABLE_GATEWAYS: `${BASE_URL}/payments/available-gateways`,
   VERIFY_PAYMENT: `${BASE_URL}/paytm/verify-payment`,
   

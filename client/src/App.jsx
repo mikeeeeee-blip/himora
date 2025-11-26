@@ -28,6 +28,7 @@ import { USER_ROLES } from "./constants/api";
 import TransactionDetailPage from "./components/pages/TransactionDetailPage";
 import PaymentSuccess from "./components/pages/PaymentSuccess";
 import PaymentFailed from "./components/pages/PaymentFailed";
+import SubPaisaPaymentPage from "./components/pages/SubPaisaPaymentPage";
 
 function App() {
   return (
@@ -149,6 +150,14 @@ function App() {
           element={
             <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
               <PaymentsPage />
+            </AuthWrapper>
+          }
+        />
+        <Route
+          path="/admin/payments/subpaisa"
+          element={
+            <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
+              <SubPaisaPaymentPage />
             </AuthWrapper>
           }
         />

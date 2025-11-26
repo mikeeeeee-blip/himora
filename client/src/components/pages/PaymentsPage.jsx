@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { FiLock, FiZap, FiSmartphone, FiExternalLink, FiCopy, FiPlus, FiX, FiRefreshCw } from 'react-icons/fi';
 import { SiGooglepay, SiPhonepe } from 'react-icons/si';
+import { useNavigate } from 'react-router-dom';
 import paymentService from '../../services/paymentService';
 import Navbar from '../Navbar';
 import Toast from '../ui/Toast';
 
 const PaymentsPage = () => {
+  const navigate = useNavigate();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [error, setError] = useState('');
@@ -121,27 +123,38 @@ const PaymentsPage = () => {
                 Create and manage payment links for your customers
               </p>
             </div>
-            <button 
-              onClick={() => {
-                setShowCreateForm(!showCreateForm);
-                setError('');
-                setSuccess('');
-                setCreatedLink(null);
-              }}
-              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-4 sm:px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 focus:ring-offset-bg-primary self-start sm:self-auto"
-            >
-              {showCreateForm ? (
-                <>
-                  <FiX className="text-base" />
-                  Cancel
-                </>
-              ) : (
-                <>
-                  <FiPlus className="text-base" />
-                  Create Payment Link
-                </>
-              )}
-            </button>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => navigate('/admin/payments/subpaisa')}
+                className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-500 text-white px-4 sm:px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-bg-primary self-start sm:self-auto"
+                title="Pay using SubPaisa gateway"
+              >
+                <FiZap className="text-base" />
+                <span className="hidden sm:inline">SubPaisa Payment</span>
+                <span className="sm:hidden">SubPaisa</span>
+              </button>
+              <button 
+                onClick={() => {
+                  setShowCreateForm(!showCreateForm);
+                  setError('');
+                  setSuccess('');
+                  setCreatedLink(null);
+                }}
+                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-4 sm:px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 focus:ring-offset-bg-primary self-start sm:self-auto"
+              >
+                {showCreateForm ? (
+                  <>
+                    <FiX className="text-base" />
+                    Cancel
+                  </>
+                ) : (
+                  <>
+                    <FiPlus className="text-base" />
+                    Create Payment Link
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 

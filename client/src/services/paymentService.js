@@ -413,6 +413,59 @@ console.log(url);
     }
   }
 
+  // Create SubPaisa Payment Link - requires API key + body data
+  async createSubPaisaPaymentLink(paymentData) {
+    try {
+      const apiKeyData = await this.getApiKey();
+      const apiKey = apiKeyData.apiKey || apiKeyData.key;
+      
+      if (!apiKey) {
+        throw new Error('API key not found');
+      }
+
+      // Transform frontend data to match API specification
+      const requestBody = {
+        amount: paymentData.amount.toString(),
+        customer_name: paymentData.customerName,
+        customer_email: paymentData.customerEmail,
+        customer_phone: paymentData.customerPhone,
+        description: paymentData.description || 'Product purchase'
+      };
+
+      // Use SubPaisa specific endpoint
+      const endpoint = API_ENDPOINTS.CREATE_LINK_SUBPAISA;
+
+      const response = await axios.post(endpoint, requestBody, {
+        headers: {
+          'x-api-key': `${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Return the response with form_data for SubPaisa SDK
+      const api = response.data || {};
+      return {
+        success: api.success || false,
+        transaction_id: api.transaction_id || null,
+        payment_link_id: api.payment_link_id || null,
+        payment_url: api.payment_url || null,
+        order_id: api.order_id || null,
+        order_amount: api.order_amount || paymentData?.amount || null,
+        order_currency: api.order_currency || 'INR',
+        merchant_id: api.merchant_id || null,
+        merchant_name: api.merchant_name || null,
+        reference_id: api.reference_id || null,
+        callback_url: api.callback_url || null,
+        form_data: api.form_data || null, // Contains spURL, encData, clientCode for SubPaisa SDK
+        message: api.message || 'Payment link created successfully',
+        raw: api
+      };
+    } catch (error) {
+      console.error('SubPaisa payment link creation error:', error);
+      throw new Error(this.getApiErrorMessage(error, 'Failed to create SubPaisa payment link'));
+    }
+  }
+
   // Get Available Gateways Status - requires API key
   async getAvailableGateways() {
     try {
