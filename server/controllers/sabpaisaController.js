@@ -67,63 +67,23 @@ function bufferToHex(buffer) {
 }
 
 /**
- * Derive a 32-byte key from the provided key material
- * Uses SHA256 to ensure consistent 32-byte key length for AES-256
- */
-function deriveKey(keyMaterial, keyName = 'key') {
-    if (!keyMaterial) {
-        throw new Error(`${keyName} material is required`);
-    }
-    
-    // If keyMaterial is base64, decode it first
-    let keyBuffer;
-    try {
-        keyBuffer = Buffer.from(keyMaterial, 'base64');
-        console.log(`   ${keyName} (base64 decoded): ${keyBuffer.length} bytes`);
-    } catch (e) {
-        // If not base64, treat as raw string
-        keyBuffer = Buffer.from(keyMaterial, 'utf8');
-        console.log(`   ${keyName} (utf8): ${keyBuffer.length} bytes`);
-    }
-    
-    // If key is already 32 bytes, use it directly
-    if (keyBuffer.length === 32) {
-        console.log(`   ${keyName}: Using directly (32 bytes)`);
-        return keyBuffer;
-    }
-    
-    // Otherwise, derive a 32-byte key using SHA256
-    console.log(`   ${keyName}: Deriving 32-byte key from ${keyBuffer.length} bytes using SHA256`);
-    return crypto.createHash('sha256').update(keyBuffer).digest();
-}
-
-/**
  * Encrypt plaintext string -> HEX string (HMAC || IV || ciphertext || tag)
  * Format: HMAC(48 bytes) || IV(12 bytes) || Ciphertext || Tag(16 bytes)
+ * 
+ * Uses direct base64 decoding of keys (no key derivation) as per SubPaisa specification
  */
 function encrypt(plaintext) {
     if (!SABPAISA_AES_KEY_BASE64 || !SABPAISA_HMAC_KEY_BASE64) {
         throw new Error('SabPaisa encryption keys not configured');
     }
 
+    // Direct base64 decoding of keys (no derivation) - as per SubPaisa specification
+    const aesKey = Buffer.from(SABPAISA_AES_KEY_BASE64, 'base64');
+    const hmacKey = Buffer.from(SABPAISA_HMAC_KEY_BASE64, 'base64');
+    
     console.log('🔐 Encryption Key Processing:');
-    console.log('   AuthenticationKey (raw):', SABPAISA_AES_KEY_BASE64 ? SABPAISA_AES_KEY_BASE64.substring(0, 20) + '...' : 'MISSING');
-    console.log('   AuthenticationIV (raw):', SABPAISA_HMAC_KEY_BASE64 ? SABPAISA_HMAC_KEY_BASE64.substring(0, 20) + '...' : 'MISSING');
-    
-    // Derive 32-byte keys for AES-256-GCM (requires exactly 32 bytes)
-    const aesKey = deriveKey(SABPAISA_AES_KEY_BASE64, 'AES Key');
-    const hmacKey = deriveKey(SABPAISA_HMAC_KEY_BASE64, 'HMAC Key');
-    
-    // Validate key lengths
-    if (aesKey.length !== 32) {
-        throw new Error(`Invalid AES key length: ${aesKey.length} bytes. Expected 32 bytes for AES-256-GCM.`);
-    }
-    
-    if (hmacKey.length !== 32) {
-        console.warn(`⚠️ HMAC key length: ${hmacKey.length} bytes (will be used for HMAC-SHA384)`);
-    }
-    
-    console.log('✅ Keys derived successfully');
+    console.log('   AES Key (base64 decoded):', aesKey.length, 'bytes');
+    console.log('   HMAC Key (base64 decoded):', hmacKey.length, 'bytes');
     
     // Generate random IV (12 bytes for GCM)
     const iv = crypto.randomBytes(IV_SIZE);
@@ -148,15 +108,17 @@ function encrypt(plaintext) {
 
 /**
  * Decrypt HEX string -> plaintext string
+ * 
+ * Uses direct base64 decoding of keys (no key derivation) as per SubPaisa specification
  */
 function decrypt(hexCiphertext) {
     if (!SABPAISA_AES_KEY_BASE64 || !SABPAISA_HMAC_KEY_BASE64) {
         throw new Error('SabPaisa encryption keys not configured');
     }
 
-    // Derive 32-byte keys (same as encryption)
-    const aesKey = deriveKey(SABPAISA_AES_KEY_BASE64);
-    const hmacKey = deriveKey(SABPAISA_HMAC_KEY_BASE64);
+    // Direct base64 decoding of keys (no derivation) - as per SubPaisa specification
+    const aesKey = Buffer.from(SABPAISA_AES_KEY_BASE64, 'base64');
+    const hmacKey = Buffer.from(SABPAISA_HMAC_KEY_BASE64, 'base64');
     
     const fullMessage = hexToBuffer(hexCiphertext);
     
