@@ -8,26 +8,61 @@ const { calculatePayinCommission } = require('../utils/commissionCalculator');
 // SabPaisa Configuration
 // Support multiple credential formats (case-insensitive matching)
 // Note: Environment variable names in .env are case-sensitive, but we check multiple variations
-const SABPAISA_AES_KEY_BASE64 = process.env.SABPAISA_AES_KEY_BASE64 || 
-                                  process.env.AuthenticationKey || 
-                                  process.env.AUTHENTICATION_KEY ||
-                                  process.env.authenticationkey;
-const SABPAISA_HMAC_KEY_BASE64 = process.env.SABPAISA_HMAC_KEY_BASE64 || 
-                                  process.env.AuthenticationIV || 
-                                  process.env.AUTHENTICATION_IV ||
-                                  process.env.authenticationiv;
-const SABPAISA_CLIENT_CODE = process.env.SABPAISA_CLIENT_CODE || 
-                              process.env.ClientCode || 
-                              process.env.CLIENT_CODE ||
-                              process.env.clientcode;
-const SABPAISA_TRANS_USER_NAME = process.env.SABPAISA_TRANS_USER_NAME || 
-                                  process.env.UserName || 
-                                  process.env.USER_NAME ||
-                                  process.env.username;
-const SABPAISA_TRANS_USER_PASSWORD = process.env.SABPAISA_TRANS_USER_PASSWORD || 
-                                     process.env.Password || 
-                                     process.env.PASSWORD ||
-                                     process.env.password;
+// Helper function to get non-empty env var
+const getEnvVar = (...names) => {
+    for (const name of names) {
+        const value = process.env[name];
+        if (value && value.trim() !== '') {
+            return value.trim();
+        }
+    }
+    return null;
+};
+
+// Hardcoded fallback values (will be used if env vars are not set)
+const SABPAISA_AES_KEY_BASE64 = getEnvVar(
+    'SABPAISA_AES_KEY_BASE64',
+    'AuthenticationKey',
+    'AUTHENTICATION_KEY',
+    'authenticationkey',
+    'SABPAISA_AUTH_KEY',
+    'SABPAISA_AUTHENTICATION_KEY'
+) || 'eURubF0fni5Wp9hcWTwjahLVHDWFKYCkmms3Uo/qt40=';
+
+const SABPAISA_HMAC_KEY_BASE64 = getEnvVar(
+    'SABPAISA_HMAC_KEY_BASE64',
+    'AuthenticationIV',
+    'AUTHENTICATION_IV',
+    'authenticationiv',
+    'SABPAISA_HMAC_KEY',
+    'SABPAISA_AUTH_IV'
+) || 'MA7rAPIimkRb4dys0RggJ0a/WRju1hJBwn0Af9Ub4rKwxsQcKMvGaab0NCuEgMXc';
+
+const SABPAISA_CLIENT_CODE = getEnvVar(
+    'SABPAISA_CLIENT_CODE',
+    'ClientCode',
+    'CLIENT_CODE',
+    'clientcode',
+    'SABPAISA_CLIENT'
+) || 'PRAB70';
+
+const SABPAISA_TRANS_USER_NAME = getEnvVar(
+    'SABPAISA_TRANS_USER_NAME',
+    'UserName',
+    'USER_NAME',
+    'username',
+    'SABPAISA_USERNAME',
+    'SABPAISA_USER'
+) || 'prabhash4152@gmail.com';
+
+const SABPAISA_TRANS_USER_PASSWORD = getEnvVar(
+    'SABPAISA_TRANS_USER_PASSWORD',
+    'Password',
+    'PASSWORD',
+    'password',
+    'SABPAISA_PASSWORD',
+    'SABPAISA_PASS'
+) || 'PRAB70_SP24229';
 const SABPAISA_DOMAIN = process.env.SabPaisaDomain || 
                         process.env.SABPAISA_DOMAIN ||
                         process.env.SABPAISA_DOMAIN_URL ||
@@ -206,16 +241,62 @@ exports.createSabpaisaPaymentLink = async (req, res) => {
         // Support both naming conventions:
         // Old: SABPAISA_AES_KEY_BASE64, SABPAISA_HMAC_KEY_BASE64, etc.
         // New: AuthenticationKey, AuthenticationIV, ClientCode, UserName, Password
-        if (!SABPAISA_AES_KEY_BASE64 || !SABPAISA_HMAC_KEY_BASE64 || !SABPAISA_CLIENT_CODE || 
-            !SABPAISA_TRANS_USER_NAME || !SABPAISA_TRANS_USER_PASSWORD) {
+        const missingCredentials = {
+            AES_KEY: !SABPAISA_AES_KEY_BASE64,
+            HMAC_KEY: !SABPAISA_HMAC_KEY_BASE64,
+            CLIENT_CODE: !SABPAISA_CLIENT_CODE,
+            USER_NAME: !SABPAISA_TRANS_USER_NAME,
+            PASSWORD: !SABPAISA_TRANS_USER_PASSWORD
+        };
+        
+        if (missingCredentials.AES_KEY || missingCredentials.HMAC_KEY || missingCredentials.CLIENT_CODE || 
+            missingCredentials.USER_NAME || missingCredentials.PASSWORD) {
             console.error('❌ SabPaisa credentials not configured');
-            console.error('   Missing:', {
-                AES_KEY: !SABPAISA_AES_KEY_BASE64,
-                HMAC_KEY: !SABPAISA_HMAC_KEY_BASE64,
-                CLIENT_CODE: !SABPAISA_CLIENT_CODE,
-                USER_NAME: !SABPAISA_TRANS_USER_NAME,
-                PASSWORD: !SABPAISA_TRANS_USER_PASSWORD
-            });
+            console.error('   Missing:', missingCredentials);
+            
+            // Debug: Show what environment variables are available
+            console.error('\n📋 Debug: Checking environment variables...');
+            const envKeys = Object.keys(process.env).filter(key => 
+                key.toUpperCase().includes('SABPAISA') || 
+                key.toUpperCase().includes('AUTH') ||
+                key.toUpperCase().includes('CLIENT') ||
+                key.toUpperCase().includes('USER') ||
+                key.toUpperCase().includes('PASSWORD')
+            );
+            console.error('   Found related env vars:', envKeys.length > 0 ? envKeys.join(', ') : 'None found');
+            
+            // Check specific variable names and their values (first few chars only for security)
+            const checks = {
+                'SABPAISA_AES_KEY_BASE64': process.env.SABPAISA_AES_KEY_BASE64 ? 
+                    `✅ (length: ${process.env.SABPAISA_AES_KEY_BASE64.length})` : '❌',
+                'AuthenticationKey': process.env.AuthenticationKey ? 
+                    `✅ (length: ${process.env.AuthenticationKey.length})` : '❌',
+                'SABPAISA_HMAC_KEY_BASE64': process.env.SABPAISA_HMAC_KEY_BASE64 ? 
+                    `✅ (length: ${process.env.SABPAISA_HMAC_KEY_BASE64.length})` : '❌',
+                'AuthenticationIV': process.env.AuthenticationIV ? 
+                    `✅ (length: ${process.env.AuthenticationIV.length})` : '❌',
+                'SABPAISA_CLIENT_CODE': process.env.SABPAISA_CLIENT_CODE ? 
+                    `✅ (value: ${process.env.SABPAISA_CLIENT_CODE})` : '❌',
+                'ClientCode': process.env.ClientCode ? 
+                    `✅ (value: ${process.env.ClientCode})` : '❌',
+                'SABPAISA_TRANS_USER_NAME': process.env.SABPAISA_TRANS_USER_NAME ? 
+                    `✅ (value: ${process.env.SABPAISA_TRANS_USER_NAME})` : '❌',
+                'UserName': process.env.UserName ? 
+                    `✅ (value: ${process.env.UserName})` : '❌',
+                'SABPAISA_TRANS_USER_PASSWORD': process.env.SABPAISA_TRANS_USER_PASSWORD ? 
+                    `✅ (length: ${process.env.SABPAISA_TRANS_USER_PASSWORD.length})` : '❌',
+                'Password': process.env.Password ? 
+                    `✅ (length: ${process.env.Password.length})` : '❌'
+            };
+            console.error('   Variable check:', checks);
+            
+            // Show actual resolved values
+            console.error('\n📋 Resolved values:');
+            console.error('   SABPAISA_AES_KEY_BASE64:', SABPAISA_AES_KEY_BASE64 ? `✅ (length: ${SABPAISA_AES_KEY_BASE64.length})` : '❌ NULL');
+            console.error('   SABPAISA_HMAC_KEY_BASE64:', SABPAISA_HMAC_KEY_BASE64 ? `✅ (length: ${SABPAISA_HMAC_KEY_BASE64.length})` : '❌ NULL');
+            console.error('   SABPAISA_CLIENT_CODE:', SABPAISA_CLIENT_CODE ? `✅ (value: ${SABPAISA_CLIENT_CODE})` : '❌ NULL');
+            console.error('   SABPAISA_TRANS_USER_NAME:', SABPAISA_TRANS_USER_NAME ? `✅ (value: ${SABPAISA_TRANS_USER_NAME})` : '❌ NULL');
+            console.error('   SABPAISA_TRANS_USER_PASSWORD:', SABPAISA_TRANS_USER_PASSWORD ? `✅ (length: ${SABPAISA_TRANS_USER_PASSWORD.length})` : '❌ NULL');
             return res.status(500).json({
                 success: false,
                 error: 'SabPaisa credentials not configured. Please set the following environment variables:',

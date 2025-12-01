@@ -1,5 +1,8 @@
 // Product detail page JavaScript
 
+// Store product slug globally for Buy Now functionality
+let currentProductSlug = '';
+
 document.addEventListener('DOMContentLoaded', function() {
     // Get product slug from URL
     let slug = '';
@@ -20,6 +23,9 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
+    // Store slug globally
+    currentProductSlug = slug;
+
     // Fetch product data
     fetch(`/api/ecommerce/product/${slug}`)
         .then(response => {
@@ -30,6 +36,8 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(data => {
             if (data.success && data.product) {
+                // Store slug from product data as well
+                currentProductSlug = data.product.slug;
                 displayProduct(data.product);
                 loadRelatedProducts(data.product.category, data.product.slug);
             } else {
@@ -56,8 +64,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (buyNowBtn) {
         buyNowBtn.addEventListener('click', function() {
             const quantity = parseInt(document.getElementById('quantity').value) || 1;
-            // In a real app, this would redirect to checkout
-            alert('Buy Now functionality coming soon!');
+            
+            if (currentProductSlug) {
+                // Redirect to checkout with product and quantity
+                window.location.href = `/checkout.html?product=${encodeURIComponent(currentProductSlug)}&quantity=${quantity}`;
+            } else {
+                alert('Unable to determine product. Please try again.');
+            }
         });
     }
 });

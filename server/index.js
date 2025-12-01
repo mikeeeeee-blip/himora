@@ -6,7 +6,9 @@ const connectDB = require('./config/db');
 const { settlementJob, manualSettlement } = require('./jobs/settlementJob'); // ✅ Import backfill
 const Transaction = require('./models/Transaction');
 const Payout = require('./models/Payout');
+const User = require('./models/User');
 const { getProductBySlug, getAllProducts, getProductsByCategory } = require('./ecommerce/products');
+const { createSabpaisaPaymentLink } = require('./controllers/sabpaisaController');
 
 dotenv.config();
 connectDB();
@@ -80,6 +82,11 @@ app.get('/product/:slug', (req, res) => {
     res.sendFile(path.join(__dirname, 'ecommerce', 'product.html'));
 });
 
+// Checkout page
+app.get('/checkout.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'checkout.html'));
+});
+
 // E-commerce API routes
 app.get('/api/ecommerce/product/:slug', (req, res) => {
     try {
@@ -110,6 +117,102 @@ app.get('/api/ecommerce/products', (req, res) => {
         res.json({ success: true, products });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// E-commerce checkout endpoint (guest checkout with Subpaisa)
+app.post('/api/ecommerce/checkout', async (req, res) => {
+    try {
+        const {
+            customer_name,
+            customer_email,
+            customer_phone,
+            customer_address,
+            customer_city,
+            customer_state,
+            customer_pincode,
+            amount,
+            description,
+            items
+        } = req.body;
+
+        // Validate required fields
+        if (!customer_name || !customer_email || !customer_phone || !amount) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: customer_name, customer_email, customer_phone, amount'
+            });
+        }
+
+        // Validate phone number
+        if (!/^[0-9]{10}$/.test(customer_phone)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid phone number. Must be 10 digits.'
+            });
+        }
+
+        // Validate email
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer_email)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid email address'
+            });
+        }
+
+        // Validate amount
+        if (parseFloat(amount) < 1) {
+            return res.status(400).json({
+                success: false,
+                error: 'Amount must be at least ₹1'
+            });
+        }
+
+        // Get default merchant for ecommerce (from environment or first merchant)
+        let defaultMerchant = null;
+        const defaultMerchantId = process.env.ECOM_DEFAULT_MERCHANT_ID;
+        
+        if (defaultMerchantId) {
+            defaultMerchant = await User.findById(defaultMerchantId);
+        }
+        
+        // If no default merchant set, get the first merchant
+        if (!defaultMerchant) {
+            defaultMerchant = await User.findOne({ role: { $ne: 'superAdmin' } });
+        }
+
+        if (!defaultMerchant) {
+            return res.status(500).json({
+                success: false,
+                error: 'No merchant configured for ecommerce checkout'
+            });
+        }
+
+        // Create a mock request object with merchant info for createSabpaisaPaymentLink
+        const mockReq = {
+            body: {
+                amount: amount.toString(),
+                customer_name,
+                customer_email,
+                customer_phone,
+                description: description || `Ecommerce order: ${items?.map(i => i.product?.title || 'Item').join(', ') || 'Order'}`,
+                success_url: `${process.env.FRONTEND_URL || process.env.BACKEND_URL || 'http://localhost:5000'}/payment-success`,
+                failure_url: `${process.env.FRONTEND_URL || process.env.BACKEND_URL || 'http://localhost:5000'}/payment-failed`
+            },
+            merchantId: defaultMerchant._id,
+            merchantName: defaultMerchant.name || 'Ecommerce Store'
+        };
+
+        // Create payment link using Subpaisa controller
+        await createSabpaisaPaymentLink(mockReq, res);
+
+    } catch (error) {
+        console.error('Ecommerce checkout error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to process checkout',
+            detail: error.message
+        });
     }
 });
 
