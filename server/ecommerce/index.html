@@ -17,9 +17,9 @@
                         <a href="/">himora.art</a>
                     </div>
                     <div class="header-icons">
-                        <button class="icon-btn" aria-label="User">👤</button>
-                        <button class="icon-btn" aria-label="Shopping Bag">🛍️</button>
-                        <button class="icon-btn" aria-label="Search">🔍</button>
+                        <button class="icon-btn" aria-label="User"><span class="icon-text">U</span></button>
+                        <button class="icon-btn" aria-label="Shopping Bag"><span class="icon-text">B</span></button>
+                        <button class="icon-btn" aria-label="Search"><span class="icon-text">S</span></button>
                     </div>
                 </div>
             </div>
@@ -55,43 +55,8 @@
             <div class="product-carousel">
                 <button class="carousel-btn carousel-prev" aria-label="Previous">‹</button>
                 <div class="carousel-container">
-                    <div class="carousel-track">
-                        <div class="carousel-item">
-                            <a href="/product/timeless-classic-collection">
-                                <div class="product-card-dark">
-                                    <img src="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=400&h=500&fit=crop" alt="Product" class="product-img">
-                                    <h3 class="product-name">Timeless Classic Collection</h3>
-                                    <p class="product-price">₹3,049.00</p>
-                                </div>
-                            </a>
-                        </div>
-                        <div class="carousel-item">
-                            <a href="/product/bohemian-rhapsody-attire">
-                                <div class="product-card-dark">
-                                    <img src="https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=400&h=500&fit=crop" alt="Product" class="product-img">
-                                    <h3 class="product-name">Bohemian Rhapsody Attire</h3>
-                                    <p class="product-price">₹2,050.00</p>
-                                </div>
-                            </a>
-                        </div>
-                        <div class="carousel-item">
-                            <a href="/product/power-suit-ensemble">
-                                <div class="product-card-dark">
-                                    <img src="https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&h=500&fit=crop" alt="Product" class="product-img">
-                                    <h3 class="product-name">Power Suit Ensemble</h3>
-                                    <p class="product-price">₹749.00</p>
-                                </div>
-                            </a>
-                        </div>
-                        <div class="carousel-item">
-                            <a href="/product/pinstripe-jacket">
-                                <div class="product-card-dark">
-                                    <img src="https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=400&h=500&fit=crop" alt="Product" class="product-img">
-                                    <h3 class="product-name">Pinstripe Jacket</h3>
-                                    <p class="product-price">₹1,090.99</p>
-                                </div>
-                            </a>
-                        </div>
+                    <div class="carousel-track" id="carousel-track">
+                        <!-- Products will be loaded dynamically -->
                     </div>
                 </div>
                 <button class="carousel-btn carousel-next" aria-label="Next">›</button>
@@ -103,7 +68,7 @@
     <section class="collection-banners">
         <div class="container">
             <div class="banners-grid">
-                <a href="/shop.html?category=Work & Office">
+                <a href="/shop.html?category=Work%20%26%20Office">
                     <div class="collection-banner">
                         <img src="https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=600&h=800&fit=crop" alt="Work Collection" class="banner-img">
                         <div class="banner-overlay">
@@ -119,7 +84,7 @@
                         </div>
                     </div>
                 </a>
-                <a href="/shop.html?category=Evening Dresses">
+                <a href="/shop.html?category=Evening%20Dresses">
                     <div class="collection-banner">
                         <img src="https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=600&h=800&fit=crop" alt="Evening Collection" class="banner-img">
                         <div class="banner-overlay">
@@ -135,31 +100,8 @@
     <section class="explore-section">
         <div class="container">
             <h2 class="section-heading">Explore the Women's Collections</h2>
-            <div class="accessories-grid">
-                <div class="accessory-item">
-                    <img src="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=300&h=400&fit=crop" alt="Jacket" class="accessory-img">
-                    <h4 class="accessory-name">Classic Jacket</h4>
-                </div>
-                <div class="accessory-item">
-                    <img src="https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=300&h=400&fit=crop" alt="Skirt" class="accessory-img">
-                    <h4 class="accessory-name">Pleated Skirt</h4>
-                </div>
-                <div class="accessory-item">
-                    <img src="https://images.unsplash.com/photo-1483985988355-763728e1935b?w=300&h=400&fit=crop" alt="Sunglasses" class="accessory-img">
-                    <h4 class="accessory-name">Designer Sunglasses</h4>
-                </div>
-                <div class="accessory-item">
-                    <img src="https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=300&h=400&fit=crop" alt="Bag" class="accessory-img">
-                    <h4 class="accessory-name">Quilted Clutch</h4>
-                </div>
-                <div class="accessory-item">
-                    <img src="https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=300&h=400&fit=crop" alt="Notebook" class="accessory-img">
-                    <h4 class="accessory-name">Leather Notebook</h4>
-                </div>
-                <div class="accessory-item">
-                    <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=300&h=400&fit=crop" alt="Accessory" class="accessory-img">
-                    <h4 class="accessory-name">Minimalist Accessories</h4>
-                </div>
+            <div class="accessories-grid" id="accessories-grid">
+                <!-- Accessories will be loaded dynamically -->
             </div>
         </div>
     </section>
@@ -168,7 +110,7 @@
     <section class="collection-banners-2">
         <div class="container">
             <div class="banners-stack">
-                <a href="/shop.html?category=Work & Office">
+                <a href="/shop.html?category=Work%20%26%20Office">
                     <div class="collection-banner-large">
                         <img src="https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=1200&h=600&fit=crop" alt="Work Collection" class="banner-img-large">
                         <div class="banner-overlay">
@@ -195,8 +137,8 @@
             <div class="accessories-overlay">
                 <h2 class="accessories-title">Accessories</h2>
                 <div class="accessories-links">
-                    <a href="/shop.html?category=men" class="accessories-link">MEN</a>
-                    <a href="/shop.html?category=women" class="accessories-link">WOMEN</a>
+                    <a href="/shop.html" class="accessories-link">SHOP ALL</a>
+                    <a href="/shop.html?category=Work%20%26%20Office" class="accessories-link">WORK</a>
                 </div>
             </div>
         </div>
@@ -209,8 +151,8 @@
             <div class="shades-overlay">
                 <h2 class="shades-title">Shades of Style</h2>
                 <div class="shades-links">
-                    <a href="/shop.html?category=men" class="shades-link">SHOP MEN</a>
-                    <a href="/shop.html?category=women" class="shades-link">SHOP WOMEN</a>
+                    <a href="/shop.html?category=Casual" class="shades-link">SHOP CASUAL</a>
+                    <a href="/shop.html?category=Evening%20Dresses" class="shades-link">SHOP EVENING</a>
                 </div>
             </div>
         </div>
@@ -257,9 +199,10 @@
                     <h4 class="footer-heading">Shop</h4>
                     <ul class="footer-links">
                         <li><a href="/shop.html">All Products</a></li>
-                        <li><a href="/shop.html?category=work">Work Collection</a></li>
-                        <li><a href="/shop.html?category=casual">Casual Collection</a></li>
-                        <li><a href="/shop.html?category=evening">Evening Collection</a></li>
+                        <li><a href="/shop.html?category=Work%20%26%20Office">Work Collection</a></li>
+                        <li><a href="/shop.html?category=Casual">Casual Collection</a></li>
+                        <li><a href="/shop.html?category=Evening%20Dresses">Evening Collection</a></li>
+                        <li><a href="/shop.html?category=Activewear">Activewear Collection</a></li>
                         <li><a href="/shop.html?category=accessories">Accessories</a></li>
                     </ul>
                 </div>
@@ -294,12 +237,12 @@
                 <div class="footer-column">
                     <h4 class="footer-heading">Follow Us</h4>
                     <div class="social-icons">
-                        <a href="#" class="social-icon" aria-label="Instagram">📷</a>
-                        <a href="#" class="social-icon" aria-label="Facebook">👤</a>
-                        <a href="#" class="social-icon" aria-label="Twitter">🐦</a>
-                        <a href="#" class="social-icon" aria-label="Pinterest">📌</a>
-                        <a href="#" class="social-icon" aria-label="YouTube">▶️</a>
-                        <a href="#" class="social-icon" aria-label="TikTok">🎵</a>
+                        <a href="#" class="social-icon" aria-label="Instagram">IG</a>
+                        <a href="#" class="social-icon" aria-label="Facebook">FB</a>
+                        <a href="#" class="social-icon" aria-label="Twitter">TW</a>
+                        <a href="#" class="social-icon" aria-label="Pinterest">PI</a>
+                        <a href="#" class="social-icon" aria-label="YouTube">YT</a>
+                        <a href="#" class="social-icon" aria-label="TikTok">TT</a>
                     </div>
                 </div>
             </div>

@@ -87,42 +87,98 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Product Carousel Functionality
-    const carouselTrack = document.querySelector('.carousel-track');
-    const carouselPrev = document.querySelector('.carousel-prev');
-    const carouselNext = document.querySelector('.carousel-next');
-    const carouselItems = document.querySelectorAll('.carousel-item');
+    // Product Carousel Functionality - Load products dynamically
+    const carouselTrack = document.getElementById('carousel-track');
+    if (carouselTrack) {
+        fetch('/api/ecommerce/products')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.products) {
+                    // Show first 8 products in carousel
+                    const carouselProducts = data.products.slice(0, 8);
+                    carouselTrack.innerHTML = carouselProducts.map(product => `
+                        <div class="carousel-item">
+                            <a href="/product/${product.slug}">
+                                <div class="product-card-dark">
+                                    <img src="${product.image}" alt="${product.title}" class="product-img" loading="lazy">
+                                    <h3 class="product-name">${product.title}</h3>
+                                    <p class="product-price">₹${product.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                </div>
+                            </a>
+                        </div>
+                    `).join('');
+                    
+                    // Initialize carousel after products are loaded
+                    initCarousel();
+                }
+            })
+            .catch(error => {
+                console.error('Error loading carousel products:', error);
+            });
+    }
+
+    // Load accessories/products for "Explore the Women's Collections" section
+    const accessoriesGrid = document.getElementById('accessories-grid');
+    if (accessoriesGrid) {
+        fetch('/api/ecommerce/products')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.products) {
+                    // Show 6 random or first 6 products
+                    const accessories = data.products.slice(0, 6);
+                    accessoriesGrid.innerHTML = accessories.map(product => `
+                        <a href="/product/${product.slug}" class="accessory-item-link">
+                            <div class="accessory-item">
+                                <img src="${product.image}" alt="${product.title}" class="accessory-img" loading="lazy">
+                                <h4 class="accessory-name">${product.title}</h4>
+                            </div>
+                        </a>
+                    `).join('');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading accessories:', error);
+            });
+    }
     
-    if (carouselTrack && carouselPrev && carouselNext) {
-        let currentIndex = 0;
-        const itemsToShow = 4;
-        const totalItems = carouselItems.length;
+    function initCarousel() {
+        const carouselTrack = document.querySelector('.carousel-track');
+        const carouselPrev = document.querySelector('.carousel-prev');
+        const carouselNext = document.querySelector('.carousel-next');
+        const carouselItems = document.querySelectorAll('.carousel-item');
         
-        function updateCarousel() {
-            const itemWidth = carouselItems[0].offsetWidth + 30; // width + gap
-            const maxIndex = Math.max(0, totalItems - itemsToShow);
-            currentIndex = Math.min(currentIndex, maxIndex);
-            carouselTrack.style.transform = `translateX(-${currentIndex * itemWidth}px)`;
+        if (carouselTrack && carouselPrev && carouselNext && carouselItems.length > 0) {
+            let currentIndex = 0;
+            const itemsToShow = 4;
+            const totalItems = carouselItems.length;
+            
+            function updateCarousel() {
+                if (carouselItems.length === 0) return;
+                const itemWidth = carouselItems[0].offsetWidth + 30; // width + gap
+                const maxIndex = Math.max(0, totalItems - itemsToShow);
+                currentIndex = Math.min(currentIndex, maxIndex);
+                carouselTrack.style.transform = `translateX(-${currentIndex * itemWidth}px)`;
+            }
+            
+            carouselNext.addEventListener('click', () => {
+                const maxIndex = Math.max(0, totalItems - itemsToShow);
+                if (currentIndex < maxIndex) {
+                    currentIndex++;
+                    updateCarousel();
+                }
+            });
+            
+            carouselPrev.addEventListener('click', () => {
+                if (currentIndex > 0) {
+                    currentIndex--;
+                    updateCarousel();
+                }
+            });
+            
+            // Handle window resize
+            window.addEventListener('resize', updateCarousel);
+            updateCarousel();
         }
-        
-        carouselNext.addEventListener('click', () => {
-            const maxIndex = Math.max(0, totalItems - itemsToShow);
-            if (currentIndex < maxIndex) {
-                currentIndex++;
-                updateCarousel();
-            }
-        });
-        
-        carouselPrev.addEventListener('click', () => {
-            if (currentIndex > 0) {
-                currentIndex--;
-                updateCarousel();
-            }
-        });
-        
-        // Handle window resize
-        window.addEventListener('resize', updateCarousel);
-        updateCarousel();
     }
 });
 

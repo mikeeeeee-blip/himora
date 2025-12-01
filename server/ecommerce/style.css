@@ -79,14 +79,29 @@ body {
     background: none;
     border: none;
     color: var(--text-white);
-    font-size: 20px;
+    font-size: 18px;
     cursor: pointer;
-    padding: 5px;
-    transition: opacity 0.3s;
+    padding: 8px 12px;
+    transition: all 0.3s;
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
 }
 
 .icon-btn:hover {
-    opacity: 0.7;
+    background-color: var(--gray-darker);
+    border-color: var(--text-white);
+}
+
+.icon-text {
+    font-weight: 600;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .header-nav {
@@ -339,13 +354,31 @@ body {
     gap: 30px;
 }
 
+.accessory-item-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
 .accessory-item {
     text-align: center;
-    transition: transform 0.3s;
+    transition: all 0.3s;
+    cursor: pointer;
+    padding: 10px;
+    background-color: var(--gray-darker);
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
 }
 
 .accessory-item:hover {
     transform: translateY(-5px);
+    border-color: var(--text-white);
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+}
+
+.accessory-item-link:hover .accessory-item {
+    transform: translateY(-5px);
+    border-color: var(--text-white);
 }
 
 .accessory-img {
@@ -652,13 +685,25 @@ body {
 }
 
 .social-icon {
-    font-size: 24px;
+    font-size: 18px;
     text-decoration: none;
-    transition: opacity 0.3s;
+    transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
+    color: var(--text-white);
+    font-weight: 600;
+    text-transform: uppercase;
 }
 
 .social-icon:hover {
-    opacity: 0.7;
+    background-color: var(--gray-darker);
+    border-color: var(--text-white);
+    transform: translateY(-2px);
 }
 
 .footer-bottom {
@@ -807,6 +852,8 @@ body {
 
 .about-list-dark li:before {
     content: "✓";
+    color: var(--text-white);
+    font-weight: bold;
     position: absolute;
     left: 0;
     color: var(--text-white);
@@ -1459,6 +1506,25 @@ body {
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+.feature-icon-small-dark {
+    font-size: 24px;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: var(--text-white);
+    display: block;
+}
+
+.check-icon {
+    font-weight: bold;
+    color: #d4edda;
+    margin-right: 5px;
+}
+
+.cart-icon {
+    font-weight: bold;
+    margin-right: 5px;
 }
 
 .related-products-section-dark {
