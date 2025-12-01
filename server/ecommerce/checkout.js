@@ -1,6 +1,11 @@
-// Checkout page JavaScript
+// Checkout page JavaScript with GSAP animations
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Lucide icons
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+    
     // Get order data from URL parameters or localStorage
     const urlParams = new URLSearchParams(window.location.search);
     const productSlug = urlParams.get('product') ? decodeURIComponent(urlParams.get('product')) : null;
@@ -16,6 +21,14 @@ document.addEventListener('DOMContentLoaded', function() {
             localStorage.removeItem('checkoutOrder'); // Clear after reading
         } catch (e) {
             console.error('Error parsing saved order:', e);
+        }
+    }
+    
+    // If no saved order, try cart data
+    if (!orderData) {
+        const cartData = cartManager.getCartData();
+        if (cartData.items.length > 0) {
+            orderData = cartData;
         }
     }
     
@@ -98,6 +111,17 @@ function displayOrderSummary(orderData) {
     
     if (!orderItemsContainer || !subtotalElement || !totalElement) return;
     
+    // Calculate totals if not provided
+    if (!orderData.subtotal || orderData.subtotal === 0) {
+        orderData.subtotal = orderData.items.reduce((sum, item) => {
+            return sum + (item.product.price * item.quantity);
+        }, 0);
+    }
+    
+    if (!orderData.total || orderData.total === 0) {
+        orderData.total = orderData.subtotal;
+    }
+    
     // Store order data for checkout
     window.currentOrder = orderData;
     
@@ -116,9 +140,62 @@ function displayOrderSummary(orderData) {
         </div>
     `).join('');
     
-    // Display totals
-    subtotalElement.textContent = `₹${orderData.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    totalElement.textContent = `₹${orderData.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // Animate items
+    if (typeof gsap !== 'undefined') {
+        gsap.from('.order-item-dark', {
+            opacity: 0,
+            y: 20,
+            duration: 0.5,
+            stagger: 0.1,
+            ease: 'power2.out'
+        });
+    }
+    
+    // Format totals
+    const subtotalFormatted = `₹${orderData.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const totalFormatted = `₹${orderData.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    
+    // Display totals with counter animation
+    if (typeof gsap !== 'undefined') {
+        // Set initial value
+        subtotalElement.textContent = '₹0.00';
+        totalElement.textContent = '₹0.00';
+        
+        // Create counter objects for animation
+        const subtotalCounter = { value: 0 };
+        const totalCounter = { value: 0 };
+        
+        // Animate subtotal counter
+        gsap.to(subtotalCounter, {
+            value: orderData.subtotal,
+            duration: 0.8,
+            ease: 'power2.out',
+            onUpdate: function() {
+                subtotalElement.textContent = `₹${Math.round(subtotalCounter.value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            },
+            onComplete: function() {
+                subtotalElement.textContent = subtotalFormatted;
+            }
+        });
+        
+        // Animate total counter
+        gsap.to(totalCounter, {
+            value: orderData.total,
+            duration: 0.8,
+            ease: 'power2.out',
+            delay: 0.1,
+            onUpdate: function() {
+                totalElement.textContent = `₹${Math.round(totalCounter.value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            },
+            onComplete: function() {
+                totalElement.textContent = totalFormatted;
+            }
+        });
+    } else {
+        // Fallback without animation - directly set values
+        subtotalElement.textContent = subtotalFormatted;
+        totalElement.textContent = totalFormatted;
+    }
 }
 
 async function handleCheckout(e) {
@@ -127,6 +204,17 @@ async function handleCheckout(e) {
     if (!window.currentOrder) {
         showError('Order data is missing. Please refresh the page.');
         return;
+    }
+    
+    // Ensure totals are calculated
+    if (!window.currentOrder.subtotal || window.currentOrder.subtotal === 0) {
+        window.currentOrder.subtotal = window.currentOrder.items.reduce((sum, item) => {
+            return sum + (item.product.price * item.quantity);
+        }, 0);
+    }
+    
+    if (!window.currentOrder.total || window.currentOrder.total === 0) {
+        window.currentOrder.total = window.currentOrder.subtotal;
     }
     
     // Get form data

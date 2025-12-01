@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Checkout - Himora | himora.art</title>
     <link rel="stylesheet" href="/style.css">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 </head>
 <body>
     <!-- Header -->
@@ -12,14 +16,23 @@
         <div class="header-top">
             <div class="container">
                 <div class="header-top-content">
-                    <button class="back-btn" aria-label="Back" onclick="window.history.back()">←</button>
+                    <button class="back-btn" aria-label="Back" onclick="window.history.back()">
+                        <i data-lucide="arrow-left"></i>
+                    </button>
                     <div class="logo">
                         <a href="/">himora.art</a>
                     </div>
                     <div class="header-icons">
-                        <button class="icon-btn" aria-label="User"><span class="icon-text">U</span></button>
-                        <button class="icon-btn" aria-label="Shopping Bag"><span class="icon-text">B</span></button>
-                        <button class="icon-btn" aria-label="Search"><span class="icon-text">S</span></button>
+                        <button class="icon-btn" aria-label="User">
+                            <i data-lucide="user"></i>
+                        </button>
+                        <button class="icon-btn cart-icon-btn" aria-label="Shopping Cart" onclick="window.location.href='/cart.html'">
+                            <i data-lucide="shopping-bag"></i>
+                            <span class="cart-badge" id="cart-badge"></span>
+                        </button>
+                        <button class="icon-btn" aria-label="Search">
+                            <i data-lucide="search"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -157,7 +170,14 @@
         </div>
     </footer>
 
+    <script src="/cart.js"></script>
     <script src="/checkout.js"></script>
+    <script>
+        // Initialize Lucide icons
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    </script>
 </body>
 </html>
 

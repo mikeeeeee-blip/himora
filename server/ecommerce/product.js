@@ -54,8 +54,62 @@ document.addEventListener('DOMContentLoaded', function() {
     if (addToCartBtn) {
         addToCartBtn.addEventListener('click', function() {
             const quantity = parseInt(document.getElementById('quantity').value) || 1;
-            // In a real app, this would add to cart
-            alert(`Added ${quantity} item(s) to cart!`);
+            
+            // Get current product data
+            if (window.currentProduct) {
+                // Add to cart with animation
+                cartManager.addItem(window.currentProduct, quantity);
+                
+                // Animate button
+                const btn = this;
+                const originalHTML = btn.innerHTML;
+                
+                if (typeof gsap !== 'undefined') {
+                    gsap.to(btn, {
+                        scale: 0.95,
+                        duration: 0.1,
+                        yoyo: true,
+                        repeat: 1,
+                        ease: 'power2.inOut'
+                    });
+                }
+                
+                btn.innerHTML = '<i data-lucide="check"></i> <span>Added!</span>';
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+                
+                // Show success animation
+                if (typeof gsap !== 'undefined') {
+                    gsap.fromTo(btn, 
+                        { backgroundColor: '#ffffff' },
+                        { 
+                            backgroundColor: '#4ade80',
+                            duration: 0.3,
+                            onComplete: () => {
+                                setTimeout(() => {
+                                    btn.innerHTML = originalHTML;
+                                    if (typeof lucide !== 'undefined') {
+                                        lucide.createIcons();
+                                    }
+                                    gsap.to(btn, { backgroundColor: '#ffffff', duration: 0.3 });
+                                }, 1500);
+                            }
+                        }
+                    );
+                    
+                    // Animate cart badge
+                    const badge = document.getElementById('cart-badge');
+                    if (badge) {
+                        gsap.fromTo(badge,
+                            { scale: 1.5, rotation: 360 },
+                            { scale: 1, rotation: 0, duration: 0.5, ease: 'back.out' }
+                        );
+                    }
+                }
+            } else {
+                alert('Product data not loaded. Please refresh the page.');
+            }
         });
     }
 
@@ -76,14 +130,52 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function displayProduct(product) {
+    // Store product globally for cart
+    window.currentProduct = product;
+    
     // Hide loading, show content
     const loading = document.getElementById('product-loading');
     const imageSection = document.getElementById('product-image-section');
     const infoSection = document.getElementById('product-info-section');
     
-    if (loading) loading.style.display = 'none';
-    if (imageSection) imageSection.style.display = 'block';
-    if (infoSection) infoSection.style.display = 'block';
+    if (loading) {
+        if (typeof gsap !== 'undefined') {
+            gsap.to(loading, {
+                opacity: 0,
+                duration: 0.3,
+                onComplete: () => {
+                    loading.style.display = 'none';
+                }
+            });
+        } else {
+            loading.style.display = 'none';
+        }
+    }
+    
+    if (imageSection) {
+        imageSection.style.display = 'block';
+        if (typeof gsap !== 'undefined') {
+            gsap.from(imageSection, {
+                opacity: 0,
+                x: -30,
+                duration: 0.6,
+                ease: 'power2.out'
+            });
+        }
+    }
+    
+    if (infoSection) {
+        infoSection.style.display = 'block';
+        if (typeof gsap !== 'undefined') {
+            gsap.from(infoSection, {
+                opacity: 0,
+                x: 30,
+                duration: 0.6,
+                ease: 'power2.out',
+                delay: 0.2
+            });
+        }
+    }
     
     // Update page title
     document.getElementById('page-title').textContent = `${product.title} - Himora | himora.art`;
@@ -96,6 +188,18 @@ function displayProduct(product) {
     const productImage = document.getElementById('product-image');
     productImage.src = product.image;
     productImage.alt = product.title;
+    
+    // Animate image load
+    productImage.onload = function() {
+        if (typeof gsap !== 'undefined') {
+            gsap.from(productImage, {
+                opacity: 0,
+                scale: 1.1,
+                duration: 0.5,
+                ease: 'power2.out'
+            });
+        }
+    };
 
     // Update product info
     document.getElementById('product-category').textContent = product.category;
@@ -103,6 +207,11 @@ function displayProduct(product) {
     document.getElementById('product-price').textContent = `₹${product.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     document.getElementById('product-description').textContent = product.description;
     document.getElementById('product-full-description').textContent = product.fullDescription;
+    
+    // Re-initialize Lucide icons
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
 }
 
 function loadRelatedProducts(category, currentSlug) {

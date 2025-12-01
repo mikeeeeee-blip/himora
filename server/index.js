@@ -87,6 +87,11 @@ app.get('/checkout.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'ecommerce', 'checkout.html'));
 });
 
+// Cart page
+app.get('/cart.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'cart.html'));
+});
+
 // E-commerce API routes
 app.get('/api/ecommerce/product/:slug', (req, res) => {
     try {
