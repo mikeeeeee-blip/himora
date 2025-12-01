@@ -67,92 +67,6 @@ img {
 
 /* Animation performance optimization - GSAP will handle initial states */
 
-/* Ripple effect for buttons */
-.btn-primary-dark,
-.btn-secondary-dark,
-.hero-shop-btn,
-.btn-checkout-dark,
-.btn-checkout-full-dark {
-    position: relative;
-    overflow: hidden;
-}
-
-.ripple {
-    position: absolute;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.5);
-    pointer-events: none;
-}
-
-/* Custom cursor - only on desktop */
-@media (min-width: 769px) {
-    .custom-cursor {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.4);
-        position: fixed;
-        pointer-events: none;
-        z-index: 9999;
-        mix-blend-mode: difference;
-        transition: transform 0.3s ease, background 0.3s ease;
-        will-change: transform;
-    }
-
-    .custom-cursor.hover {
-        background: rgba(255, 255, 255, 0.6);
-    }
-
-    /* Hide default cursor on interactive elements */
-    a:hover,
-    button:hover,
-    .product-card-dark:hover,
-    .collection-banner:hover {
-        cursor: none;
-    }
-}
-
-/* Scroll progress bar */
-.scroll-progress {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 3px;
-    background: linear-gradient(90deg, 
-        transparent 0%, 
-        rgba(255, 255, 255, 0.4) 50%, 
-        transparent 100%);
-    transform: scaleX(0);
-    transform-origin: left;
-    z-index: 10000;
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
-}
-
-/* Word animation container */
-.word {
-    display: inline-block;
-    white-space: nowrap;
-}
-
-/* Smooth transitions for all interactive elements */
-a, button {
-    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-/* Image loading state */
-img {
-    transition: opacity 0.8s ease, transform 0.8s ease;
-}
-
-/* Enhanced hover states */
-.product-card-dark:hover,
-.collection-banner:hover,
-.accessory-item:hover,
-.blog-card:hover {
-    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
 .container {
     max-width: 1400px;
     margin: 0 auto;
@@ -309,7 +223,7 @@ img {
 
 .hero-banner-image {
     width: 100%;
-    height: 100%;
+    height: 95%;
     object-fit: cover;
 }
 
