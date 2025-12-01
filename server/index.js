@@ -1,10 +1,12 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const path = require('path');
 const connectDB = require('./config/db');
 const { settlementJob, manualSettlement } = require('./jobs/settlementJob'); // ✅ Import backfill
 const Transaction = require('./models/Transaction');
 const Payout = require('./models/Payout');
+const { getProductBySlug, getAllProducts, getProductsByCategory } = require('./ecommerce/products');
 
 dotenv.config();
 connectDB();
@@ -25,6 +27,91 @@ app.use(express.json({
 // ✅ Start settlement job (runs daily at 4 PM IST)
 settlementJob.start();
 console.log('✅ Settlement cron job started - runs daily at 4:00 PM IST');
+
+// Serve e-commerce static files (CSS, JS, etc.)
+app.use('/ecommerce', express.static(path.join(__dirname, 'ecommerce')));
+app.use(express.static(path.join(__dirname, 'ecommerce'))); // Also serve at root for assets
+app.use('/assets', express.static(path.join(__dirname, 'assets'))); // Serve assets folder
+
+// Serve e-commerce pages
+app.get('/ecommerce', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'index.html'));
+});
+app.get('/ecommerce/shop.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'shop.html'));
+});
+app.get('/ecommerce/about.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'about.html'));
+});
+app.get('/ecommerce/contact.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'contact.html'));
+});
+
+// Serve e-commerce at root path
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'index.html'));
+});
+app.get('/shop.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'shop.html'));
+});
+app.get('/about.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'about.html'));
+});
+app.get('/contact.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'contact.html'));
+});
+
+// Policy pages
+app.get('/privacy-policy.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'privacy-policy.html'));
+});
+app.get('/refund-policy.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'refund-policy.html'));
+});
+app.get('/terms-conditions.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'terms-conditions.html'));
+});
+app.get('/shipping-policy.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'shipping-policy.html'));
+});
+
+// Product slug pages
+app.get('/product/:slug', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'product.html'));
+});
+
+// E-commerce API routes
+app.get('/api/ecommerce/product/:slug', (req, res) => {
+    try {
+        const { slug } = req.params;
+        const product = getProductBySlug(slug);
+        
+        if (product) {
+            res.json({ success: true, product });
+        } else {
+            res.status(404).json({ success: false, error: 'Product not found' });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/ecommerce/products', (req, res) => {
+    try {
+        const { category } = req.query;
+        let products;
+        
+        if (category) {
+            products = getProductsByCategory(category);
+        } else {
+            products = getAllProducts();
+        }
+        
+        res.json({ success: true, products });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
