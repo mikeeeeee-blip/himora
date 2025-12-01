@@ -110,6 +110,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Initialize carousel after products are loaded
                     initCarousel();
+                    
+                    // Refresh animations after products load
+                    if (typeof ScrollTrigger !== 'undefined') {
+                        setTimeout(() => {
+                            ScrollTrigger.refresh();
+                        }, 100);
+                    }
                 }
             })
             .catch(error => {
@@ -134,6 +141,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                         </a>
                     `).join('');
+                    
+                    // Refresh animations after accessories load
+                    if (typeof ScrollTrigger !== 'undefined') {
+                        setTimeout(() => {
+                            ScrollTrigger.refresh();
+                        }, 100);
+                    }
                 }
             })
             .catch(error => {
@@ -157,7 +171,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 const itemWidth = carouselItems[0].offsetWidth + 30; // width + gap
                 const maxIndex = Math.max(0, totalItems - itemsToShow);
                 currentIndex = Math.min(currentIndex, maxIndex);
-                carouselTrack.style.transform = `translateX(-${currentIndex * itemWidth}px)`;
+                
+                // Use GSAP for smooth carousel animation
+                if (typeof gsap !== 'undefined') {
+                    gsap.to(carouselTrack, {
+                        x: -currentIndex * itemWidth,
+                        duration: 0.6,
+                        ease: 'power2.inOut'
+                    });
+                } else {
+                    carouselTrack.style.transform = `translateX(-${currentIndex * itemWidth}px)`;
+                }
             }
             
             carouselNext.addEventListener('click', () => {
