@@ -127,14 +127,14 @@ function displayOrderSummary(orderData) {
     
     // Display order items
     orderItemsContainer.innerHTML = orderData.items.map(item => `
-        <div class="order-item-dark">
-            <img src="${item.product.image}" alt="${item.product.title}" class="order-item-img-dark">
-            <div class="order-item-details-dark">
-                <h3 class="order-item-name-dark">${item.product.title}</h3>
-                <p class="order-item-category-dark">${item.product.category}</p>
-                <p class="order-item-quantity-dark">Quantity: ${item.quantity}</p>
+        <div class="order-item-dark flex gap-4 mb-4 pb-4 border-b border-border-dark">
+            <img src="${item.product.image}" alt="${item.product.title}" class="order-item-img-dark w-20 h-20 object-cover flex-shrink-0">
+            <div class="order-item-details-dark flex-1 min-w-0">
+                <h3 class="order-item-name-dark text-lg font-semibold mb-1 text-text-white">${item.product.title}</h3>
+                <p class="order-item-category-dark text-text-gray text-sm mb-1">${item.product.category}</p>
+                <p class="order-item-quantity-dark text-text-gray text-sm">Quantity: ${item.quantity}</p>
             </div>
-            <div class="order-item-price-dark">
+            <div class="order-item-price-dark text-xl font-bold text-text-white">
                 ₹${(item.product.price * item.quantity).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
         </div>

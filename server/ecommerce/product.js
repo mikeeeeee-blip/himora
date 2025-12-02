@@ -239,16 +239,16 @@ function displayRelatedProducts(products) {
     }
 
     container.innerHTML = products.map(product => `
-        <div class="product-card-dark" data-category="${product.category}">
+        <div class="product-card-dark bg-primary-black border border-border-dark overflow-hidden group cursor-pointer hover:border-text-white transition-colors" data-category="${product.category}">
             <a href="/product/${product.slug}">
-                <img src="${product.image}" alt="${product.title}" class="product-img-dark" loading="lazy">
+                <img src="${product.image}" alt="${product.title}" class="product-img-dark w-full h-[400px] object-cover transition-transform duration-600 group-hover:scale-105" loading="lazy">
             </a>
-            <div class="product-category-dark">${product.category}</div>
-            <h3 class="product-name-dark">
-                <a href="/product/${product.slug}">${product.title}</a>
+            <div class="product-category-dark text-text-gray text-xs uppercase tracking-wider mt-4 mb-2 px-4">${product.category}</div>
+            <h3 class="product-name-dark text-lg font-semibold mb-2 px-4">
+                <a href="/product/${product.slug}" class="text-text-white no-underline hover:text-text-gray transition-colors">${product.title}</a>
             </h3>
-            <div class="product-price-dark">₹${product.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <a href="/product/${product.slug}" class="btn-view-product-dark">View Product</a>
+            <div class="product-price-dark text-xl font-bold mb-4 px-4">₹${product.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <a href="/product/${product.slug}" class="btn-view-product-dark block mx-4 mb-4 bg-text-white text-primary-black px-6 py-2 text-center no-underline font-semibold uppercase tracking-wider hover:bg-text-gray transition-colors">View Product</a>
         </div>
     `).join('');
 }

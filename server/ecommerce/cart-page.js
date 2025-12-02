@@ -102,32 +102,32 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!cartItemsList) return;
         
         cartItemsList.innerHTML = cart.map((item, index) => `
-            <div class="cart-item-dark" data-slug="${item.product.slug}">
-                <div class="cart-item-image-dark">
-                    <img src="${item.product.image}" alt="${item.product.title}" loading="lazy">
+            <div class="cart-item-dark bg-primary-black border border-border-dark p-4 flex flex-col md:flex-row gap-4 items-center" data-slug="${item.product.slug}">
+                <div class="cart-item-image-dark w-24 h-24 flex-shrink-0">
+                    <img src="${item.product.image}" alt="${item.product.title}" class="w-full h-full object-cover" loading="lazy">
                 </div>
-                <div class="cart-item-details-dark">
-                    <h3 class="cart-item-title-dark">
-                        <a href="/product/${item.product.slug}">${item.product.title}</a>
+                <div class="cart-item-details-dark flex-1 min-w-0">
+                    <h3 class="cart-item-title-dark text-lg font-semibold mb-1">
+                        <a href="/product/${item.product.slug}" class="text-text-white no-underline hover:text-text-gray transition-colors">${item.product.title}</a>
                     </h3>
-                    <p class="cart-item-category-dark">${item.product.category}</p>
-                    <div class="cart-item-price-dark">₹${item.product.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <p class="cart-item-category-dark text-text-gray text-sm mb-2">${item.product.category}</p>
+                    <div class="cart-item-price-dark text-text-white font-semibold">₹${item.product.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 </div>
-                <div class="cart-item-controls-dark">
-                    <div class="quantity-controls-dark">
-                        <button class="qty-btn-dark" onclick="updateCartQuantity('${item.product.slug}', ${item.quantity - 1})">
+                <div class="cart-item-controls-dark flex items-center gap-4">
+                    <div class="quantity-controls-dark flex items-center gap-2 border border-border-dark">
+                        <button class="qty-btn-dark bg-primary-black text-text-white px-3 py-1 hover:bg-border-dark transition-colors" onclick="updateCartQuantity('${item.product.slug}', ${item.quantity - 1})">
                             <i data-lucide="minus"></i>
                         </button>
-                        <span class="qty-value-dark">${item.quantity}</span>
-                        <button class="qty-btn-dark" onclick="updateCartQuantity('${item.product.slug}', ${item.quantity + 1})">
+                        <span class="qty-value-dark text-text-white px-4">${item.quantity}</span>
+                        <button class="qty-btn-dark bg-primary-black text-text-white px-3 py-1 hover:bg-border-dark transition-colors" onclick="updateCartQuantity('${item.product.slug}', ${item.quantity + 1})">
                             <i data-lucide="plus"></i>
                         </button>
                     </div>
-                    <button class="remove-item-btn-dark" onclick="removeCartItem('${item.product.slug}')" aria-label="Remove item">
+                    <button class="remove-item-btn-dark bg-transparent border-none text-red-400 hover:text-red-300 transition-colors cursor-pointer" onclick="removeCartItem('${item.product.slug}')" aria-label="Remove item">
                         <i data-lucide="trash-2"></i>
                     </button>
                 </div>
-                <div class="cart-item-total-dark">
+                <div class="cart-item-total-dark text-xl font-bold text-text-white">
                     ₹${(item.product.price * item.quantity).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
             </div>

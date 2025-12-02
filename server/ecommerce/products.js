@@ -253,8 +253,8 @@ const products = [
         category: 'Trousers',
         price: 3299.00,
         image: '/assets/trousers/male/image copy 6.png',
-        description: 'Formal trousers with classic design. Perfect for business suits and formal occasions.',
-        fullDescription: 'These formal trousers feature traditional design elements and premium materials. The expert tailoring and classic fit make them perfect for business suits, formal events, or professional occasions.',
+        description: 'Formal trousers with classic design. Perfect for formal occasions and professional wear.',
+        fullDescription: 'These formal trousers feature traditional design elements and premium materials. The expert tailoring and classic fit make them perfect for formal events, professional occasions, or business meetings.',
         inStock: true
     },
     
@@ -444,23 +444,23 @@ const products = [
         inStock: true
     },
     {
-        slug: 'professional-formal-suit-navy',
-        title: 'Professional Formal Suit - Navy',
+        slug: 'professional-formal-shirt-navy',
+        title: 'Professional Formal Shirt - Navy',
         category: 'Formal',
         price: 5299.00,
         image: '/assets/formal/female/image copy.png',
-        description: 'A tailored navy blue formal suit that exudes confidence and professionalism.',
-        fullDescription: 'This professional navy blue formal suit features expert tailoring and premium fabric. The structured blazer and matching trousers create a powerful, confident look. Perfect for important business meetings, presentations, or formal corporate events.',
+        description: 'A tailored navy blue formal shirt that exudes confidence and professionalism.',
+        fullDescription: 'This professional navy blue formal shirt features expert tailoring and premium fabric. The structured design creates a powerful, confident look. Perfect for important business meetings, presentations, or formal corporate events.',
         inStock: true
     },
     {
-        slug: 'classic-formal-blazer-set',
-        title: 'Classic Formal Blazer Set',
+        slug: 'classic-formal-shirt-set',
+        title: 'Classic Formal Shirt Set',
         category: 'Formal',
         price: 4899.00,
         image: '/assets/formal/female/image copy 2.png',
-        description: 'A timeless formal blazer set that never goes out of style. Perfect for the modern professional woman.',
-        fullDescription: 'This classic formal blazer set features premium wool blend fabric and expert tailoring. The structured silhouette creates a powerful, confident look while maintaining comfort. The set includes a tailored blazer and matching skirt or trousers.',
+        description: 'A timeless formal shirt set that never goes out of style. Perfect for the modern professional woman.',
+        fullDescription: 'This classic formal shirt set features premium fabric and expert tailoring. The structured silhouette creates a powerful, confident look while maintaining comfort. Perfect for professional occasions and business meetings.',
         inStock: true
     },
     {
@@ -486,53 +486,53 @@ const products = [
     
     // Formal Collection - Male
     {
-        slug: 'classic-formal-suit-black',
-        title: 'Classic Formal Suit - Black',
+        slug: 'classic-formal-shirt-black',
+        title: 'Classic Formal Shirt - Black',
         category: 'Formal',
         price: 6999.00,
         image: '/assets/formal/male/image.png',
-        description: 'A timeless black formal suit that defines sophistication and professionalism.',
-        fullDescription: 'This classic black formal suit features premium wool fabric and expert tailoring. The traditional two-button design and straight-leg trousers create a sharp, professional appearance. Perfect for business meetings, formal events, or corporate functions.',
+        description: 'A timeless black formal shirt that defines sophistication and professionalism.',
+        fullDescription: 'This classic black formal shirt features premium fabric and expert tailoring. The traditional design creates a sharp, professional appearance. Perfect for business meetings, formal events, or corporate functions.',
         inStock: true
     },
     {
-        slug: 'navy-formal-business-suit',
-        title: 'Navy Formal Business Suit',
+        slug: 'navy-formal-business-shirt',
+        title: 'Navy Formal Business Shirt',
         category: 'Formal',
         price: 7499.00,
         image: '/assets/formal/male/image copy.png',
-        description: 'A sophisticated navy blue business suit that combines style with professionalism.',
-        fullDescription: 'This navy blue formal business suit features premium fabric and modern tailoring. The contemporary fit and classic color make it versatile for various formal occasions. Perfect for important business meetings, conferences, or formal corporate events.',
+        description: 'A sophisticated navy blue business shirt that combines style with professionalism.',
+        fullDescription: 'This navy blue formal business shirt features premium fabric and modern tailoring. The contemporary fit and classic color make it versatile for various formal occasions. Perfect for important business meetings, conferences, or formal corporate events.',
         inStock: true
     },
     {
-        slug: 'executive-formal-suit-gray',
-        title: 'Executive Formal Suit - Gray',
+        slug: 'executive-formal-shirt-gray',
+        title: 'Executive Formal Shirt - Gray',
         category: 'Formal',
         price: 7999.00,
         image: '/assets/formal/male/image copy 2.png',
-        description: 'An elegant gray formal suit designed for the modern executive professional.',
-        fullDescription: 'This executive gray formal suit features premium materials and expert craftsmanship. The sophisticated color and tailored fit create a distinguished appearance. Ideal for executive meetings, formal presentations, or high-profile business events.',
+        description: 'An elegant gray formal shirt designed for the modern executive professional.',
+        fullDescription: 'This executive gray formal shirt features premium materials and expert craftsmanship. The sophisticated color and tailored fit create a distinguished appearance. Ideal for executive meetings, formal presentations, or high-profile business events.',
         inStock: true
     },
     {
-        slug: 'premium-formal-tuxedo',
-        title: 'Premium Formal Tuxedo',
+        slug: 'premium-formal-shirt',
+        title: 'Premium Formal Shirt',
         category: 'Formal',
         price: 8999.00,
         image: '/assets/formal/male/image copy 3.png',
-        description: 'A luxurious formal tuxedo perfect for black-tie events and formal galas.',
-        fullDescription: 'This premium formal tuxedo features the finest materials and meticulous attention to detail. The classic design with satin lapels creates an elegant, sophisticated look. Perfect for formal galas, black-tie events, weddings, or prestigious occasions.',
+        description: 'A luxurious formal shirt perfect for formal events and professional occasions.',
+        fullDescription: 'This premium formal shirt features the finest materials and meticulous attention to detail. The classic design creates an elegant, sophisticated look. Perfect for formal events, business meetings, or prestigious occasions.',
         inStock: true
     },
     {
-        slug: 'tailored-formal-suit-charcoal',
-        title: 'Tailored Formal Suit - Charcoal',
+        slug: 'tailored-formal-shirt-charcoal',
+        title: 'Tailored Formal Shirt - Charcoal',
         category: 'Formal',
         price: 8499.00,
         image: '/assets/formal/male/image copy 4.png',
-        description: 'A perfectly tailored charcoal formal suit that exudes confidence and style.',
-        fullDescription: 'This tailored charcoal formal suit features premium fabric and expert tailoring. The modern fit and sophisticated color create a powerful, confident appearance. Perfect for business executives, formal meetings, or important corporate events.',
+        description: 'A perfectly tailored charcoal formal shirt that exudes confidence and style.',
+        fullDescription: 'This tailored charcoal formal shirt features premium fabric and expert tailoring. The modern fit and sophisticated color create a powerful, confident appearance. Perfect for business executives, formal meetings, or important corporate events.',
         inStock: true
     },
     
@@ -574,7 +574,7 @@ const products = [
         price: 3799.00,
         image: '/assets/shoes/image copy 3.png',
         description: 'Professional business shoes designed for the modern executive. Comfort and style in perfect harmony.',
-        fullDescription: 'These professional business shoes feature premium leather and ergonomic design for all-day comfort. The versatile style works with suits, dress pants, or business casual attire. Perfect for long work days, important meetings, or professional networking events.',
+                    fullDescription: 'These professional business shoes feature premium leather and ergonomic design for all-day comfort. The versatile style works with formal shirts, dress pants, or business casual attire. Perfect for long work days, important meetings, or professional networking events.',
         inStock: true
     },
     {

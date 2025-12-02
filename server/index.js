@@ -42,6 +42,9 @@ app.get('/ecommerce', (req, res) => {
 app.get('/ecommerce/shop.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'ecommerce', 'shop.html'));
 });
+app.get('/ecommerce/collections.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'collections.html'));
+});
 app.get('/ecommerce/about.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'ecommerce', 'about.html'));
 });
@@ -55,6 +58,9 @@ app.get('/', (req, res) => {
 });
 app.get('/shop.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'ecommerce', 'shop.html'));
+});
+app.get('/collections.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'collections.html'));
 });
 app.get('/about.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'ecommerce', 'about.html'));

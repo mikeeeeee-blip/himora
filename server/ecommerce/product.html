@@ -4,126 +4,150 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title id="page-title">Product - Himora | himora.art</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-black': '#000000',
+                        'primary-white': '#ffffff',
+                        'gray-light': '#f5f5f5',
+                        'gray-medium': '#e0e0e0',
+                        'gray-dark': '#666666',
+                        'gray-darker': '#333333',
+                        'text-white': '#ffffff',
+                        'text-gray': '#cccccc',
+                        'border-dark': '#333333',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Custom CSS for GSAP animations -->
     <link rel="stylesheet" href="/style.css">
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- GSAP -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 </head>
-<body>
+<body class="bg-primary-black text-text-white font-sans antialiased overflow-x-hidden">
     <!-- Header -->
-    <header class="site-header dark-header">
-        <div class="header-top">
-            <div class="container">
-                <div class="header-top-content">
-                    <button class="back-btn" aria-label="Back" onclick="window.history.back()">
+    <header class="bg-primary-black border-b border-border-dark sticky top-0 z-50">
+        <div class="py-4 border-b border-border-dark">
+            <div class="max-w-[1400px] mx-auto px-10">
+                <div class="flex justify-between items-center">
+                    <button class="bg-transparent border-none text-text-white text-2xl cursor-pointer hover:opacity-70 transition-opacity" aria-label="Back" onclick="window.history.back()">
                         <i data-lucide="arrow-left"></i>
                     </button>
-                    <div class="logo">
-                        <a href="/">himora.art</a>
+                    <div class="text-xl font-semibold">
+                        <a href="/" class="text-text-white no-underline hover:text-text-gray transition-colors">himora.art</a>
                     </div>
-                    <div class="header-icons">
-                        <button class="icon-btn" aria-label="User">
+                    <div class="flex items-center gap-4">
+                        <button class="bg-transparent border-none text-text-white text-xl cursor-pointer hover:opacity-70 transition-opacity" aria-label="User">
                             <i data-lucide="user"></i>
                         </button>
-                        <button class="icon-btn cart-icon-btn" aria-label="Shopping Cart" onclick="window.location.href='/cart.html'">
+                        <button class="bg-transparent border-none text-text-white text-xl cursor-pointer hover:opacity-70 transition-opacity relative" aria-label="Shopping Cart" onclick="window.location.href='/cart.html'">
                             <i data-lucide="shopping-bag"></i>
-                            <span class="cart-badge" id="cart-badge"></span>
+                            <span class="cart-badge absolute -top-2 -right-2 bg-text-white text-primary-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center" id="cart-badge"></span>
                         </button>
-                        <button class="icon-btn" aria-label="Search">
+                        <button class="bg-transparent border-none text-text-white text-xl cursor-pointer hover:opacity-70 transition-opacity" aria-label="Search">
                             <i data-lucide="search"></i>
                         </button>
                     </div>
                 </div>
             </div>
         </div>
-        <nav class="header-nav">
-            <div class="container">
-                <ul class="nav-menu">
-                    <li><a href="/">Home</a></li>
-                    <li><a href="/shop.html">Shop</a></li>
-                    <li><a href="/shop.html">Collections</a></li>
-                    <li><a href="/about.html">About</a></li>
-                    <li><a href="/contact.html">Contact</a></li>
+        <nav class="py-4">
+            <div class="max-w-[1400px] mx-auto px-10">
+                <ul class="flex justify-center items-center gap-8 list-none m-0 p-0">
+                    <li><a href="/" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">Home</a></li>
+                    <li><a href="/shop.html" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">Shop</a></li>
+                    <li><a href="/collections.html" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">Collections</a></li>
+                    <li><a href="/about.html" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">About</a></li>
+                    <li><a href="/contact.html" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">Contact</a></li>
                 </ul>
             </div>
         </nav>
     </header>
 
     <!-- Product Detail Page -->
-    <main class="product-detail-page-dark">
-        <div class="container">
-            <nav class="breadcrumb-dark">
-                <a href="/">Home</a> / 
-                <a href="/shop.html">Shop</a> / 
+    <main class="py-16 min-h-screen">
+        <div class="max-w-[1400px] mx-auto px-10">
+            <nav class="breadcrumb-dark text-text-gray text-sm mb-8">
+                <a href="/" class="text-text-white hover:text-text-gray transition-colors">Home</a> / 
+                <a href="/shop.html" class="text-text-white hover:text-text-gray transition-colors">Shop</a> / 
                 <span id="breadcrumb-category">Category</span> / 
                 <span id="breadcrumb-product">Product</span>
             </nav>
 
-            <div class="product-detail-container-dark" id="product-container">
-                <div class="product-loading-dark" id="product-loading">
-                    <div class="loading-spinner-dark"></div>
-                    <p>Loading product...</p>
+            <div class="product-detail-container-dark grid grid-cols-1 lg:grid-cols-2 gap-12 mb-16" id="product-container">
+                <div class="product-loading-dark flex flex-col items-center justify-center py-20" id="product-loading">
+                    <div class="loading-spinner-dark w-12 h-12 border-4 border-border-dark border-t-text-white rounded-full animate-spin mb-4"></div>
+                    <p class="text-text-gray">Loading product...</p>
                 </div>
                 
                 <div class="product-image-section-dark" id="product-image-section" style="display: none;">
-                    <img id="product-image" src="" alt="Product Image" class="product-main-image-dark" onerror="this.src='https://via.placeholder.com/600x700?text=Product+Image'">
+                    <img id="product-image" src="" alt="Product Image" class="product-main-image-dark w-full h-auto object-cover" onerror="this.src='https://via.placeholder.com/600x700?text=Product+Image'">
                 </div>
 
                 <div class="product-info-section-dark" id="product-info-section" style="display: none;">
-                    <div class="product-category-dark" id="product-category">Category</div>
-                    <h1 class="product-detail-title-dark" id="product-title">Product Title</h1>
-                    <div class="product-detail-price-dark" id="product-price">₹0.00</div>
+                    <div class="product-category-dark text-text-gray text-xs uppercase tracking-wider mb-4" id="product-category">Category</div>
+                    <h1 class="product-detail-title-dark text-4xl font-bold mb-4" id="product-title">Product Title</h1>
+                    <div class="product-detail-price-dark text-3xl font-bold mb-6" id="product-price">₹0.00</div>
                     
-                    <div class="product-rating-dark">
-                        <span class="product-rating-stars-dark">★★★★★</span>
-                        <span class="product-rating-text-dark">(4.8) 124 Reviews</span>
+                    <div class="product-rating-dark flex items-center gap-2 mb-6">
+                        <span class="product-rating-stars-dark text-yellow-400">★★★★★</span>
+                        <span class="product-rating-text-dark text-text-gray text-sm">(4.8) 124 Reviews</span>
                     </div>
                     
-                    <div class="product-description-dark" id="product-description">
+                    <div class="product-description-dark text-text-gray mb-6" id="product-description">
                         Product description will appear here.
                     </div>
 
-                    <div class="product-full-description-dark" id="product-full-description">
+                    <div class="product-full-description-dark text-text-gray mb-8" id="product-full-description">
                         Full product description will appear here.
                     </div>
 
-                    <div class="product-actions-dark">
+                    <div class="product-actions-dark space-y-4 mb-8">
                         <div class="stock-info-dark">
-                            <span class="stock-badge-dark in-stock-dark"><span class="check-icon">✓</span> In Stock</span>
+                            <span class="stock-badge-dark in-stock-dark bg-green-600 text-text-white px-4 py-2 inline-flex items-center gap-2 text-sm font-semibold">
+                                <span class="check-icon">✓</span> In Stock
+                            </span>
                         </div>
-                        <div class="quantity-selector-dark">
-                            <label for="quantity">Quantity:</label>
-                            <input type="number" id="quantity" min="1" value="1" max="10">
+                        <div class="quantity-selector-dark flex items-center gap-4">
+                            <label for="quantity" class="text-text-white font-semibold">Quantity:</label>
+                            <input type="number" id="quantity" min="1" value="1" max="10" class="bg-primary-black border border-border-dark text-text-white px-4 py-2 w-20 focus:outline-none focus:border-text-white transition-colors">
                         </div>
-                        <button class="btn-primary-dark btn-add-to-cart-dark" id="add-to-cart-btn">
+                        <button class="btn-primary-dark btn-add-to-cart-dark bg-text-white text-primary-black px-8 py-3 w-full font-semibold uppercase tracking-wider hover:bg-text-gray transition-colors flex items-center justify-center gap-2" id="add-to-cart-btn">
                             <i data-lucide="shopping-cart"></i>
                             <span>Add to Cart</span>
                         </button>
-                        <button class="btn-secondary-dark btn-buy-now-dark" id="buy-now-btn">Buy Now</button>
+                        <button class="btn-secondary-dark btn-buy-now-dark bg-transparent border-2 border-text-white text-text-white px-8 py-3 w-full font-semibold uppercase tracking-wider hover:bg-text-white hover:text-primary-black transition-colors" id="buy-now-btn">Buy Now</button>
                     </div>
 
-                    <div class="product-features-dark">
-                        <div class="feature-item-small-dark">
-                            <span class="feature-icon-small-dark">L</span>
-                            <span>Secure Payment</span>
+                    <div class="product-features-dark flex flex-wrap gap-4 pt-8 border-t border-border-dark">
+                        <div class="feature-item-small-dark flex items-center gap-2">
+                            <span class="feature-icon-small-dark bg-border-dark text-text-white w-8 h-8 flex items-center justify-center rounded-full text-xs font-bold">L</span>
+                            <span class="text-text-gray text-sm">Secure Payment</span>
                         </div>
-                        <div class="feature-item-small-dark">
-                            <span class="feature-icon-small-dark">S</span>
-                            <span>Free Shipping</span>
+                        <div class="feature-item-small-dark flex items-center gap-2">
+                            <span class="feature-icon-small-dark bg-border-dark text-text-white w-8 h-8 flex items-center justify-center rounded-full text-xs font-bold">S</span>
+                            <span class="text-text-gray text-sm">Free Shipping</span>
                         </div>
-                        <div class="feature-item-small-dark">
-                            <span class="feature-icon-small-dark">R</span>
-                            <span>Easy Returns</span>
+                        <div class="feature-item-small-dark flex items-center gap-2">
+                            <span class="feature-icon-small-dark bg-border-dark text-text-white w-8 h-8 flex items-center justify-center rounded-full text-xs font-bold">R</span>
+                            <span class="text-text-gray text-sm">Easy Returns</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Related Products -->
-            <section class="related-products-section-dark">
-                <h2 class="section-heading">You May Also Like</h2>
-                <div class="products-grid-dark" id="related-products">
+            <section class="related-products-section-dark mt-16">
+                <h2 class="text-4xl font-bold text-center mb-12 uppercase tracking-wider">You May Also Like</h2>
+                <div class="products-grid-dark grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="related-products">
                     <!-- Related products will be loaded here -->
                 </div>
             </section>
@@ -131,53 +155,53 @@
     </main>
 
     <!-- Footer -->
-    <footer class="site-footer dark-footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-column">
-                    <h4 class="footer-heading">Shop</h4>
-                    <ul class="footer-links">
-                        <li><a href="/shop.html">All Products</a></li>
-                        <li><a href="/shop.html?category=Work%20%26%20Office">Work Collection</a></li>
-                        <li><a href="/shop.html?category=Casual">Casual Collection</a></li>
-                        <li><a href="/shop.html?category=Evening%20Dresses">Evening Collection</a></li>
-                        <li><a href="/shop.html?category=Activewear">Activewear Collection</a></li>
+    <footer class="bg-primary-black border-t border-border-dark py-16">
+        <div class="max-w-[1400px] mx-auto px-10">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">Shop</h4>
+                    <ul class="list-none p-0 m-0 space-y-2">
+                        <li><a href="/shop.html" class="text-text-gray no-underline hover:text-text-white transition-colors">All Products</a></li>
+                        <li><a href="/shop.html?category=Work%20%26%20Office" class="text-text-gray no-underline hover:text-text-white transition-colors">Work Collection</a></li>
+                        <li><a href="/shop.html?category=Casual" class="text-text-gray no-underline hover:text-text-white transition-colors">Casual Collection</a></li>
+                        <li><a href="/shop.html?category=Evening%20Dresses" class="text-text-gray no-underline hover:text-text-white transition-colors">Evening Collection</a></li>
+                        <li><a href="/shop.html?category=Activewear" class="text-text-gray no-underline hover:text-text-white transition-colors">Activewear Collection</a></li>
                     </ul>
                 </div>
-                <div class="footer-column">
-                    <h4 class="footer-heading">About Us</h4>
-                    <ul class="footer-links">
-                        <li><a href="/about.html">Our Story</a></li>
-                        <li><a href="/contact.html">Contact Us</a></li>
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">About Us</h4>
+                    <ul class="list-none p-0 m-0 space-y-2">
+                        <li><a href="/about.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Our Story</a></li>
+                        <li><a href="/contact.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Contact Us</a></li>
                     </ul>
                 </div>
-                <div class="footer-column">
-                    <h4 class="footer-heading">Help</h4>
-                    <ul class="footer-links">
-                        <li><a href="/privacy-policy.html">Privacy Policy</a></li>
-                        <li><a href="/refund-policy.html">Refund Policy</a></li>
-                        <li><a href="/terms-conditions.html">Terms & Conditions</a></li>
-                        <li><a href="/shipping-policy.html">Shipping Policy</a></li>
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">Help</h4>
+                    <ul class="list-none p-0 m-0 space-y-2">
+                        <li><a href="/privacy-policy.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Privacy Policy</a></li>
+                        <li><a href="/refund-policy.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Refund Policy</a></li>
+                        <li><a href="/terms-conditions.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Terms & Conditions</a></li>
+                        <li><a href="/shipping-policy.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Shipping Policy</a></li>
                     </ul>
                 </div>
-                <div class="footer-column">
-                    <h4 class="footer-heading">Legal</h4>
-                    <ul class="footer-links">
-                        <li><a href="/privacy-policy.html">Privacy Policy</a></li>
-                        <li><a href="/terms-conditions.html">Terms & Conditions</a></li>
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">Legal</h4>
+                    <ul class="list-none p-0 m-0 space-y-2">
+                        <li><a href="/privacy-policy.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Privacy Policy</a></li>
+                        <li><a href="/terms-conditions.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Terms & Conditions</a></li>
                     </ul>
                 </div>
-                <div class="footer-column">
-                    <h4 class="footer-heading">Follow Us</h4>
-                    <div class="social-icons">
-                        <a href="#" class="social-icon" aria-label="Instagram">IG</a>
-                        <a href="#" class="social-icon" aria-label="Facebook">FB</a>
-                        <a href="#" class="social-icon" aria-label="Twitter">TW</a>
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">Follow Us</h4>
+                    <div class="flex flex-wrap gap-2">
+                        <a href="#" class="bg-border-dark text-text-white w-10 h-10 flex items-center justify-center no-underline hover:bg-text-white hover:text-primary-black transition-colors" aria-label="Instagram">IG</a>
+                        <a href="#" class="bg-border-dark text-text-white w-10 h-10 flex items-center justify-center no-underline hover:bg-text-white hover:text-primary-black transition-colors" aria-label="Facebook">FB</a>
+                        <a href="#" class="bg-border-dark text-text-white w-10 h-10 flex items-center justify-center no-underline hover:bg-text-white hover:text-primary-black transition-colors" aria-label="Twitter">TW</a>
                     </div>
                 </div>
             </div>
-            <div class="footer-bottom">
-                <p>Copyright © 2025 himora.art | Powered by himora.art</p>
+            <div class="border-t border-border-dark pt-8 text-center">
+                <p class="text-text-gray text-sm">Copyright © 2025 himora.art | Powered by himora.art</p>
             </div>
         </div>
     </footer>

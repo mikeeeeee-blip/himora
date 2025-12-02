@@ -124,12 +124,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const finalProducts = carouselProducts.slice(0, 4);
                     
                     carouselTrack.innerHTML = finalProducts.map(product => `
-                        <div class="carousel-item">
+                        <div class="carousel-item min-w-[280px] flex-shrink-0">
                             <a href="/product/${product.slug}">
-                                <div class="product-card-dark">
-                                    <img src="${product.image}" alt="${product.title}" class="product-img" loading="lazy">
-                                    <h3 class="product-name">${product.title}</h3>
-                                    <p class="product-price">₹${product.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <div class="product-card-dark bg-primary-black border border-border-dark overflow-hidden group cursor-pointer hover:border-text-white transition-colors">
+                                    <img src="${product.image}" alt="${product.title}" class="product-img w-full h-[400px] object-cover transition-transform duration-600 group-hover:scale-105" loading="lazy">
+                                    <h3 class="product-name text-lg font-semibold mb-2 px-4 mt-4 text-text-white">${product.title}</h3>
+                                    <p class="product-price text-xl font-bold mb-4 px-4 text-text-white">₹${product.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
                             </a>
                         </div>
@@ -258,9 +258,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     const finalProducts = selectedProducts.slice(0, 4);
                     
                     featuredGrid.innerHTML = finalProducts.map(product => `
-                        <a href="/product/${product.slug}" class="accessory-item-link">
-                            <div class="accessory-item">
-                                <img src="${product.image}" alt="${product.title}" class="accessory-img" loading="lazy">
+                        <a href="/product/${product.slug}" class="accessory-item-link block">
+                            <div class="accessory-item bg-primary-black border border-border-dark overflow-hidden group cursor-pointer hover:border-text-white transition-colors">
+                                <img src="${product.image}" alt="${product.title}" class="accessory-img w-full h-[400px] object-cover transition-transform duration-600 group-hover:scale-105" loading="lazy">
                                 <h4 class="accessory-name">${product.title}</h4>
                             </div>
                         </a>

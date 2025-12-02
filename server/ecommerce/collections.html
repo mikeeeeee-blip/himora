@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collections - Himora | himora.art</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-black': '#000000',
+                        'primary-white': '#ffffff',
+                        'gray-light': '#f5f5f5',
+                        'gray-medium': '#e0e0e0',
+                        'gray-dark': '#666666',
+                        'gray-darker': '#333333',
+                        'text-white': '#ffffff',
+                        'text-gray': '#cccccc',
+                        'border-dark': '#333333',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Custom CSS for GSAP animations -->
+    <link rel="stylesheet" href="/style.css">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <!-- GSAP ScrollTrigger -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+</head>
+<body class="bg-primary-black text-text-white font-sans antialiased overflow-x-hidden">
+    <!-- Header -->
+    <header class="bg-primary-black border-b border-border-dark sticky top-0 z-50">
+        <div class="py-4 border-b border-border-dark">
+            <div class="max-w-[1400px] mx-auto px-10">
+                <div class="flex justify-between items-center">
+                    <button class="bg-transparent border-none text-text-white text-2xl cursor-pointer hover:opacity-70 transition-opacity" aria-label="Back" onclick="window.history.back()">
+                        <i data-lucide="arrow-left"></i>
+                    </button>
+                    <div class="text-xl font-semibold">
+                        <a href="/" class="text-text-white no-underline hover:text-text-gray transition-colors">himora.art</a>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <button class="bg-transparent border-none text-text-white text-xl cursor-pointer hover:opacity-70 transition-opacity" aria-label="User">
+                            <i data-lucide="user"></i>
+                        </button>
+                        <button class="bg-transparent border-none text-text-white text-xl cursor-pointer hover:opacity-70 transition-opacity relative" aria-label="Shopping Cart" onclick="window.location.href='/cart.html'">
+                            <i data-lucide="shopping-bag"></i>
+                            <span class="cart-badge absolute -top-2 -right-2 bg-text-white text-primary-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center" id="cart-badge"></span>
+                        </button>
+                        <button class="bg-transparent border-none text-text-white text-xl cursor-pointer hover:opacity-70 transition-opacity" aria-label="Search">
+                            <i data-lucide="search"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <nav class="py-4">
+            <div class="max-w-[1400px] mx-auto px-10">
+                <ul class="flex justify-center items-center gap-8 list-none m-0 p-0">
+                    <li><a href="/" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">Home</a></li>
+                    <li><a href="/shop.html" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">Shop</a></li>
+                    <li><a href="/collections.html" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">Collections</a></li>
+                    <li><a href="/about.html" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">About</a></li>
+                    <li><a href="/contact.html" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">Contact</a></li>
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Collections Page Hero -->
+    <section class="relative w-full h-[400px] overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-r from-primary-black via-gray-darker to-primary-black"></div>
+        <div class="relative h-full flex flex-col items-center justify-center text-center px-4">
+            <h1 class="text-5xl md:text-6xl font-bold mb-4 uppercase tracking-wider">Our Collections</h1>
+            <p class="text-text-gray text-lg max-w-2xl">Discover our curated selection of premium fashion collections</p>
+        </div>
+    </section>
+
+    <!-- Collections Grid -->
+    <section class="py-16">
+        <div class="max-w-[1400px] mx-auto px-10">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Casual Collection -->
+                <a href="/shop.html?category=Casual" class="group block">
+                    <div class="collection-card relative overflow-hidden bg-primary-black border border-border-dark hover:border-text-white transition-all duration-300 h-full">
+                        <div class="relative h-[500px] overflow-hidden">
+                            <img src="/assets/casuals/female/image.png" alt="Casual Collection" class="w-full h-full object-cover transition-transform duration-600 group-hover:scale-110">
+                            <div class="absolute inset-0 bg-gradient-to-t from-primary-black via-transparent to-transparent opacity-60"></div>
+                            <div class="absolute bottom-0 left-0 right-0 p-8">
+                                <h2 class="text-3xl font-bold mb-2 uppercase tracking-wider">Casual Collection</h2>
+                                <p class="text-text-gray mb-4">Comfortable and stylish everyday wear</p>
+                                <span class="inline-flex items-center gap-2 text-text-white uppercase text-sm font-semibold tracking-wider group-hover:gap-4 transition-all">
+                                    Shop Now <i data-lucide="arrow-right"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Formal Collection -->
+                <a href="/shop.html?category=Formal" class="group block">
+                    <div class="collection-card relative overflow-hidden bg-primary-black border border-border-dark hover:border-text-white transition-all duration-300 h-full">
+                        <div class="relative h-[500px] overflow-hidden">
+                            <img src="/assets/formal/female/image.png" alt="Formal Collection" class="w-full h-full object-cover transition-transform duration-600 group-hover:scale-110">
+                            <div class="absolute inset-0 bg-gradient-to-t from-primary-black via-transparent to-transparent opacity-60"></div>
+                            <div class="absolute bottom-0 left-0 right-0 p-8">
+                                <h2 class="text-3xl font-bold mb-2 uppercase tracking-wider">Formal Collection</h2>
+                                <p class="text-text-gray mb-4">Professional and elegant attire</p>
+                                <span class="inline-flex items-center gap-2 text-text-white uppercase text-sm font-semibold tracking-wider group-hover:gap-4 transition-all">
+                                    Shop Now <i data-lucide="arrow-right"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Trousers Collection -->
+                <a href="/shop.html?category=Trousers" class="group block">
+                    <div class="collection-card relative overflow-hidden bg-primary-black border border-border-dark hover:border-text-white transition-all duration-300 h-full">
+                        <div class="relative h-[500px] overflow-hidden">
+                            <img src="/assets/trousers/female/image.png" alt="Trousers Collection" class="w-full h-full object-cover transition-transform duration-600 group-hover:scale-110">
+                            <div class="absolute inset-0 bg-gradient-to-t from-primary-black via-transparent to-transparent opacity-60"></div>
+                            <div class="absolute bottom-0 left-0 right-0 p-8">
+                                <h2 class="text-3xl font-bold mb-2 uppercase tracking-wider">Trousers Collection</h2>
+                                <p class="text-text-gray mb-4">Perfect fit for every occasion</p>
+                                <span class="inline-flex items-center gap-2 text-text-white uppercase text-sm font-semibold tracking-wider group-hover:gap-4 transition-all">
+                                    Shop Now <i data-lucide="arrow-right"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Jeans Collection -->
+                <a href="/shop.html?category=Jeans" class="group block">
+                    <div class="collection-card relative overflow-hidden bg-primary-black border border-border-dark hover:border-text-white transition-all duration-300 h-full">
+                        <div class="relative h-[500px] overflow-hidden">
+                            <img src="/assets/jeans/female/image.png" alt="Jeans Collection" class="w-full h-full object-cover transition-transform duration-600 group-hover:scale-110">
+                            <div class="absolute inset-0 bg-gradient-to-t from-primary-black via-transparent to-transparent opacity-60"></div>
+                            <div class="absolute bottom-0 left-0 right-0 p-8">
+                                <h2 class="text-3xl font-bold mb-2 uppercase tracking-wider">Jeans Collection</h2>
+                                <p class="text-text-gray mb-4">Classic denim for everyone</p>
+                                <span class="inline-flex items-center gap-2 text-text-white uppercase text-sm font-semibold tracking-wider group-hover:gap-4 transition-all">
+                                    Shop Now <i data-lucide="arrow-right"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Shoes Collection -->
+                <a href="/shop.html?category=Shoes" class="group block">
+                    <div class="collection-card relative overflow-hidden bg-primary-black border border-border-dark hover:border-text-white transition-all duration-300 h-full">
+                        <div class="relative h-[500px] overflow-hidden">
+                            <img src="/assets/shoes/image.png" alt="Shoes Collection" class="w-full h-full object-cover transition-transform duration-600 group-hover:scale-110">
+                            <div class="absolute inset-0 bg-gradient-to-t from-primary-black via-transparent to-transparent opacity-60"></div>
+                            <div class="absolute bottom-0 left-0 right-0 p-8">
+                                <h2 class="text-3xl font-bold mb-2 uppercase tracking-wider">Shoes Collection</h2>
+                                <p class="text-text-gray mb-4">Step into sophistication</p>
+                                <span class="inline-flex items-center gap-2 text-text-white uppercase text-sm font-semibold tracking-wider group-hover:gap-4 transition-all">
+                                    Shop Now <i data-lucide="arrow-right"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- All Products Collection -->
+                <a href="/shop.html" class="group block">
+                    <div class="collection-card relative overflow-hidden bg-gray-darker border border-border-dark hover:border-text-white transition-all duration-300 h-full flex items-center justify-center">
+                        <div class="text-center p-8">
+                            <div class="w-24 h-24 mx-auto mb-6 bg-primary-black rounded-full flex items-center justify-center border-2 border-text-white">
+                                <i data-lucide="grid" class="w-12 h-12 text-text-white"></i>
+                            </div>
+                            <h2 class="text-3xl font-bold mb-2 uppercase tracking-wider">All Products</h2>
+                            <p class="text-text-gray mb-4">Browse our complete catalog</p>
+                            <span class="inline-flex items-center gap-2 text-text-white uppercase text-sm font-semibold tracking-wider group-hover:gap-4 transition-all">
+                                View All <i data-lucide="arrow-right"></i>
+                            </span>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Featured Products Section -->
+    <section class="py-16 bg-gray-darker">
+        <div class="max-w-[1400px] mx-auto px-10">
+            <h2 class="text-4xl font-bold text-center mb-12 uppercase tracking-wider">Featured from Collections</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="featured-products">
+                <!-- Products will be loaded dynamically -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-primary-black border-t border-border-dark py-16">
+        <div class="max-w-[1400px] mx-auto px-10">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">Shop</h4>
+                    <ul class="list-none p-0 m-0 space-y-2">
+                        <li><a href="/shop.html" class="text-text-gray no-underline hover:text-text-white transition-colors">All Products</a></li>
+                        <li><a href="/shop.html?category=Casual" class="text-text-gray no-underline hover:text-text-white transition-colors">Casual Collection</a></li>
+                        <li><a href="/shop.html?category=Formal" class="text-text-gray no-underline hover:text-text-white transition-colors">Formal Collection</a></li>
+                        <li><a href="/shop.html?category=Trousers" class="text-text-gray no-underline hover:text-text-white transition-colors">Trousers Collection</a></li>
+                        <li><a href="/shop.html?category=Jeans" class="text-text-gray no-underline hover:text-text-white transition-colors">Jeans Collection</a></li>
+                        <li><a href="/shop.html?category=Shoes" class="text-text-gray no-underline hover:text-text-white transition-colors">Shoes Collection</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">About Us</h4>
+                    <ul class="list-none p-0 m-0 space-y-2">
+                        <li><a href="/about.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Our Story</a></li>
+                        <li><a href="/contact.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Contact Us</a></li>
+                        <li><a href="#" class="text-text-gray no-underline hover:text-text-white transition-colors">Careers</a></li>
+                        <li><a href="#" class="text-text-gray no-underline hover:text-text-white transition-colors">Press</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">Help</h4>
+                    <ul class="list-none p-0 m-0 space-y-2">
+                        <li><a href="/contact.html" class="text-text-gray no-underline hover:text-text-white transition-colors">FAQ</a></li>
+                        <li><a href="/shipping-policy.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Shipping</a></li>
+                        <li><a href="/refund-policy.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Returns</a></li>
+                        <li><a href="/contact.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Size Guide</a></li>
+                        <li><a href="/contact.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Track Order</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">Legal</h4>
+                    <ul class="list-none p-0 m-0 space-y-2">
+                        <li><a href="/privacy-policy.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Privacy Policy</a></li>
+                        <li><a href="/terms-conditions.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Terms & Conditions</a></li>
+                        <li><a href="/refund-policy.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Refund Policy</a></li>
+                        <li><a href="/shipping-policy.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Shipping Policy</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">Follow Us</h4>
+                    <div class="flex flex-wrap gap-2">
+                        <a href="#" class="bg-border-dark text-text-white w-10 h-10 flex items-center justify-center no-underline hover:bg-text-white hover:text-primary-black transition-colors" aria-label="Instagram">IG</a>
+                        <a href="#" class="bg-border-dark text-text-white w-10 h-10 flex items-center justify-center no-underline hover:bg-text-white hover:text-primary-black transition-colors" aria-label="Facebook">FB</a>
+                        <a href="#" class="bg-border-dark text-text-white w-10 h-10 flex items-center justify-center no-underline hover:bg-text-white hover:text-primary-black transition-colors" aria-label="Twitter">TW</a>
+                        <a href="#" class="bg-border-dark text-text-white w-10 h-10 flex items-center justify-center no-underline hover:bg-text-white hover:text-primary-black transition-colors" aria-label="Pinterest">PI</a>
+                        <a href="#" class="bg-border-dark text-text-white w-10 h-10 flex items-center justify-center no-underline hover:bg-text-white hover:text-primary-black transition-colors" aria-label="YouTube">YT</a>
+                        <a href="#" class="bg-border-dark text-text-white w-10 h-10 flex items-center justify-center no-underline hover:bg-text-white hover:text-primary-black transition-colors" aria-label="TikTok">TT</a>
+                    </div>
+                </div>
+            </div>
+            <div class="border-t border-border-dark pt-8 text-center">
+                <p class="text-text-gray text-sm">Copyright © 2025 himora.art | Powered by himora.art</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/cart.js"></script>
+    <script>
+        // Initialize Lucide icons
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+
+        // Load featured products
+        document.addEventListener('DOMContentLoaded', function() {
+            const featuredProducts = document.getElementById('featured-products');
+            
+            if (featuredProducts) {
+                fetch('/api/ecommerce/products')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.products) {
+                            // Get 4 random products from different categories
+                            const categories = ['Casual', 'Formal', 'Trousers', 'Jeans', 'Shoes'];
+                            const selectedProducts = [];
+                            
+                            categories.forEach(category => {
+                                const categoryProducts = data.products.filter(p => p.category === category);
+                                if (categoryProducts.length > 0) {
+                                    const randomProduct = categoryProducts[Math.floor(Math.random() * categoryProducts.length)];
+                                    if (!selectedProducts.find(p => p.slug === randomProduct.slug)) {
+                                        selectedProducts.push(randomProduct);
+                                    }
+                                }
+                            });
+                            
+                            // Fill remaining slots if needed
+                            while (selectedProducts.length < 4 && selectedProducts.length < data.products.length) {
+                                const randomProduct = data.products[Math.floor(Math.random() * data.products.length)];
+                                if (!selectedProducts.find(p => p.slug === randomProduct.slug)) {
+                                    selectedProducts.push(randomProduct);
+                                }
+                            }
+                            
+                            const finalProducts = selectedProducts.slice(0, 4);
+                            
+                            featuredProducts.innerHTML = finalProducts.map(product => `
+                                <div class="product-card-dark bg-primary-black border border-border-dark overflow-hidden group cursor-pointer hover:border-text-white transition-colors">
+                                    <a href="/product/${product.slug}">
+                                        <img src="${product.image}" alt="${product.title}" class="product-img-dark w-full h-[400px] object-cover transition-transform duration-600 group-hover:scale-105" loading="lazy">
+                                    </a>
+                                    <div class="product-category-dark text-text-gray text-xs uppercase tracking-wider mt-4 mb-2 px-4">${product.category}</div>
+                                    <h3 class="product-name-dark text-lg font-semibold mb-2 px-4">
+                                        <a href="/product/${product.slug}" class="text-text-white no-underline hover:text-text-gray transition-colors">${product.title}</a>
+                                    </h3>
+                                    <div class="product-price-dark text-xl font-bold mb-4 px-4">₹${product.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                    <a href="/product/${product.slug}" class="btn-view-product-dark block mx-4 mb-4 bg-text-white text-primary-black px-6 py-2 text-center no-underline font-semibold uppercase tracking-wider hover:bg-text-gray transition-colors">View Product</a>
+                                </div>
+                            `).join('');
+                            
+                            // Re-initialize Lucide icons
+                            if (typeof lucide !== 'undefined') {
+                                lucide.createIcons();
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading featured products:', error);
+                    });
+            }
+        });
+    </script>
+</body>
+</html>
+

@@ -4,90 +4,114 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shopping Cart - Himora | himora.art</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-black': '#000000',
+                        'primary-white': '#ffffff',
+                        'gray-light': '#f5f5f5',
+                        'gray-medium': '#e0e0e0',
+                        'gray-dark': '#666666',
+                        'gray-darker': '#333333',
+                        'text-white': '#ffffff',
+                        'text-gray': '#cccccc',
+                        'border-dark': '#333333',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Custom CSS for GSAP animations -->
     <link rel="stylesheet" href="/style.css">
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- GSAP -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 </head>
-<body>
+<body class="bg-primary-black text-text-white font-sans antialiased overflow-x-hidden">
     <!-- Header -->
-    <header class="site-header dark-header">
-        <div class="header-top">
-            <div class="container">
-                <div class="header-top-content">
-                    <button class="back-btn" aria-label="Back" onclick="window.history.back()">
+    <header class="bg-primary-black border-b border-border-dark sticky top-0 z-50">
+        <div class="py-4 border-b border-border-dark">
+            <div class="max-w-[1400px] mx-auto px-10">
+                <div class="flex justify-between items-center">
+                    <button class="bg-transparent border-none text-text-white text-2xl cursor-pointer hover:opacity-70 transition-opacity" aria-label="Back" onclick="window.history.back()">
                         <i data-lucide="arrow-left"></i>
                     </button>
-                    <div class="logo">
-                        <a href="/">himora.art</a>
+                    <div class="text-xl font-semibold">
+                        <a href="/" class="text-text-white no-underline hover:text-text-gray transition-colors">himora.art</a>
                     </div>
-                    <div class="header-icons">
-                        <button class="icon-btn" aria-label="User">
+                    <div class="flex items-center gap-4">
+                        <button class="bg-transparent border-none text-text-white text-xl cursor-pointer hover:opacity-70 transition-opacity" aria-label="User">
                             <i data-lucide="user"></i>
                         </button>
-                        <button class="icon-btn cart-icon-btn" aria-label="Shopping Cart" onclick="window.location.href='/cart.html'">
+                        <button class="bg-transparent border-none text-text-white text-xl cursor-pointer hover:opacity-70 transition-opacity relative" aria-label="Shopping Cart" onclick="window.location.href='/cart.html'">
                             <i data-lucide="shopping-bag"></i>
-                            <span class="cart-badge" id="cart-badge"></span>
+                            <span class="cart-badge absolute -top-2 -right-2 bg-text-white text-primary-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center" id="cart-badge"></span>
                         </button>
-                        <button class="icon-btn" aria-label="Search">
+                        <button class="bg-transparent border-none text-text-white text-xl cursor-pointer hover:opacity-70 transition-opacity" aria-label="Search">
                             <i data-lucide="search"></i>
                         </button>
                     </div>
                 </div>
             </div>
         </div>
-        <nav class="header-nav">
-            <div class="container">
-                <ul class="nav-menu">
-                    <li><a href="/">Home</a></li>
-                    <li><a href="/shop.html">Shop</a></li>
-                    <li><a href="/shop.html">Collections</a></li>
-                    <li><a href="/about.html">About</a></li>
-                    <li><a href="/contact.html">Contact</a></li>
+        <nav class="py-4">
+            <div class="max-w-[1400px] mx-auto px-10">
+                <ul class="flex justify-center items-center gap-8 list-none m-0 p-0">
+                    <li><a href="/" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">Home</a></li>
+                    <li><a href="/shop.html" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">Shop</a></li>
+                    <li><a href="/collections.html" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">Collections</a></li>
+                    <li><a href="/about.html" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">About</a></li>
+                    <li><a href="/contact.html" class="text-text-white no-underline hover:text-text-gray transition-colors text-sm uppercase tracking-wider">Contact</a></li>
                 </ul>
             </div>
         </nav>
     </header>
 
     <!-- Cart Page -->
-    <main class="cart-page-dark">
-        <div class="container">
-            <h1 class="page-title-dark">Shopping Cart</h1>
+    <main class="py-16 min-h-screen">
+        <div class="max-w-[1400px] mx-auto px-10">
+            <h1 class="text-4xl font-bold mb-8 uppercase tracking-wider">Shopping Cart</h1>
             
-            <div id="cart-container" class="cart-container-dark">
-                <div id="cart-loading" class="cart-loading-dark">
-                    <div class="loading-spinner-dark"></div>
-                    <p>Loading cart...</p>
+            <div id="cart-container">
+                <div id="cart-loading" class="flex flex-col items-center justify-center py-20">
+                    <div class="loading-spinner-dark w-12 h-12 border-4 border-border-dark border-t-text-white rounded-full animate-spin mb-4"></div>
+                    <p class="text-text-gray">Loading cart...</p>
                 </div>
                 
-                <div id="cart-content" style="display: none;" class="cart-content-grid">
-                    <div class="cart-items-section">
-                        <div id="cart-items-list" class="cart-items-list-dark">
+                <div id="cart-content" style="display: none;" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2">
+                        <div id="cart-items-list" class="space-y-4">
                             <!-- Cart items will be loaded here -->
                         </div>
                     </div>
                     
-                    <div class="cart-summary-section">
-                        <div class="cart-summary-dark">
-                            <h2 class="cart-summary-title">Order Summary</h2>
-                            <div class="summary-row-dark">
-                                <span>Subtotal:</span>
-                                <span id="cart-subtotal">₹0.00</span>
+                    <div class="lg:col-span-1">
+                        <div class="bg-primary-black border border-border-dark p-6">
+                            <h2 class="text-2xl font-semibold mb-6 uppercase tracking-wider">Order Summary</h2>
+                            <div class="space-y-4 mb-6">
+                                <div class="flex justify-between text-text-gray">
+                                    <span>Subtotal:</span>
+                                    <span id="cart-subtotal" class="text-text-white font-semibold">₹0.00</span>
+                                </div>
+                                <div class="flex justify-between text-text-gray">
+                                    <span>Shipping:</span>
+                                    <span class="text-text-white font-semibold">Free</span>
+                                </div>
+                                <div class="flex justify-between text-xl font-bold pt-4 border-t border-border-dark">
+                                    <span>Total:</span>
+                                    <span id="cart-total" class="text-text-white">₹0.00</span>
+                                </div>
                             </div>
-                            <div class="summary-row-dark">
-                                <span>Shipping:</span>
-                                <span>Free</span>
-                            </div>
-                            <div class="summary-row-dark summary-total-dark">
-                                <span>Total:</span>
-                                <span id="cart-total">₹0.00</span>
-                            </div>
-                            <button class="btn-primary-dark btn-checkout-full-dark" id="proceed-checkout-btn">
+                            <button class="btn-primary-dark btn-checkout-full-dark bg-text-white text-primary-black px-8 py-3 w-full font-semibold uppercase tracking-wider hover:bg-text-gray transition-colors flex items-center justify-center gap-2 mb-4" id="proceed-checkout-btn">
                                 <i data-lucide="credit-card"></i>
                                 Proceed to Checkout
                             </button>
-                            <a href="/shop.html" class="btn-secondary-dark btn-continue-shopping">
+                            <a href="/shop.html" class="btn-secondary-dark btn-continue-shopping bg-transparent border-2 border-text-white text-text-white px-8 py-3 w-full font-semibold uppercase tracking-wider hover:bg-text-white hover:text-primary-black transition-colors flex items-center justify-center gap-2">
                                 <i data-lucide="arrow-left"></i>
                                 Continue Shopping
                             </a>
@@ -95,11 +119,11 @@
                     </div>
                 </div>
                 
-                <div id="cart-empty" class="cart-empty-dark" style="display: none;">
-                    <i data-lucide="shopping-bag" class="empty-cart-icon"></i>
-                    <h2>Your cart is empty</h2>
-                    <p>Looks like you haven't added anything to your cart yet.</p>
-                    <a href="/shop.html" class="btn-primary-dark">
+                <div id="cart-empty" class="flex flex-col items-center justify-center py-20 text-center" style="display: none;">
+                    <i data-lucide="shopping-bag" class="w-24 h-24 text-text-gray mb-6"></i>
+                    <h2 class="text-3xl font-bold mb-4">Your cart is empty</h2>
+                    <p class="text-text-gray mb-8">Looks like you haven't added anything to your cart yet.</p>
+                    <a href="/shop.html" class="bg-text-white text-primary-black px-8 py-3 no-underline font-semibold uppercase tracking-wider hover:bg-text-gray transition-colors inline-flex items-center gap-2">
                         <i data-lucide="shopping-bag"></i>
                         Start Shopping
                     </a>
@@ -109,37 +133,37 @@
     </main>
 
     <!-- Footer -->
-    <footer class="site-footer dark-footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-column">
-                    <h4 class="footer-heading">Shop</h4>
-                    <ul class="footer-links">
-                        <li><a href="/shop.html">All Products</a></li>
-                        <li><a href="/shop.html?category=Work%20%26%20Office">Work Collection</a></li>
-                        <li><a href="/shop.html?category=Casual">Casual Collection</a></li>
-                        <li><a href="/shop.html?category=Evening%20Dresses">Evening Collection</a></li>
+    <footer class="bg-primary-black border-t border-border-dark py-16">
+        <div class="max-w-[1400px] mx-auto px-10">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">Shop</h4>
+                    <ul class="list-none p-0 m-0 space-y-2">
+                        <li><a href="/shop.html" class="text-text-gray no-underline hover:text-text-white transition-colors">All Products</a></li>
+                        <li><a href="/shop.html?category=Work%20%26%20Office" class="text-text-gray no-underline hover:text-text-white transition-colors">Work Collection</a></li>
+                        <li><a href="/shop.html?category=Casual" class="text-text-gray no-underline hover:text-text-white transition-colors">Casual Collection</a></li>
+                        <li><a href="/shop.html?category=Evening%20Dresses" class="text-text-gray no-underline hover:text-text-white transition-colors">Evening Collection</a></li>
                     </ul>
                 </div>
-                <div class="footer-column">
-                    <h4 class="footer-heading">About Us</h4>
-                    <ul class="footer-links">
-                        <li><a href="/about.html">Our Story</a></li>
-                        <li><a href="/contact.html">Contact Us</a></li>
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">About Us</h4>
+                    <ul class="list-none p-0 m-0 space-y-2">
+                        <li><a href="/about.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Our Story</a></li>
+                        <li><a href="/contact.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Contact Us</a></li>
                     </ul>
                 </div>
-                <div class="footer-column">
-                    <h4 class="footer-heading">Help</h4>
-                    <ul class="footer-links">
-                        <li><a href="/privacy-policy.html">Privacy Policy</a></li>
-                        <li><a href="/refund-policy.html">Refund Policy</a></li>
-                        <li><a href="/terms-conditions.html">Terms & Conditions</a></li>
-                        <li><a href="/shipping-policy.html">Shipping Policy</a></li>
+                <div>
+                    <h4 class="text-lg font-semibold mb-4 uppercase tracking-wider">Help</h4>
+                    <ul class="list-none p-0 m-0 space-y-2">
+                        <li><a href="/privacy-policy.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Privacy Policy</a></li>
+                        <li><a href="/refund-policy.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Refund Policy</a></li>
+                        <li><a href="/terms-conditions.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Terms & Conditions</a></li>
+                        <li><a href="/shipping-policy.html" class="text-text-gray no-underline hover:text-text-white transition-colors">Shipping Policy</a></li>
                     </ul>
                 </div>
             </div>
-            <div class="footer-bottom">
-                <p>Copyright © 2025 himora.art | Powered by himora.art</p>
+            <div class="border-t border-border-dark pt-8 text-center">
+                <p class="text-text-gray text-sm">Copyright © 2025 himora.art | Powered by himora.art</p>
             </div>
         </div>
     </footer>
@@ -154,4 +178,3 @@
     </script>
 </body>
 </html>
-
