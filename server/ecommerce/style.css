@@ -286,14 +286,20 @@ img {
 /* Just Dropped Section */
 .just-dropped-section {
     background-color: var(--gray-darker);
-    padding-bottom: 80px;
+    padding: 60px 0;
+}
+
+.just-dropped-section .container {
+    max-width: 100%;
+    padding: 0 20px;
 }
 
 .product-carousel {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 15px;
+    padding: 0;
 }
 
 .carousel-container {
@@ -303,9 +309,10 @@ img {
 
 .carousel-track {
     display: flex;
-    gap: 30px;
+    gap: 15px;
     transition: transform 0.5s ease;
     will-change: transform;
+    padding: 0;
 }
 
 .carousel-item {
@@ -316,7 +323,7 @@ img {
 .product-card-dark {
     background-color: var(--primary-black);
     border: 1px solid var(--border-dark);
-    padding: 20px;
+    padding: 15px;
     text-align: center;
     transition: transform 0.3s;
 }
@@ -369,13 +376,31 @@ img {
 /* Collection Banners */
 .collection-banners {
     background-color: var(--primary-black);
-    padding: 80px 0;
+    padding: 60px 0;
+}
+
+.collection-banners .container {
+    max-width: 100%;
+    padding: 0 20px;
 }
 
 .banners-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 15px;
+    padding: 0;
+}
+
+@media (min-width: 1200px) {
+    .banners-grid {
+        grid-template-columns: repeat(5, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .banners-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .collection-banner {
@@ -384,6 +409,7 @@ img {
     overflow: hidden;
     cursor: pointer;
     display: block;
+    margin: 0;
 }
 
 .collection-banners a {
@@ -409,7 +435,7 @@ img {
     left: 0;
     right: 0;
     background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-    padding: 40px 20px 20px;
+    padding: 30px 15px 15px;
 }
 
 .banner-title {
@@ -423,13 +449,163 @@ img {
 /* Explore Section */
 .explore-section {
     background-color: var(--gray-darker);
-    padding-bottom: 80px;
+    padding: 80px 0;
+}
+
+.explore-section-mens {
+    background-color: var(--primary-black);
+    padding: 80px 0;
+}
+
+/* Category CTAs Section */
+.category-ctas-section {
+    background-color: var(--gray-darker);
+    padding: 80px 0;
+}
+
+.category-ctas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 30px;
+    margin-top: 50px;
+}
+
+.category-cta-card {
+    background: linear-gradient(135deg, var(--gray-darker) 0%, var(--primary-black) 100%);
+    border: 1px solid var(--gray-border);
+    border-radius: 12px;
+    padding: 40px 30px;
+    text-decoration: none;
+    color: var(--text-white);
+    transition: all 0.4s ease;
+    display: block;
+    position: relative;
+    overflow: hidden;
+}
+
+.category-cta-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+    transition: left 0.5s ease;
+}
+
+.category-cta-card:hover::before {
+    left: 100%;
+}
+
+.category-cta-card:hover {
+    transform: translateY(-8px);
+    border-color: var(--accent-gold);
+    box-shadow: 0 10px 30px rgba(212, 175, 55, 0.2);
+}
+
+.cta-card-content {
+    position: relative;
+    z-index: 1;
+}
+
+.cta-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-white);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.cta-description {
+    font-size: 16px;
+    color: var(--text-gray);
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+
+.cta-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent-gold);
+    font-weight: 600;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: gap 0.3s ease;
+}
+
+.category-cta-card:hover .cta-link {
+    gap: 12px;
+}
+
+.cta-link i {
+    width: 18px;
+    height: 18px;
 }
 
 .accessories-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 30px;
+}
+
+/* Formal Collection Section */
+.formal-collection-section {
+    background-color: var(--primary-black);
+    padding: 80px 0;
+}
+
+.formal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 30px;
+}
+
+/* Trousers Collection Section */
+.trousers-collection-section {
+    background-color: var(--gray-darker);
+    padding: 80px 0;
+}
+
+.trousers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 30px;
+}
+
+/* Jeans Collection Section */
+.jeans-collection-section {
+    background-color: var(--primary-black);
+    padding: 80px 0;
+}
+
+.jeans-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 30px;
+}
+
+/* Shoes Collection Section */
+.shoes-collection-section {
+    background-color: var(--gray-darker);
+    padding: 80px 0;
+}
+
+.shoes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 30px;
+}
+
+.section-subtitle {
+    font-size: 18px;
+    color: var(--text-gray);
+    text-align: center;
+    margin-bottom: 50px;
+    line-height: 1.8;
 }
 
 .accessory-item-link {
@@ -797,8 +973,13 @@ img {
 
 /* Responsive Design */
 @media (max-width: 1200px) {
+    .collection-banners .container {
+        padding: 0 15px;
+    }
+    
     .banners-grid {
         grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
     }
     
     .accessories-grid {
@@ -834,8 +1015,17 @@ img {
         font-size: 12px;
     }
     
+    .collection-banners .container {
+        padding: 0 15px;
+    }
+    
     .banners-grid {
         grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .collection-banner {
+        height: 500px;
     }
     
     .accessories-grid {
@@ -862,8 +1052,20 @@ img {
         gap: 15px;
     }
     
+    .just-dropped-section .container {
+        padding: 0 15px;
+    }
+    
     .carousel-item {
-        min-width: 240px;
+        min-width: 250px;
+    }
+    
+    .product-carousel {
+        gap: 10px;
+    }
+    
+    .carousel-track {
+        gap: 10px;
     }
 }
 

@@ -61,9 +61,10 @@
                     <select id="category-filter" class="filter-select-dark">
                         <option value="all">All Categories</option>
                         <option value="Casual">Casual</option>
-                        <option value="Work & Office">Work & Office</option>
-                        <option value="Evening Dresses">Evening Dresses</option>
-                        <option value="Activewear">Activewear</option>
+                        <option value="Formal">Formal</option>
+                        <option value="Trousers">Trousers</option>
+                        <option value="Jeans">Jeans</option>
+                        <option value="Shoes">Shoes</option>
                     </select>
                 </div>
                 <div class="filter-group-dark">
@@ -173,14 +174,11 @@
                         if (categoryParam) {
                             // Map URL category to filter value (handle both URL-encoded and lowercase)
                             const categoryMap = {
-                                'work': 'Work & Office',
-                                'work & office': 'Work & Office',
-                                'work%20%26%20office': 'Work & Office',
                                 'casual': 'Casual',
-                                'evening': 'Evening Dresses',
-                                'evening dresses': 'Evening Dresses',
-                                'evening%20dresses': 'Evening Dresses',
-                                'activewear': 'Activewear',
+                                'formal': 'Formal',
+                                'trousers': 'Trousers',
+                                'jeans': 'Jeans',
+                                'shoes': 'Shoes',
                                 'men': 'all', // Show all for men/women
                                 'women': 'all',
                                 'accessories': 'all'

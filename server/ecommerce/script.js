@@ -87,16 +87,43 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Product Carousel Functionality - Load products dynamically
+    // Product Carousel Functionality - Load 4 products (2 male, 2 female) with auto-scroll
     const carouselTrack = document.getElementById('carousel-track');
     if (carouselTrack) {
         fetch('/api/ecommerce/products')
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.products) {
-                    // Show first 8 products in carousel
-                    const carouselProducts = data.products.slice(0, 8);
-                    carouselTrack.innerHTML = carouselProducts.map(product => `
+                    // Separate male and female products
+                    const getGender = (product) => {
+                        if (product.image.includes('/female/')) return 'female';
+                        if (product.image.includes('/male/')) return 'male';
+                        return 'unisex';
+                    };
+                    
+                    const femaleProducts = data.products.filter(p => getGender(p) === 'female');
+                    const maleProducts = data.products.filter(p => getGender(p) === 'male');
+                    
+                    // Get 2 female and 2 male products with variety
+                    const selectedFemale = [
+                        ...femaleProducts.filter(p => p.category === 'Casual').slice(0, 1),
+                        ...femaleProducts.filter(p => p.category === 'Formal').slice(0, 1)
+                    ].filter(Boolean).slice(0, 2);
+                    
+                    const selectedMale = [
+                        ...maleProducts.filter(p => p.category === 'Casual').slice(0, 1),
+                        ...maleProducts.filter(p => p.category === 'Formal').slice(0, 1)
+                    ].filter(Boolean).slice(0, 2);
+                    
+                    // Mix them: female, male, female, male
+                    const carouselProducts = [];
+                    for (let i = 0; i < Math.max(selectedFemale.length, selectedMale.length); i++) {
+                        if (selectedFemale[i]) carouselProducts.push(selectedFemale[i]);
+                        if (selectedMale[i]) carouselProducts.push(selectedMale[i]);
+                    }
+                    const finalProducts = carouselProducts.slice(0, 4);
+                    
+                    carouselTrack.innerHTML = finalProducts.map(product => `
                         <div class="carousel-item">
                             <a href="/product/${product.slug}">
                                 <div class="product-card-dark">
@@ -111,6 +138,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Initialize carousel after products are loaded
                     initCarousel();
                     
+                    // Start auto-scroll
+                    startAutoScroll();
+                    
                     // Refresh animations after products load
                     if (typeof ScrollTrigger !== 'undefined') {
                         setTimeout(() => {
@@ -123,17 +153,111 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error loading carousel products:', error);
             });
     }
+    
+    // Auto-scroll functionality
+    let autoScrollInterval = null;
+    let isUserInteracting = false;
+    
+    function startAutoScroll() {
+        const carouselTrack = document.getElementById('carousel-track');
+        const carouselContainer = document.querySelector('.carousel-container');
+        if (!carouselTrack || !carouselContainer) return;
+        
+        // Clear any existing interval
+        if (autoScrollInterval) {
+            clearInterval(autoScrollInterval);
+        }
+        
+        // Auto-scroll every 3 seconds
+        autoScrollInterval = setInterval(() => {
+            if (isUserInteracting) return; // Don't auto-scroll if user is interacting
+            
+            const carouselItems = carouselTrack.querySelectorAll('.carousel-item');
+            if (carouselItems.length <= 1) return;
+            
+            const firstItem = carouselItems[0];
+            const itemWidth = firstItem.offsetWidth + 15; // width + gap
+            
+            // Move first item to end
+            carouselTrack.style.transition = 'transform 0.5s ease';
+            carouselTrack.style.transform = `translateX(-${itemWidth}px)`;
+            
+            setTimeout(() => {
+                carouselTrack.style.transition = 'none';
+                carouselTrack.appendChild(firstItem);
+                carouselTrack.style.transform = 'translateX(0)';
+            }, 500);
+        }, 3000);
+        
+        // Pause on hover
+        carouselContainer.addEventListener('mouseenter', () => {
+            isUserInteracting = true;
+        });
+        
+        carouselContainer.addEventListener('mouseleave', () => {
+            isUserInteracting = false;
+        });
+        
+        // Pause on manual navigation
+        const prevBtn = document.querySelector('.carousel-prev');
+        const nextBtn = document.querySelector('.carousel-next');
+        
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => {
+                isUserInteracting = true;
+                setTimeout(() => {
+                    isUserInteracting = false;
+                }, 5000);
+            });
+        }
+        
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                isUserInteracting = true;
+                setTimeout(() => {
+                    isUserInteracting = false;
+                }, 5000);
+            });
+        }
+    }
 
-    // Load accessories/products for "Explore the Women's Collections" section
-    const accessoriesGrid = document.getElementById('accessories-grid');
-    if (accessoriesGrid) {
+    // Load products for "Featured Collection" section - showing 2 male and 2 female products
+    const featuredGrid = document.getElementById('featured-grid');
+    if (featuredGrid) {
         fetch('/api/ecommerce/products')
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.products) {
-                    // Show 6 random or first 6 products
-                    const accessories = data.products.slice(0, 6);
-                    accessoriesGrid.innerHTML = accessories.map(product => `
+                    // Separate male and female products
+                    const getGender = (product) => {
+                        if (product.image.includes('/female/')) return 'female';
+                        if (product.image.includes('/male/')) return 'male';
+                        return 'unisex';
+                    };
+                    
+                    const femaleProducts = data.products.filter(p => getGender(p) === 'female');
+                    const maleProducts = data.products.filter(p => getGender(p) === 'male');
+                    
+                    // Get 2 female and 2 male products with variety
+                    const selectedFemale = [
+                        ...femaleProducts.filter(p => p.category === 'Casual').slice(0, 1),
+                        ...femaleProducts.filter(p => p.category === 'Formal').slice(0, 1)
+                    ].filter(Boolean).slice(0, 2);
+                    
+                    const selectedMale = [
+                        ...maleProducts.filter(p => p.category === 'Casual').slice(0, 1),
+                        ...maleProducts.filter(p => p.category === 'Formal').slice(0, 1)
+                    ].filter(Boolean).slice(0, 2);
+                    
+                    // Mix them: female, male, female, male
+                    const selectedProducts = [];
+                    for (let i = 0; i < Math.max(selectedFemale.length, selectedMale.length); i++) {
+                        if (selectedFemale[i]) selectedProducts.push(selectedFemale[i]);
+                        if (selectedMale[i]) selectedProducts.push(selectedMale[i]);
+                    }
+                    const finalProducts = selectedProducts.slice(0, 4);
+                    
+                    featuredGrid.innerHTML = finalProducts.map(product => `
                         <a href="/product/${product.slug}" class="accessory-item-link">
                             <div class="accessory-item">
                                 <img src="${product.image}" alt="${product.title}" class="accessory-img" loading="lazy">
@@ -142,7 +266,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </a>
                     `).join('');
                     
-                    // Refresh animations after accessories load
+                    // Refresh animations after products load
                     if (typeof ScrollTrigger !== 'undefined') {
                         setTimeout(() => {
                             ScrollTrigger.refresh();
@@ -151,8 +275,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(error => {
-                console.error('Error loading accessories:', error);
+                console.error('Error loading featured products:', error);
             });
+    }
+
+    // Initialize Lucide icons for category CTAs
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
     }
     
     function initCarousel() {
@@ -168,7 +297,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             function updateCarousel() {
                 if (carouselItems.length === 0) return;
-                const itemWidth = carouselItems[0].offsetWidth + 30; // width + gap
+                const itemWidth = carouselItems[0].offsetWidth + 15; // width + gap
                 const maxIndex = Math.max(0, totalItems - itemsToShow);
                 currentIndex = Math.min(currentIndex, maxIndex);
                 

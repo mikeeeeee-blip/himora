@@ -300,6 +300,323 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // ============ TROUSERS COLLECTION ANIMATIONS ============
+    const trousersProducts = document.querySelectorAll('.trousers-grid .product-card-dark');
+    trousersProducts.forEach((product, index) => {
+        const productImg = product.querySelector('.product-img-dark');
+
+        // Staggered grid reveal
+        gsap.from(product, {
+            opacity: 0,
+            y: 60,
+            scale: 0.9,
+            duration: 0.7,
+            ease: 'power3.out',
+            delay: index * 0.1,
+            scrollTrigger: {
+                trigger: product,
+                start: 'top 85%',
+                toggleActions: 'play none none none'
+            }
+        });
+
+        // Image reveal
+        if (productImg) {
+            gsap.from(productImg, {
+                scale: 1.2,
+                opacity: 0,
+                duration: 0.8,
+                ease: 'power2.out',
+                delay: index * 0.1 + 0.2,
+                scrollTrigger: {
+                    trigger: product,
+                    start: 'top 85%',
+                    toggleActions: 'play none none none'
+                }
+            });
+        }
+
+        // Hover effect
+        product.addEventListener('mouseenter', () => {
+            gsap.to(product, {
+                y: -10,
+                scale: 1.02,
+                duration: 0.4,
+                ease: 'power2.out'
+            });
+            if (productImg) {
+                gsap.to(productImg, {
+                    scale: 1.1,
+                    duration: 0.4,
+                    ease: 'power2.out'
+                });
+            }
+        });
+
+        product.addEventListener('mouseleave', () => {
+            gsap.to(product, {
+                y: 0,
+                scale: 1,
+                duration: 0.4,
+                ease: 'power2.out'
+            });
+            if (productImg) {
+                gsap.to(productImg, {
+                    scale: 1,
+                    duration: 0.4,
+                    ease: 'power2.out'
+                });
+            }
+        });
+    });
+
+    // ============ JEANS COLLECTION ANIMATIONS ============
+    const jeansProducts = document.querySelectorAll('.jeans-grid .product-card-dark');
+    jeansProducts.forEach((product, index) => {
+        const productImg = product.querySelector('.product-img-dark');
+
+        // Staggered grid reveal
+        gsap.from(product, {
+            opacity: 0,
+            y: 60,
+            scale: 0.9,
+            duration: 0.7,
+            ease: 'power3.out',
+            delay: index * 0.1,
+            scrollTrigger: {
+                trigger: product,
+                start: 'top 85%',
+                toggleActions: 'play none none none'
+            }
+        });
+
+        // Image reveal
+        if (productImg) {
+            gsap.from(productImg, {
+                scale: 1.2,
+                opacity: 0,
+                duration: 0.8,
+                ease: 'power2.out',
+                delay: index * 0.1 + 0.2,
+                scrollTrigger: {
+                    trigger: product,
+                    start: 'top 85%',
+                    toggleActions: 'play none none none'
+                }
+            });
+        }
+
+        // Hover effect
+        product.addEventListener('mouseenter', () => {
+            gsap.to(product, {
+                y: -10,
+                scale: 1.02,
+                duration: 0.4,
+                ease: 'power2.out'
+            });
+            if (productImg) {
+                gsap.to(productImg, {
+                    scale: 1.1,
+                    duration: 0.4,
+                    ease: 'power2.out'
+                });
+            }
+        });
+
+        product.addEventListener('mouseleave', () => {
+            gsap.to(product, {
+                y: 0,
+                scale: 1,
+                duration: 0.4,
+                ease: 'power2.out'
+            });
+            if (productImg) {
+                gsap.to(productImg, {
+                    scale: 1,
+                    duration: 0.4,
+                    ease: 'power2.out'
+                });
+            }
+        });
+    });
+
+    // ============ SHOES COLLECTION ANIMATIONS ============
+    const shoesProducts = document.querySelectorAll('.shoes-grid .product-card-dark');
+    shoesProducts.forEach((product, index) => {
+        const productImg = product.querySelector('.product-img-dark');
+
+        // Staggered grid reveal
+        gsap.from(product, {
+            opacity: 0,
+            y: 60,
+            scale: 0.9,
+            duration: 0.7,
+            ease: 'power3.out',
+            delay: index * 0.1,
+            scrollTrigger: {
+                trigger: product,
+                start: 'top 85%',
+                toggleActions: 'play none none none'
+            }
+        });
+
+        // Image reveal
+        if (productImg) {
+            gsap.from(productImg, {
+                scale: 1.2,
+                opacity: 0,
+                duration: 0.8,
+                ease: 'power2.out',
+                delay: index * 0.1 + 0.2,
+                scrollTrigger: {
+                    trigger: product,
+                    start: 'top 85%',
+                    toggleActions: 'play none none none'
+                }
+            });
+        }
+
+        // Hover effect
+        product.addEventListener('mouseenter', () => {
+            gsap.to(product, {
+                y: -10,
+                scale: 1.02,
+                duration: 0.4,
+                ease: 'power2.out'
+            });
+            if (productImg) {
+                gsap.to(productImg, {
+                    scale: 1.1,
+                    duration: 0.4,
+                    ease: 'power2.out'
+                });
+            }
+        });
+
+        product.addEventListener('mouseleave', () => {
+            gsap.to(product, {
+                y: 0,
+                scale: 1,
+                duration: 0.4,
+                ease: 'power2.out'
+            });
+            if (productImg) {
+                gsap.to(productImg, {
+                    scale: 1,
+                    duration: 0.4,
+                    ease: 'power2.out'
+                });
+            }
+        });
+    });
+
+    // ============ FORMAL COLLECTION ANIMATIONS ============
+    const formalProducts = document.querySelectorAll('.formal-grid .product-card-dark');
+    formalProducts.forEach((product, index) => {
+        const productImg = product.querySelector('.product-img-dark');
+
+        // Staggered grid reveal
+        gsap.from(product, {
+            opacity: 0,
+            y: 60,
+            scale: 0.9,
+            duration: 0.7,
+            ease: 'power3.out',
+            delay: index * 0.1,
+            scrollTrigger: {
+                trigger: product,
+                start: 'top 85%',
+                toggleActions: 'play none none none'
+            }
+        });
+
+        // Image reveal
+        if (productImg) {
+            gsap.from(productImg, {
+                scale: 1.2,
+                opacity: 0,
+                duration: 0.8,
+                ease: 'power2.out',
+                delay: index * 0.1 + 0.2,
+                scrollTrigger: {
+                    trigger: product,
+                    start: 'top 85%',
+                    toggleActions: 'play none none none'
+                }
+            });
+        }
+
+        // Hover effect
+        product.addEventListener('mouseenter', () => {
+            gsap.to(product, {
+                y: -10,
+                scale: 1.02,
+                duration: 0.4,
+                ease: 'power2.out'
+            });
+            if (productImg) {
+                gsap.to(productImg, {
+                    scale: 1.1,
+                    duration: 0.4,
+                    ease: 'power2.out'
+                });
+            }
+        });
+
+        product.addEventListener('mouseleave', () => {
+            gsap.to(product, {
+                y: 0,
+                scale: 1,
+                duration: 0.4,
+                ease: 'power2.out'
+            });
+            if (productImg) {
+                gsap.to(productImg, {
+                    scale: 1,
+                    duration: 0.4,
+                    ease: 'power2.out'
+                });
+            }
+        });
+    });
+
+    // ============ CATEGORY CTAs ANIMATIONS ============
+    const ctaCards = document.querySelectorAll('.category-cta-card');
+    ctaCards.forEach((card, index) => {
+        gsap.from(card, {
+            opacity: 0,
+            y: 40,
+            scale: 0.95,
+            duration: 0.7,
+            ease: 'power3.out',
+            delay: index * 0.1,
+            scrollTrigger: {
+                trigger: card,
+                start: 'top 85%',
+                toggleActions: 'play none none none'
+            }
+        });
+
+        // Hover animation
+        card.addEventListener('mouseenter', () => {
+            gsap.to(card, {
+                y: -8,
+                scale: 1.02,
+                duration: 0.4,
+                ease: 'power2.out'
+            });
+        });
+
+        card.addEventListener('mouseleave', () => {
+            gsap.to(card, {
+                y: 0,
+                scale: 1,
+                duration: 0.4,
+                ease: 'power2.out'
+            });
+        });
+    });
+
     // ============ ACCESSORIES GRID ANIMATIONS ============
     const accessoryItems = document.querySelectorAll('.accessory-item');
     accessoryItems.forEach((item, index) => {
@@ -629,6 +946,347 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+
+    // ============ FORMAL SECTION ANIMATIONS ============
+    const formalSection = document.querySelector('.formal-collection-section');
+    if (formalSection) {
+        const formalHeading = formalSection.querySelector('.section-heading');
+        const formalSubtitle = formalSection.querySelector('.section-subtitle');
+        const formalGrid = formalSection.querySelector('.formal-grid');
+        const formalButton = formalSection.querySelector('.btn-primary-dark');
+
+        // Section entrance
+        gsap.from(formalSection, {
+            opacity: 0,
+            y: 40,
+            duration: 1,
+            ease: 'power3.out',
+            scrollTrigger: {
+                trigger: formalSection,
+                start: 'top 90%',
+                toggleActions: 'play none none none'
+            }
+        });
+
+        // Heading animation
+        if (formalHeading) {
+            gsap.from(formalHeading, {
+                opacity: 0,
+                y: 30,
+                duration: 0.8,
+                ease: 'power3.out',
+                scrollTrigger: {
+                    trigger: formalSection,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            });
+        }
+
+        // Subtitle animation
+        if (formalSubtitle) {
+            gsap.from(formalSubtitle, {
+                opacity: 0,
+                y: 20,
+                duration: 0.6,
+                ease: 'power2.out',
+                delay: 0.2,
+                scrollTrigger: {
+                    trigger: formalSection,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            });
+        }
+
+        // Button animation
+        if (formalButton) {
+            gsap.from(formalButton, {
+                opacity: 0,
+                scale: 0.9,
+                duration: 0.6,
+                ease: 'back.out(1.7)',
+                delay: 0.5,
+                scrollTrigger: {
+                    trigger: formalSection,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            });
+
+            // Button hover
+            formalButton.addEventListener('mouseenter', () => {
+                gsap.to(formalButton, {
+                    scale: 1.05,
+                    duration: 0.3,
+                    ease: 'power2.out'
+                });
+            });
+
+            formalButton.addEventListener('mouseleave', () => {
+                gsap.to(formalButton, {
+                    scale: 1,
+                    duration: 0.3,
+                    ease: 'power2.out'
+                });
+            });
+        }
+    }
+
+    // ============ TROUSERS SECTION ANIMATIONS ============
+    const trousersSection = document.querySelector('.trousers-collection-section');
+    if (trousersSection) {
+        const trousersHeading = trousersSection.querySelector('.section-heading');
+        const trousersSubtitle = trousersSection.querySelector('.section-subtitle');
+        const trousersButton = trousersSection.querySelector('.btn-primary-dark');
+
+        // Section entrance
+        gsap.from(trousersSection, {
+            opacity: 0,
+            y: 40,
+            duration: 1,
+            ease: 'power3.out',
+            scrollTrigger: {
+                trigger: trousersSection,
+                start: 'top 90%',
+                toggleActions: 'play none none none'
+            }
+        });
+
+        // Heading animation
+        if (trousersHeading) {
+            gsap.from(trousersHeading, {
+                opacity: 0,
+                y: 30,
+                duration: 0.8,
+                ease: 'power3.out',
+                scrollTrigger: {
+                    trigger: trousersSection,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            });
+        }
+
+        // Subtitle animation
+        if (trousersSubtitle) {
+            gsap.from(trousersSubtitle, {
+                opacity: 0,
+                y: 20,
+                duration: 0.6,
+                ease: 'power2.out',
+                delay: 0.2,
+                scrollTrigger: {
+                    trigger: trousersSection,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            });
+        }
+
+        // Button animation
+        if (trousersButton) {
+            gsap.from(trousersButton, {
+                opacity: 0,
+                scale: 0.9,
+                duration: 0.6,
+                ease: 'back.out(1.7)',
+                delay: 0.5,
+                scrollTrigger: {
+                    trigger: trousersSection,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            });
+
+            // Button hover
+            trousersButton.addEventListener('mouseenter', () => {
+                gsap.to(trousersButton, {
+                    scale: 1.05,
+                    duration: 0.3,
+                    ease: 'power2.out'
+                });
+            });
+
+            trousersButton.addEventListener('mouseleave', () => {
+                gsap.to(trousersButton, {
+                    scale: 1,
+                    duration: 0.3,
+                    ease: 'power2.out'
+                });
+            });
+        }
+    }
+
+    // ============ JEANS SECTION ANIMATIONS ============
+    const jeansSection = document.querySelector('.jeans-collection-section');
+    if (jeansSection) {
+        const jeansHeading = jeansSection.querySelector('.section-heading');
+        const jeansSubtitle = jeansSection.querySelector('.section-subtitle');
+        const jeansButton = jeansSection.querySelector('.btn-primary-dark');
+
+        // Section entrance
+        gsap.from(jeansSection, {
+            opacity: 0,
+            y: 40,
+            duration: 1,
+            ease: 'power3.out',
+            scrollTrigger: {
+                trigger: jeansSection,
+                start: 'top 90%',
+                toggleActions: 'play none none none'
+            }
+        });
+
+        // Heading animation
+        if (jeansHeading) {
+            gsap.from(jeansHeading, {
+                opacity: 0,
+                y: 30,
+                duration: 0.8,
+                ease: 'power3.out',
+                scrollTrigger: {
+                    trigger: jeansSection,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            });
+        }
+
+        // Subtitle animation
+        if (jeansSubtitle) {
+            gsap.from(jeansSubtitle, {
+                opacity: 0,
+                y: 20,
+                duration: 0.6,
+                ease: 'power2.out',
+                delay: 0.2,
+                scrollTrigger: {
+                    trigger: jeansSection,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            });
+        }
+
+        // Button animation
+        if (jeansButton) {
+            gsap.from(jeansButton, {
+                opacity: 0,
+                scale: 0.9,
+                duration: 0.6,
+                ease: 'back.out(1.7)',
+                delay: 0.5,
+                scrollTrigger: {
+                    trigger: jeansSection,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            });
+
+            // Button hover
+            jeansButton.addEventListener('mouseenter', () => {
+                gsap.to(jeansButton, {
+                    scale: 1.05,
+                    duration: 0.3,
+                    ease: 'power2.out'
+                });
+            });
+
+            jeansButton.addEventListener('mouseleave', () => {
+                gsap.to(jeansButton, {
+                    scale: 1,
+                    duration: 0.3,
+                    ease: 'power2.out'
+                });
+            });
+        }
+    }
+
+    // ============ SHOES SECTION ANIMATIONS ============
+    const shoesSection = document.querySelector('.shoes-collection-section');
+    if (shoesSection) {
+        const shoesHeading = shoesSection.querySelector('.section-heading');
+        const shoesSubtitle = shoesSection.querySelector('.section-subtitle');
+        const shoesButton = shoesSection.querySelector('.btn-primary-dark');
+
+        // Section entrance
+        gsap.from(shoesSection, {
+            opacity: 0,
+            y: 40,
+            duration: 1,
+            ease: 'power3.out',
+            scrollTrigger: {
+                trigger: shoesSection,
+                start: 'top 90%',
+                toggleActions: 'play none none none'
+            }
+        });
+
+        // Heading animation
+        if (shoesHeading) {
+            gsap.from(shoesHeading, {
+                opacity: 0,
+                y: 30,
+                duration: 0.8,
+                ease: 'power3.out',
+                scrollTrigger: {
+                    trigger: shoesSection,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            });
+        }
+
+        // Subtitle animation
+        if (shoesSubtitle) {
+            gsap.from(shoesSubtitle, {
+                opacity: 0,
+                y: 20,
+                duration: 0.6,
+                ease: 'power2.out',
+                delay: 0.2,
+                scrollTrigger: {
+                    trigger: shoesSection,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            });
+        }
+
+        // Button animation
+        if (shoesButton) {
+            gsap.from(shoesButton, {
+                opacity: 0,
+                scale: 0.9,
+                duration: 0.6,
+                ease: 'back.out(1.7)',
+                delay: 0.5,
+                scrollTrigger: {
+                    trigger: shoesSection,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            });
+
+            // Button hover
+            shoesButton.addEventListener('mouseenter', () => {
+                gsap.to(shoesButton, {
+                    scale: 1.05,
+                    duration: 0.3,
+                    ease: 'power2.out'
+                });
+            });
+
+            shoesButton.addEventListener('mouseleave', () => {
+                gsap.to(shoesButton, {
+                    scale: 1,
+                    duration: 0.3,
+                    ease: 'power2.out'
+                });
+            });
+        }
+    }
 
     // ============ PERFORMANCE OPTIMIZATION ============
     // Refresh ScrollTrigger on dynamic content load
