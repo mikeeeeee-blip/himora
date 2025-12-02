@@ -104,15 +104,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     const femaleProducts = data.products.filter(p => getGender(p) === 'female');
                     const maleProducts = data.products.filter(p => getGender(p) === 'male');
                     
-                    // Get 2 female and 2 male products with variety
+                    // Get 2 female and 2 male products with variety - use Trousers and Jeans for Just Dropped
                     const selectedFemale = [
-                        ...femaleProducts.filter(p => p.category === 'Casual').slice(0, 1),
-                        ...femaleProducts.filter(p => p.category === 'Formal').slice(0, 1)
+                        ...femaleProducts.filter(p => p.category === 'Trousers').slice(0, 1),
+                        ...femaleProducts.filter(p => p.category === 'Jeans').slice(0, 1)
                     ].filter(Boolean).slice(0, 2);
                     
                     const selectedMale = [
-                        ...maleProducts.filter(p => p.category === 'Casual').slice(0, 1),
-                        ...maleProducts.filter(p => p.category === 'Formal').slice(0, 1)
+                        ...maleProducts.filter(p => p.category === 'Trousers').slice(0, 1),
+                        ...maleProducts.filter(p => p.category === 'Jeans').slice(0, 1)
                     ].filter(Boolean).slice(0, 2);
                     
                     // Mix them: female, male, female, male
@@ -238,16 +238,29 @@ document.addEventListener('DOMContentLoaded', function() {
                     const femaleProducts = data.products.filter(p => getGender(p) === 'female');
                     const maleProducts = data.products.filter(p => getGender(p) === 'male');
                     
-                    // Get 2 female and 2 male products with variety
+                    // Get 2 female and 2 male products with variety - use different products than Just Dropped
+                    // Use second items from Casual and Formal, or use Shoes category
                     const selectedFemale = [
-                        ...femaleProducts.filter(p => p.category === 'Casual').slice(0, 1),
-                        ...femaleProducts.filter(p => p.category === 'Formal').slice(0, 1)
-                    ].filter(Boolean).slice(0, 2);
+                        ...femaleProducts.filter(p => p.category === 'Casual').slice(1, 2),
+                        ...femaleProducts.filter(p => p.category === 'Formal').slice(1, 2)
+                    ].filter(Boolean);
+                    
+                    // If not enough, add from other categories
+                    if (selectedFemale.length < 2) {
+                        const shoesFemale = femaleProducts.filter(p => p.category === 'Shoes').slice(0, 1);
+                        selectedFemale.push(...shoesFemale);
+                    }
                     
                     const selectedMale = [
-                        ...maleProducts.filter(p => p.category === 'Casual').slice(0, 1),
-                        ...maleProducts.filter(p => p.category === 'Formal').slice(0, 1)
-                    ].filter(Boolean).slice(0, 2);
+                        ...maleProducts.filter(p => p.category === 'Casual').slice(1, 2),
+                        ...maleProducts.filter(p => p.category === 'Formal').slice(1, 2)
+                    ].filter(Boolean);
+                    
+                    // If not enough, add from other categories
+                    if (selectedMale.length < 2) {
+                        const shoesMale = maleProducts.filter(p => p.category === 'Shoes').slice(0, 1);
+                        selectedMale.push(...shoesMale);
+                    }
                     
                     // Mix them: female, male, female, male
                     const selectedProducts = [];
