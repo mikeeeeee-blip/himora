@@ -12,57 +12,108 @@ const { calculatePayinCommission } = require('../utils/commissionCalculator');
 const getEnvVar = (...names) => {
     for (const name of names) {
         const value = process.env[name];
-        if (value && value.trim() !== '') {
+        if (value && typeof value === 'string' && value.trim() !== '') {
             return value.trim();
         }
     }
     return null;
 };
 
-// Hardcoded fallback values (will be used if env vars are not set)
-const SABPAISA_AES_KEY_BASE64 = getEnvVar(
+// Helper to safely get env var with direct fallback
+const getEnvVarSafe = (primaryName, ...altNames) => {
+    // Try getEnvVar first (checks multiple names)
+    const value = getEnvVar(primaryName, ...altNames);
+    if (value) return value;
+    
+    // Direct fallback to process.env
+    const directValue = process.env[primaryName];
+    if (directValue && typeof directValue === 'string' && directValue.trim() !== '') {
+        return directValue.trim();
+    }
+    
+    return null;
+};
+
+// Get credentials from environment variables
+// ⚠️ IMPORTANT: In production, these MUST be set via environment variables
+// Fallback values are only for development/testing and will NOT work in production
+const SABPAISA_AES_KEY_BASE64 = getEnvVarSafe(
     'SABPAISA_AES_KEY_BASE64',
     'AuthenticationKey',
     'AUTHENTICATION_KEY',
     'authenticationkey',
     'SABPAISA_AUTH_KEY',
     'SABPAISA_AUTHENTICATION_KEY'
-) || 'eURubF0fni5Wp9hcWTwjahLVHDWFKYCkmms3Uo/qt40=';
+);
 
-const SABPAISA_HMAC_KEY_BASE64 = getEnvVar(
+const SABPAISA_HMAC_KEY_BASE64 = getEnvVarSafe(
     'SABPAISA_HMAC_KEY_BASE64',
     'AuthenticationIV',
     'AUTHENTICATION_IV',
     'authenticationiv',
     'SABPAISA_HMAC_KEY',
     'SABPAISA_AUTH_IV'
-) || 'MA7rAPIimkRb4dys0RggJ0a/WRju1hJBwn0Af9Ub4rKwxsQcKMvGaab0NCuEgMXc';
+);
 
-const SABPAISA_CLIENT_CODE = getEnvVar(
+const SABPAISA_CLIENT_CODE = getEnvVarSafe(
     'SABPAISA_CLIENT_CODE',
     'ClientCode',
     'CLIENT_CODE',
     'clientcode',
     'SABPAISA_CLIENT'
-) || 'PRAB70';
+);
 
-const SABPAISA_TRANS_USER_NAME = getEnvVar(
+const SABPAISA_TRANS_USER_NAME = getEnvVarSafe(
     'SABPAISA_TRANS_USER_NAME',
     'UserName',
     'USER_NAME',
     'username',
     'SABPAISA_USERNAME',
     'SABPAISA_USER'
-) || 'prabhash4152@gmail.com';
+);
 
-const SABPAISA_TRANS_USER_PASSWORD = getEnvVar(
+const SABPAISA_TRANS_USER_PASSWORD = getEnvVarSafe(
     'SABPAISA_TRANS_USER_PASSWORD',
     'Password',
     'PASSWORD',
     'password',
     'SABPAISA_PASSWORD',
     'SABPAISA_PASS'
-) || 'PRAB70_SP24229';
+);
+
+// Check if we're in production and credentials are missing
+const isProduction = process.env.NODE_ENV === 'production' || 
+                     process.env.NODE_ENV === 'PRODUCTION' ||
+                     !process.env.NODE_ENV || // Default to production if not set
+                     process.env.SABPAISA_ENVIRONMENT === 'production';
+
+// Development fallback values (ONLY for non-production environments)
+const DEV_FALLBACK_AES_KEY = 'eURubF0fni5Wp9hcWTwjahLVHDWFKYCkmms3Uo/qt40=';
+const DEV_FALLBACK_HMAC_KEY = 'MA7rAPIimkRb4dys0RggJ0a/WRju1hJBwn0Af9Ub4rKwxsQcKMvGaab0NCuEgMXc';
+const DEV_FALLBACK_CLIENT_CODE = 'PRAB70';
+const DEV_FALLBACK_USER_NAME = 'prabhash4152@gmail.com';
+const DEV_FALLBACK_PASSWORD = 'PRAB70_SP24229';
+
+// Use fallbacks only in non-production environments
+const finalAESKey = SABPAISA_AES_KEY_BASE64 || (!isProduction ? DEV_FALLBACK_AES_KEY : null);
+const finalHMACKey = SABPAISA_HMAC_KEY_BASE64 || (!isProduction ? DEV_FALLBACK_HMAC_KEY : null);
+const finalClientCode = SABPAISA_CLIENT_CODE || (!isProduction ? DEV_FALLBACK_CLIENT_CODE : null);
+const finalUserName = SABPAISA_TRANS_USER_NAME || (!isProduction ? DEV_FALLBACK_USER_NAME : null);
+const finalPassword = SABPAISA_TRANS_USER_PASSWORD || (!isProduction ? DEV_FALLBACK_PASSWORD : null);
+
+// Debug: Log credential loading status (only in development or if credentials are missing)
+if (!isProduction || !finalAESKey || !finalHMACKey || !finalClientCode || !finalUserName || !finalPassword) {
+    console.log('\n🔐 SabPaisaa Credential Loading Status:');
+    console.log('   Environment:', isProduction ? 'PRODUCTION' : 'DEVELOPMENT');
+    console.log('   AES_KEY:', SABPAISA_AES_KEY_BASE64 ? `✅ Loaded (length: ${SABPAISA_AES_KEY_BASE64.length})` : '❌ Missing');
+    console.log('   HMAC_KEY:', SABPAISA_HMAC_KEY_BASE64 ? `✅ Loaded (length: ${SABPAISA_HMAC_KEY_BASE64.length})` : '❌ Missing');
+    console.log('   CLIENT_CODE:', SABPAISA_CLIENT_CODE ? `✅ Loaded (${SABPAISA_CLIENT_CODE})` : '❌ Missing');
+    console.log('   USER_NAME:', SABPAISA_TRANS_USER_NAME ? `✅ Loaded (${SABPAISA_TRANS_USER_NAME})` : '❌ Missing');
+    console.log('   PASSWORD:', SABPAISA_TRANS_USER_PASSWORD ? `✅ Loaded (length: ${SABPAISA_TRANS_USER_PASSWORD.length})` : '❌ Missing');
+    if (isProduction && (!finalAESKey || !finalHMACKey || !finalClientCode || !finalUserName || !finalPassword)) {
+        console.log('   ⚠️  WARNING: Production environment but some credentials are missing!');
+    }
+}
 const SABPAISA_DOMAIN = process.env.SabPaisaDomain || 
                         process.env.SABPAISA_DOMAIN ||
                         process.env.SABPAISA_DOMAIN_URL ||
@@ -107,14 +158,17 @@ function bufferToHex(buffer) {
  * 
  * Uses direct base64 decoding of keys (no key derivation) as per SubPaisa specification
  */
-function encrypt(plaintext) {
-    if (!SABPAISA_AES_KEY_BASE64 || !SABPAISA_HMAC_KEY_BASE64) {
+function encrypt(plaintext, customAESKey = null, customHMACKey = null) {
+    const useAESKey = customAESKey || finalAESKey;
+    const useHMACKey = customHMACKey || finalHMACKey;
+    
+    if (!useAESKey || !useHMACKey) {
         throw new Error('SabPaisa encryption keys not configured');
     }
 
     // Direct base64 decoding of keys (no derivation) - as per SubPaisa specification
-    const aesKey = Buffer.from(SABPAISA_AES_KEY_BASE64, 'base64');
-    const hmacKey = Buffer.from(SABPAISA_HMAC_KEY_BASE64, 'base64');
+    const aesKey = Buffer.from(useAESKey, 'base64');
+    const hmacKey = Buffer.from(useHMACKey, 'base64');
     
     console.log('🔐 Encryption Key Processing:');
     console.log('   AES Key (base64 decoded):', aesKey.length, 'bytes');
@@ -147,13 +201,13 @@ function encrypt(plaintext) {
  * Uses direct base64 decoding of keys (no key derivation) as per SubPaisa specification
  */
 function decrypt(hexCiphertext) {
-    if (!SABPAISA_AES_KEY_BASE64 || !SABPAISA_HMAC_KEY_BASE64) {
+    if (!finalAESKey || !finalHMACKey) {
         throw new Error('SabPaisa encryption keys not configured');
     }
 
     // Direct base64 decoding of keys (no derivation) - as per SubPaisa specification
-    const aesKey = Buffer.from(SABPAISA_AES_KEY_BASE64, 'base64');
-    const hmacKey = Buffer.from(SABPAISA_HMAC_KEY_BASE64, 'base64');
+    const aesKey = Buffer.from(finalAESKey, 'base64');
+    const hmacKey = Buffer.from(finalHMACKey, 'base64');
     
     const fullMessage = hexToBuffer(hexCiphertext);
     
@@ -237,16 +291,29 @@ exports.createSabpaisaPaymentLink = async (req, res) => {
         console.log('   Merchant:', merchantName, `(${merchantId})`);
         console.log('   Environment:', SABPAISA_ENVIRONMENT);
 
+        // Re-check credentials at runtime (in case they weren't loaded at module init)
+        // This handles cases where dotenv loads after module initialization
+        const runtimeAESKey = finalAESKey || getEnvVarSafe('SABPAISA_AES_KEY_BASE64', 'AuthenticationKey', 'AUTHENTICATION_KEY') || 
+                              (process.env.SABPAISA_AES_KEY_BASE64 && process.env.SABPAISA_AES_KEY_BASE64.trim ? process.env.SABPAISA_AES_KEY_BASE64.trim() : null);
+        const runtimeHMACKey = finalHMACKey || getEnvVarSafe('SABPAISA_HMAC_KEY_BASE64', 'AuthenticationIV', 'AUTHENTICATION_IV') || 
+                                (process.env.SABPAISA_HMAC_KEY_BASE64 && process.env.SABPAISA_HMAC_KEY_BASE64.trim ? process.env.SABPAISA_HMAC_KEY_BASE64.trim() : null);
+        const runtimeClientCode = finalClientCode || getEnvVarSafe('SABPAISA_CLIENT_CODE', 'ClientCode', 'CLIENT_CODE') || 
+                                  (process.env.SABPAISA_CLIENT_CODE && process.env.SABPAISA_CLIENT_CODE.trim ? process.env.SABPAISA_CLIENT_CODE.trim() : null);
+        const runtimeUserName = finalUserName || getEnvVarSafe('SABPAISA_TRANS_USER_NAME', 'UserName', 'USER_NAME') || 
+                                 (process.env.SABPAISA_TRANS_USER_NAME && process.env.SABPAISA_TRANS_USER_NAME.trim ? process.env.SABPAISA_TRANS_USER_NAME.trim() : null);
+        const runtimePassword = finalPassword || getEnvVarSafe('SABPAISA_TRANS_USER_PASSWORD', 'Password', 'PASSWORD') || 
+                                (process.env.SABPAISA_TRANS_USER_PASSWORD && process.env.SABPAISA_TRANS_USER_PASSWORD.trim ? process.env.SABPAISA_TRANS_USER_PASSWORD.trim() : null);
+
         // Validate credentials
         // Support both naming conventions:
         // Old: SABPAISA_AES_KEY_BASE64, SABPAISA_HMAC_KEY_BASE64, etc.
         // New: AuthenticationKey, AuthenticationIV, ClientCode, UserName, Password
         const missingCredentials = {
-            AES_KEY: !SABPAISA_AES_KEY_BASE64,
-            HMAC_KEY: !SABPAISA_HMAC_KEY_BASE64,
-            CLIENT_CODE: !SABPAISA_CLIENT_CODE,
-            USER_NAME: !SABPAISA_TRANS_USER_NAME,
-            PASSWORD: !SABPAISA_TRANS_USER_PASSWORD
+            AES_KEY: !runtimeAESKey,
+            HMAC_KEY: !runtimeHMACKey,
+            CLIENT_CODE: !runtimeClientCode,
+            USER_NAME: !runtimeUserName,
+            PASSWORD: !runtimePassword
         };
         
         if (missingCredentials.AES_KEY || missingCredentials.HMAC_KEY || missingCredentials.CLIENT_CODE || 
@@ -290,13 +357,63 @@ exports.createSabpaisaPaymentLink = async (req, res) => {
             };
             console.error('   Variable check:', checks);
             
-            // Show actual resolved values
+            // Show actual resolved values (both module-level and runtime)
             console.error('\n📋 Resolved values:');
-            console.error('   SABPAISA_AES_KEY_BASE64:', SABPAISA_AES_KEY_BASE64 ? `✅ (length: ${SABPAISA_AES_KEY_BASE64.length})` : '❌ NULL');
-            console.error('   SABPAISA_HMAC_KEY_BASE64:', SABPAISA_HMAC_KEY_BASE64 ? `✅ (length: ${SABPAISA_HMAC_KEY_BASE64.length})` : '❌ NULL');
-            console.error('   SABPAISA_CLIENT_CODE:', SABPAISA_CLIENT_CODE ? `✅ (value: ${SABPAISA_CLIENT_CODE})` : '❌ NULL');
-            console.error('   SABPAISA_TRANS_USER_NAME:', SABPAISA_TRANS_USER_NAME ? `✅ (value: ${SABPAISA_TRANS_USER_NAME})` : '❌ NULL');
-            console.error('   SABPAISA_TRANS_USER_PASSWORD:', SABPAISA_TRANS_USER_PASSWORD ? `✅ (length: ${SABPAISA_TRANS_USER_PASSWORD.length})` : '❌ NULL');
+            console.error('   Environment:', isProduction ? 'PRODUCTION ⚠️' : 'DEVELOPMENT');
+            console.error('   Module-level SABPAISA_AES_KEY_BASE64:', SABPAISA_AES_KEY_BASE64 ? `✅ (length: ${SABPAISA_AES_KEY_BASE64.length})` : '❌ NULL');
+            console.error('   Module-level finalAESKey:', finalAESKey ? `✅ (length: ${finalAESKey.length})` : '❌ NULL');
+            console.error('   Runtime runtimeAESKey:', runtimeAESKey ? `✅ (length: ${runtimeAESKey.length})` : '❌ NULL');
+            console.error('   Direct process.env check:', process.env.SABPAISA_AES_KEY_BASE64 ? `✅ (length: ${process.env.SABPAISA_AES_KEY_BASE64.length}, type: ${typeof process.env.SABPAISA_AES_KEY_BASE64})` : '❌ NULL');
+            console.error('   SABPAISA_HMAC_KEY_BASE64:', runtimeHMACKey ? `✅ (length: ${runtimeHMACKey.length})` : '❌ NULL');
+            console.error('   SABPAISA_CLIENT_CODE:', runtimeClientCode ? `✅ (value: ${runtimeClientCode})` : '❌ NULL');
+            console.error('   SABPAISA_TRANS_USER_NAME:', runtimeUserName ? `✅ (value: ${runtimeUserName})` : '❌ NULL');
+            console.error('   SABPAISA_TRANS_USER_PASSWORD:', runtimePassword ? `✅ (length: ${runtimePassword.length})` : '❌ NULL');
+            
+            // Production-specific warning
+            if (isProduction && (!runtimeAESKey || !runtimeHMACKey || !runtimeClientCode || !runtimeUserName || !runtimePassword)) {
+                console.error('\n🚨 CRITICAL: Production environment detected but credentials are missing!');
+                console.error('   Fallback credentials will NOT work in production.');
+                console.error('   Please set the following environment variables in your production server:');
+            }
+            
+            // If runtime credentials are available, use them and continue instead of returning error
+            if (runtimeAESKey && runtimeHMACKey && runtimeClientCode && runtimeUserName && runtimePassword) {
+                console.log('✅ Runtime credentials found! Proceeding with payment link creation using runtime credentials.');
+                // We'll use runtime credentials below, so we skip the error return
+            } else {
+                return res.status(500).json({
+                    success: false,
+                    error: 'SabPaisa credentials not configured. Please set the following environment variables:',
+                    required_variables: {
+                        'Option 1 (New format)': {
+                            'AuthenticationKey': 'Your AES encryption key (base64)',
+                            'AuthenticationIV': 'Your HMAC key (base64)',
+                            'ClientCode': 'Your client code',
+                            'UserName': 'Your transaction username',
+                            'Password': 'Your transaction password',
+                            'SabPaisaDomain': 'SabPaisa domain URL (optional)'
+                        },
+                        'Option 2 (Old format)': {
+                            'SABPAISA_AES_KEY_BASE64': 'Your AES encryption key (base64)',
+                            'SABPAISA_HMAC_KEY_BASE64': 'Your HMAC key (base64)',
+                            'SABPAISA_CLIENT_CODE': 'Your client code',
+                            'SABPAISA_TRANS_USER_NAME': 'Your transaction username',
+                            'SABPAISA_TRANS_USER_PASSWORD': 'Your transaction password'
+                        }
+                    }
+                });
+            }
+        }
+
+        // Use runtime credentials if available, otherwise use module-level (which may be null)
+        const activeAESKey = runtimeAESKey || finalAESKey;
+        const activeHMACKey = runtimeHMACKey || finalHMACKey;
+        const activeClientCode = runtimeClientCode || finalClientCode;
+        const activeUserName = runtimeUserName || finalUserName;
+        const activePassword = runtimePassword || finalPassword;
+
+        // Final validation - if still missing, return error
+        if (!activeAESKey || !activeHMACKey || !activeClientCode || !activeUserName || !activePassword) {
             return res.status(500).json({
                 success: false,
                 error: 'SabPaisa credentials not configured. Please set the following environment variables:',
@@ -382,9 +499,9 @@ exports.createSabpaisaPaymentLink = async (req, res) => {
             `payerMobile=${customer_phone}`,
             `clientTxnId=${clientTxnId}`,
             `amount=${amount}`,
-            `clientCode=${SABPAISA_CLIENT_CODE}`,
-            `transUserName=${SABPAISA_TRANS_USER_NAME}`,
-            `transUserPassword=${SABPAISA_TRANS_USER_PASSWORD}`,
+            `clientCode=${activeClientCode}`,
+            `transUserName=${activeUserName}`,
+            `transUserPassword=${activePassword}`,
             `callbackUrl=${sabpaisaCallbackUrl}`,
             `channelId=${channelId}`,
             `mcc=${mcc}`,
@@ -400,10 +517,10 @@ exports.createSabpaisaPaymentLink = async (req, res) => {
 
         console.log('📋 Request String:', stringForRequest);
 
-        // Encrypt the request string
+        // Encrypt the request string using active credentials
         let encryptedStringForRequest;
         try {
-            encryptedStringForRequest = encrypt(stringForRequest);
+            encryptedStringForRequest = encrypt(stringForRequest, activeAESKey, activeHMACKey);
             console.log('✅ Encryption successful');
             console.log('   Encrypted String (first 50 chars):', encryptedStringForRequest.substring(0, 50) + '...');
         } catch (err) {
@@ -458,7 +575,7 @@ exports.createSabpaisaPaymentLink = async (req, res) => {
         const formData = {
             spURL: SABPAISA_SP_URL,
             encData: encryptedStringForRequest,
-            clientCode: SABPAISA_CLIENT_CODE
+            clientCode: activeClientCode
         };
 
         // Return response with payment URL (frontend will auto-submit form)
@@ -500,6 +617,37 @@ exports.createSabpaisaPaymentLink = async (req, res) => {
 exports.getSabpaisaPaymentPage = async (req, res) => {
     try {
         const { transactionId } = req.params;
+        
+        // Re-check credentials at runtime (same as createSabpaisaPaymentLink)
+        const runtimeAESKey = finalAESKey || getEnvVarSafe('SABPAISA_AES_KEY_BASE64', 'AuthenticationKey', 'AUTHENTICATION_KEY') || 
+                              (process.env.SABPAISA_AES_KEY_BASE64 && process.env.SABPAISA_AES_KEY_BASE64.trim ? process.env.SABPAISA_AES_KEY_BASE64.trim() : null);
+        const runtimeHMACKey = finalHMACKey || getEnvVarSafe('SABPAISA_HMAC_KEY_BASE64', 'AuthenticationIV', 'AUTHENTICATION_IV') || 
+                                (process.env.SABPAISA_HMAC_KEY_BASE64 && process.env.SABPAISA_HMAC_KEY_BASE64.trim ? process.env.SABPAISA_HMAC_KEY_BASE64.trim() : null);
+        const runtimeClientCode = finalClientCode || getEnvVarSafe('SABPAISA_CLIENT_CODE', 'ClientCode', 'CLIENT_CODE') || 
+                                  (process.env.SABPAISA_CLIENT_CODE && process.env.SABPAISA_CLIENT_CODE.trim ? process.env.SABPAISA_CLIENT_CODE.trim() : null);
+        const runtimeUserName = finalUserName || getEnvVarSafe('SABPAISA_TRANS_USER_NAME', 'UserName', 'USER_NAME') || 
+                                 (process.env.SABPAISA_TRANS_USER_NAME && process.env.SABPAISA_TRANS_USER_NAME.trim ? process.env.SABPAISA_TRANS_USER_NAME.trim() : null);
+        const runtimePassword = finalPassword || getEnvVarSafe('SABPAISA_TRANS_USER_PASSWORD', 'Password', 'PASSWORD') || 
+                                (process.env.SABPAISA_TRANS_USER_PASSWORD && process.env.SABPAISA_TRANS_USER_PASSWORD.trim ? process.env.SABPAISA_TRANS_USER_PASSWORD.trim() : null);
+
+        // Use runtime credentials if available, otherwise use module-level
+        const activeAESKey = runtimeAESKey || finalAESKey;
+        const activeHMACKey = runtimeHMACKey || finalHMACKey;
+        const activeClientCode = runtimeClientCode || finalClientCode;
+        const activeUserName = runtimeUserName || finalUserName;
+        const activePassword = runtimePassword || finalPassword;
+
+        // Validate credentials
+        if (!activeAESKey || !activeHMACKey || !activeClientCode || !activeUserName || !activePassword) {
+            return res.status(500).send(`
+                <html>
+                    <body>
+                        <h1>Payment Error</h1>
+                        <p>SabPaisa credentials not configured. Please contact support.</p>
+                    </body>
+                </html>
+            `);
+        }
 
         if (!transactionId) {
             return res.status(400).send('Missing transaction ID');
@@ -525,9 +673,9 @@ exports.getSabpaisaPaymentPage = async (req, res) => {
             `payerMobile=${transaction.customerPhone}`,
             `clientTxnId=${transaction.orderId}`,
             `amount=${transaction.amount}`,
-            `clientCode=${SABPAISA_CLIENT_CODE}`,
-            `transUserName=${SABPAISA_TRANS_USER_NAME}`,
-            `transUserPassword=${SABPAISA_TRANS_USER_PASSWORD}`,
+            `clientCode=${activeClientCode}`,
+            `transUserName=${activeUserName}`,
+            `transUserPassword=${activePassword}`,
             `callbackUrl=${sabpaisaCallbackUrl}`,
             `channelId=${channelId}`,
             `mcc=${mcc}`,
@@ -537,12 +685,12 @@ exports.getSabpaisaPaymentPage = async (req, res) => {
         
         const stringForRequest = requestParams.join('&');
 
-        const encryptedStringForRequest = encrypt(stringForRequest);
+        const encryptedStringForRequest = encrypt(stringForRequest, activeAESKey, activeHMACKey);
 
         const formData = {
             spURL: SABPAISA_SP_URL,
             encData: encryptedStringForRequest,
-            clientCode: SABPAISA_CLIENT_CODE
+            clientCode: activeClientCode
         };
 
         // Render HTML page that auto-submits form

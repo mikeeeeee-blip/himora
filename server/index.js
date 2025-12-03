@@ -1,7 +1,22 @@
-const express = require('express');
+// Load environment variables FIRST, before any other imports
+// This ensures all modules can access process.env when they load
 const dotenv = require('dotenv');
-const cors = require('cors');
 const path = require('path');
+
+// Explicitly specify the .env file path to ensure it's found
+const envPath = path.join(__dirname, '.env');
+const result = dotenv.config({ path: envPath });
+
+if (result.error) {
+    console.warn('⚠️  Warning: Could not load .env file:', result.error.message);
+    console.warn('   Attempted path:', envPath);
+    console.warn('   Current working directory:', process.cwd());
+} else {
+    console.log('✅ Environment variables loaded from:', envPath);
+}
+
+const express = require('express');
+const cors = require('cors');
 const connectDB = require('./config/db');
 const { settlementJob, manualSettlement } = require('./jobs/settlementJob'); // ✅ Import backfill
 const Transaction = require('./models/Transaction');
@@ -9,8 +24,6 @@ const Payout = require('./models/Payout');
 const User = require('./models/User');
 const { getProductBySlug, getAllProducts, getProductsByCategory } = require('./ecommerce/products');
 const { createSabpaisaPaymentLink } = require('./controllers/sabpaisaController');
-
-dotenv.config();
 connectDB();
 
 const app = express();
