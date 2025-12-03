@@ -200,14 +200,17 @@ function encrypt(plaintext, customAESKey = null, customHMACKey = null) {
  * 
  * Uses direct base64 decoding of keys (no key derivation) as per SubPaisa specification
  */
-function decrypt(hexCiphertext) {
-    if (!finalAESKey || !finalHMACKey) {
+function decrypt(hexCiphertext, customAESKey = null, customHMACKey = null) {
+    const useAESKey = customAESKey || finalAESKey;
+    const useHMACKey = customHMACKey || finalHMACKey;
+    
+    if (!useAESKey || !useHMACKey) {
         throw new Error('SabPaisa encryption keys not configured');
     }
 
     // Direct base64 decoding of keys (no derivation) - as per SubPaisa specification
-    const aesKey = Buffer.from(finalAESKey, 'base64');
-    const hmacKey = Buffer.from(finalHMACKey, 'base64');
+    const aesKey = Buffer.from(useAESKey, 'base64');
+    const hmacKey = Buffer.from(useHMACKey, 'base64');
     
     const fullMessage = hexToBuffer(hexCiphertext);
     
@@ -784,6 +787,21 @@ exports.handleSabpaisaCallback = async (req, res) => {
             return res.redirect(`${frontendUrl}/payment-failed?error=transaction_not_found`);
         }
 
+        // Load credentials at runtime for callback decryption
+        const runtimeAESKey = finalAESKey || getEnvVarSafe('SABPAISA_AES_KEY_BASE64', 'AuthenticationKey', 'AUTHENTICATION_KEY') || 
+                              (process.env.SABPAISA_AES_KEY_BASE64 && process.env.SABPAISA_AES_KEY_BASE64.trim ? process.env.SABPAISA_AES_KEY_BASE64.trim() : null);
+        const runtimeHMACKey = finalHMACKey || getEnvVarSafe('SABPAISA_HMAC_KEY_BASE64', 'AuthenticationIV', 'AUTHENTICATION_IV') || 
+                                (process.env.SABPAISA_HMAC_KEY_BASE64 && process.env.SABPAISA_HMAC_KEY_BASE64.trim ? process.env.SABPAISA_HMAC_KEY_BASE64.trim() : null);
+        
+        const activeAESKey = runtimeAESKey || finalAESKey;
+        const activeHMACKey = runtimeHMACKey || finalHMACKey;
+
+        if (!activeAESKey || !activeHMACKey) {
+            console.error('❌ SabPaisa encryption keys not configured for callback decryption');
+            const frontendUrl = (process.env.FRONTEND_URL || 'https://payments.ninex-group.com').replace(/:\d+$/, '').replace(/\/$/, '');
+            return res.redirect(`${frontendUrl}/payment-failed?error=decryption_keys_missing`);
+        }
+
         // Extract encrypted response from POST body (form-encoded)
         // SabPaisa sends encrypted response in POST body as form data: encResponse=<encrypted_data>
         let encData = null;
@@ -813,8 +831,8 @@ exports.handleSabpaisaCallback = async (req, res) => {
 
             console.log('   Encrypted Response (first 50 chars):', encData.substring(0, 50) + '...');
 
-            // Decrypt response
-            const decryptedResponse = decrypt(encData);
+            // Decrypt response using runtime credentials
+            const decryptedResponse = decrypt(encData, activeAESKey, activeHMACKey);
             console.log('   Decrypted Response:', decryptedResponse);
 
             // Parse decrypted response (format: key1=value1&key2=value2)
@@ -842,8 +860,12 @@ exports.handleSabpaisaCallback = async (req, res) => {
             if (status === 'SUCCESS' || status === 'success' || status === 'Success' || 
                 responseParams.responseCode === '000' || responseParams.responseCode === '00') {
                 
+                console.log('\n✅ PAYMENT SUCCESSFUL - Processing callback...');
+                console.log('   Current Transaction Status:', transaction.status);
+                
                 // Payment is successful, update transaction if not already updated
                 if (transaction.status !== 'paid') {
+                    console.log('   📝 Updating transaction status to "paid"...');
                     const paidAt = new Date();
                     const expectedSettlement = calculateExpectedSettlementDate(paidAt);
                     const commissionData = calculatePayinCommission(amount);
@@ -874,7 +896,21 @@ exports.handleSabpaisaCallback = async (req, res) => {
                         { new: true }
                     ).populate('merchantId');
 
-                    if (updatedTransaction && updatedTransaction.merchantId.webhookEnabled) {
+                    console.log('   ✅ Transaction status updated to "paid"');
+                    console.log('   💰 Amount:', amount);
+                    console.log('   💵 Commission:', commissionData.commission);
+                    console.log('   💵 Net Amount:', update.netAmount);
+                    console.log('   📅 Paid At:', paidAt.toISOString());
+                    console.log('   🏦 Payment Method:', update.paymentMethod);
+                    if (update.acquirerData.utr) {
+                        console.log('   🔢 UTR:', update.acquirerData.utr);
+                    }
+                    if (update.acquirerData.rrn) {
+                        console.log('   🔢 RRN:', update.acquirerData.rrn);
+                    }
+
+                    if (updatedTransaction && updatedTransaction.merchantId && updatedTransaction.merchantId.webhookEnabled) {
+                        console.log('   📡 Sending webhook notification to merchant...');
                         const webhookPayload = {
                             event: 'payment.success',
                             timestamp: new Date().toISOString(),
@@ -912,9 +948,14 @@ exports.handleSabpaisaCallback = async (req, res) => {
                         };
 
                         await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
+                        console.log('   ✅ Webhook notification sent');
+                    } else {
+                        console.log('   ℹ️  Webhook not enabled for this merchant');
                     }
 
-                    console.log('✅ Transaction updated via callback:', transaction_id);
+                    console.log('✅ Transaction successfully marked as PAID via callback:', transaction_id);
+                } else {
+                    console.log('   ℹ️  Transaction already marked as paid, skipping update');
                 }
             } else {
                 // Payment failed
