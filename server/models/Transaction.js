@@ -185,9 +185,8 @@ TransactionSchema.pre('save', function (next) {
 });
 
 // Indexes for fast queries
+// Note: orderId and transactionId already have unique indexes from schema definition
 TransactionSchema.index({ merchantId: 1, createdAt: -1 });
-TransactionSchema.index({ orderId: 1 });
-TransactionSchema.index({ transactionId: 1 });
 TransactionSchema.index({ status: 1 });
 TransactionSchema.index({ 'acquirerData.utr': 1 }); // ✅ Index for UTR search
 TransactionSchema.index({ razorpayPaymentId: 1 });

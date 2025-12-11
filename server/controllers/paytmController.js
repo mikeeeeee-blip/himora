@@ -12,13 +12,24 @@ const PAYTM_MERCHANT_ID = process.env.PAYTM_MERCHANT_ID;
 // Handle merchant key with special characters (like #) - trim whitespace and ensure it's not truncated
 let PAYTM_MERCHANT_KEY = process.env.PAYTM_MERCHANT_KEY;
 if (PAYTM_MERCHANT_KEY) {
+    // Remove surrounding quotes if present (from .env file)
     PAYTM_MERCHANT_KEY = PAYTM_MERCHANT_KEY.trim();
+    if ((PAYTM_MERCHANT_KEY.startsWith('"') && PAYTM_MERCHANT_KEY.endsWith('"')) ||
+        (PAYTM_MERCHANT_KEY.startsWith("'") && PAYTM_MERCHANT_KEY.endsWith("'"))) {
+        PAYTM_MERCHANT_KEY = PAYTM_MERCHANT_KEY.slice(1, -1);
+    }
+    PAYTM_MERCHANT_KEY = PAYTM_MERCHANT_KEY.trim();
+    
     // Check if key might be truncated (common issue with # characters in .env)
+    // Paytm merchant keys are typically 32+ characters
     if (PAYTM_MERCHANT_KEY.length < 20) {
         console.warn('⚠️ WARNING: PAYTM_MERCHANT_KEY appears to be truncated or too short!');
-        console.warn('⚠️ If your key contains # characters, wrap it in quotes in your .env file:');
-        console.warn('⚠️ PAYTM_MERCHANT_KEY="#your_full_key_here"');
+        console.warn('⚠️ Paytm merchant keys are typically 32+ characters long.');
         console.warn('⚠️ Current key length:', PAYTM_MERCHANT_KEY.length, 'characters');
+        console.warn('⚠️ If your key contains # or other special characters, ensure it\'s properly quoted in .env:');
+        console.warn('⚠️ PAYTM_MERCHANT_KEY="#your_full_key_here" (with double quotes)');
+        console.warn('⚠️ Or: PAYTM_MERCHANT_KEY=\'your_full_key_here\' (with single quotes)');
+        console.warn('⚠️ Make sure the entire key from Paytm Dashboard is copied correctly.');
     }
 }
 const PAYTM_WEBSITE = process.env.PAYTM_WEBSITE || 'DEFAULT'; // Should match Paytm Dashboard
