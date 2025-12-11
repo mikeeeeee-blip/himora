@@ -308,4 +308,45 @@ app.use('/api/sabpaisa', require('./routes/sabpaisaRoutes')); // ✅ NEW
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {console.log(`🚀 Server running on port ${PORT} and env is ${process.env.PAYTM_MERCHANT_KEY}`)});
+// Ensure logs are flushed immediately (important for PM2)
+const originalLog = console.log;
+const originalError = console.error;
+const originalWarn = console.warn;
+
+console.log = function(...args) {
+    originalLog.apply(console, args);
+    if (process.stdout.isTTY === false) {
+        process.stdout.write('\n');
+    }
+};
+
+console.error = function(...args) {
+    originalError.apply(console, args);
+    if (process.stderr.isTTY === false) {
+        process.stderr.write('\n');
+    }
+};
+
+console.warn = function(...args) {
+    originalWarn.apply(console, args);
+    if (process.stdout.isTTY === false) {
+        process.stdout.write('\n');
+    }
+};
+
+// Handle uncaught exceptions and unhandled rejections
+process.on('uncaughtException', (error) => {
+    console.error('❌ Uncaught Exception:', error);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+app.listen(PORT, () => {
+    const message = `🚀 Server running on port ${PORT} and env is ${process.env.PAYTM_MERCHANT_KEY || 'not set'}`;
+    console.log(message);
+    // Force flush
+    if (process.stdout) process.stdout.write('');
+});
