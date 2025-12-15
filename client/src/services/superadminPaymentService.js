@@ -237,6 +237,33 @@ async triggerManualSettlement() {
     }
   }
 
+  async deleteTransaction(transactionId) {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      console.log('Deleting transaction:', transactionId);
+
+      const response = await axios.delete(
+        API_ENDPOINTS.ADMIN_DELETE_TRANSACTION(transactionId),
+        {
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('Delete transaction response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Delete transaction error:', error);
+      this.handleError(error, 'Failed to delete transaction');
+    }
+  }
+
   // ============ PAYOUTS ============
   async getAllPayouts(filters = {}) {
     try {

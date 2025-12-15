@@ -12,7 +12,8 @@ import {
   FiAlertCircle,
   FiUser,
   FiDollarSign,
-  FiFilter
+  FiFilter,
+  FiTrash2
 } from 'react-icons/fi';
 import { HiOutlineChartBar } from 'react-icons/hi2';
 
@@ -23,6 +24,7 @@ const SuperadminUpdateTransactionsPage = () => {
   const [success, setSuccess] = useState('');
   const [updatingId, setUpdatingId] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [newStatus, setNewStatus] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [merchantFilter, setMerchantFilter] = useState('');
@@ -116,6 +118,27 @@ const SuperadminUpdateTransactionsPage = () => {
       setError(e.message || 'Failed to update transaction status');
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const handleDelete = async (transactionId) => {
+    if (!window.confirm(`Are you sure you want to delete transaction ${transactionId}? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingId(transactionId);
+    setError('');
+    setSuccess('');
+
+    try {
+      await superadminPaymentService.deleteTransaction(transactionId);
+      setSuccess(`Transaction ${transactionId} deleted successfully!`);
+      // Refresh the list
+      await fetchTransactions();
+    } catch (e) {
+      setError(e.message || 'Failed to delete transaction');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -544,13 +567,23 @@ const SuperadminUpdateTransactionsPage = () => {
                                     </button>
                                   </div>
                                 ) : (
-                                  <button
-                                    onClick={() => handleEdit(transaction)}
-                                    className="p-2 bg-accent/20 hover:bg-accent/30 text-accent rounded-lg transition-colors"
-                                    title="Edit Status"
-                                  >
-                                    <FiEdit3 size={16} />
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => handleEdit(transaction)}
+                                      className="p-2 bg-accent/20 hover:bg-accent/30 text-accent rounded-lg transition-colors"
+                                      title="Edit Status"
+                                    >
+                                      <FiEdit3 size={16} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(transaction.transactionId)}
+                                      disabled={deletingId === transaction.transactionId || transaction.settlementStatus === 'settled'}
+                                      className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title={transaction.settlementStatus === 'settled' ? 'Cannot delete settled transaction' : 'Delete Transaction'}
+                                    >
+                                      <FiTrash2 className={deletingId === transaction.transactionId ? 'animate-spin' : ''} size={16} />
+                                    </button>
+                                  </div>
                                 )}
                               </td>
                             </tr>

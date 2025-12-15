@@ -491,6 +491,12 @@ const PayinsPage = () => {
                             Amount
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                            Commission
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                            GST Rate Amount
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
                             Status
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
@@ -549,6 +555,31 @@ const PayinsPage = () => {
                             </td>
                             <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
                               {formatAmount(transaction.amount)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-white border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                              {transaction.commission !== undefined && transaction.commission !== null
+                                ? formatAmount(transaction.commission)
+                                : "₹0.00"}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-white border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                              {(() => {
+                                // Calculate GST amount
+                                // GST rate is 18% (from commissionCalculator.js)
+                                // Formula: GST = baseCommission * (gstRate / 100)
+                                const baseRate = 3.8; // 3.8% base commission rate
+                                const gstRate = 18; // 18% GST rate
+                                let gstAmount = 0;
+                                
+                                if (transaction.amount && transaction.amount > 0) {
+                                  // Calculate base commission first, then GST on it
+                                  // From commissionCalculator: baseCommission = amount * 3.8% / 100
+                                  // GST = baseCommission * (gstRate / 100)
+                                  const baseCommission = (transaction.amount * baseRate) / 100;
+                                  gstAmount = (baseCommission * gstRate) / 100;
+                                }
+                                
+                                return formatAmount(gstAmount);
+                              })()}
                             </td>
                             <td className="px-4 py-3 text-sm border-b border-white/10 whitespace-nowrap">
                               <span

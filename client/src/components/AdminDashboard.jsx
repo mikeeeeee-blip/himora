@@ -1237,6 +1237,20 @@ const AdminDashboard = () => {
       icon: <FiBook className="text-xl" />,
       title: dateRange === "weekly" ? "Week Payin Commission" : dateRange === "monthly" ? "Month Payin Commission" : "Today payin Commission",
       value: formatCurrency(parseFloat(totalPayinCommission || 0)),
+      subtitle: (() => {
+        // Calculate GST from commission
+        // Commission stored is total (baseCommission + GST)
+        // Formula: totalCommission = baseCommission + GST
+        // GST = baseCommission * 18% = baseCommission * 0.18
+        // So: totalCommission = baseCommission + (baseCommission * 0.18) = baseCommission * 1.18
+        // Therefore: baseCommission = totalCommission / 1.18
+        // And: GST = totalCommission - baseCommission = totalCommission * (0.18 / 1.18)
+        const commission = parseFloat(totalPayinCommission || 0);
+        const gstRate = 18; // 18% GST rate
+        // GST = commission * (gstRate / (100 + gstRate))
+        const gstAmount = commission * (gstRate / (100 + gstRate));
+        return `GST Rate: ${gstRate}% | Total GST: ${formatCurrency(gstAmount)}`;
+      })(),
     },
     {
       icon: <FiBook className="text-xl" />,

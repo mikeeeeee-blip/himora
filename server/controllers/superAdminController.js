@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const Settings = require('../models/Settings');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
+const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
 const { sendMerchantWebhook, sendPayoutWebhook } = require('./merchantWebhookController');
 const mongoose = require('mongoose');
 const COMMISSION_RATE = 0.038; // 3.8%
@@ -653,14 +654,40 @@ exports.updateTransactionStatus = async (req, res) => {
             }
         };
 
-        // If setting to 'paid', also set paidAt
-        if (status === 'paid' && !transaction.paidAt) {
-            updateOperation.$set.paidAt = new Date();
+        // If setting to 'paid', recalculate commission and sync all data
+        if (status === 'paid') {
+            const paidAt = transaction.paidAt || new Date();
+            
+            // Calculate commission using the commission calculator
+            const commissionData = calculatePayinCommission(transaction.amount);
+            
+            // Calculate expected settlement date
+            const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+            
+            // Update all relevant fields
+            updateOperation.$set.paidAt = paidAt;
+            updateOperation.$set.commission = commissionData.commission;
+            updateOperation.$set.netAmount = parseFloat((transaction.amount - commissionData.commission).toFixed(2));
+            updateOperation.$set.settlementStatus = 'unsettled';
+            updateOperation.$set.expectedSettlementDate = expectedSettlement;
+            
+            console.log(`💰 Commission recalculated for transaction ${transactionId}:`);
+            console.log(`   Amount: ₹${transaction.amount}`);
+            console.log(`   Commission: ₹${commissionData.commission}`);
+            console.log(`   Net Amount: ₹${updateOperation.$set.netAmount}`);
+            console.log(`   Expected Settlement: ${expectedSettlement.toISOString()}`);
         }
 
-        // If changing from 'paid' to another status, remove paidAt
+        // If changing from 'paid' to another status, remove paidAt and reset commission-related fields
         if (transaction.status === 'paid' && status !== 'paid') {
-            updateOperation.$unset = { paidAt: "" };
+            updateOperation.$unset = { 
+                paidAt: "",
+                commission: "",
+                netAmount: "",
+                settlementStatus: "",
+                expectedSettlementDate: "",
+                settlementDate: ""
+            };
         }
 
         const updatedTransaction = await Transaction.findOneAndUpdate(
@@ -673,7 +700,7 @@ exports.updateTransactionStatus = async (req, res) => {
 
         res.json({
             success: true,
-            message: `Transaction status updated successfully`,
+            message: `Transaction status updated successfully${status === 'paid' ? ' - Commission recalculated and data synced' : ''}`,
             transaction: {
                 transactionId: updatedTransaction.transactionId,
                 orderId: updatedTransaction.orderId,
@@ -683,6 +710,10 @@ exports.updateTransactionStatus = async (req, res) => {
                 merchantName: updatedTransaction.merchantName,
                 customerName: updatedTransaction.customerName,
                 paidAt: updatedTransaction.paidAt,
+                commission: updatedTransaction.commission,
+                netAmount: updatedTransaction.netAmount,
+                settlementStatus: updatedTransaction.settlementStatus,
+                expectedSettlementDate: updatedTransaction.expectedSettlementDate,
                 updatedAt: updatedTransaction.updatedAt
             }
         });
@@ -692,6 +723,56 @@ exports.updateTransactionStatus = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to update transaction status',
+            details: error.message
+        });
+    }
+};
+
+// ============ DELETE TRANSACTION (SUPER ADMIN) ============
+/**
+ * Deletes a transaction (Super Admin only)
+ * 
+ * DELETE /api/payments/admin/transactions/:transactionId
+ * Headers: x-auth-token (JWT token - Super Admin)
+ */
+exports.deleteTransaction = async (req, res) => {
+    try {
+        const { transactionId } = req.params;
+
+        // Find the transaction
+        const transaction = await Transaction.findOne({ transactionId });
+
+        if (!transaction) {
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found'
+            });
+        }
+
+        // Check if transaction is settled or part of a payout
+        if (transaction.settlementStatus === 'settled') {
+            return res.status(400).json({
+                success: false,
+                error: 'Cannot delete a settled transaction. Please contact support if this is necessary.'
+            });
+        }
+
+        // Delete the transaction
+        await Transaction.deleteOne({ transactionId });
+
+        console.log(`🗑️ Super Admin deleted transaction ${transactionId}`);
+
+        res.json({
+            success: true,
+            message: 'Transaction deleted successfully',
+            transactionId: transactionId
+        });
+
+    } catch (error) {
+        console.error('❌ Delete Transaction Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete transaction',
             details: error.message
         });
     }

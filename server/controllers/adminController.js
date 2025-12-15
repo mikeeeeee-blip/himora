@@ -30,7 +30,7 @@ exports.getMyBalance = async (req, res) => {
     try {
         const merchantObjectId =  new mongoose.Types.ObjectId(req.merchantId);
 
-        // Aggregate settled transactions
+        // Aggregate settled transactions (use stored commission so GST & any overrides are respected)
         const settledAgg = await Transaction.aggregate([
             { $match: { merchantId: merchantObjectId, status: 'paid', settlementStatus: 'settled' } },
             {
@@ -38,26 +38,28 @@ exports.getMyBalance = async (req, res) => {
                     _id: null,
                     settledRevenue: { $sum: '$amount' },
                     settledRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
+                    settledCommission: { $sum: { $ifNull: ['$commission', 0] } },
                     settledCount: { $sum: 1 }
                 }
             }
         ]);
-        const settled = settledAgg[0] || { settledRevenue: 0, settledRefunded: 0, settledCount: 0 };
-        const settledCommission = settled.settledRevenue * COMMISSION_RATE;
+        const settled = settledAgg[0] || { settledRevenue: 0, settledRefunded: 0, settledCommission: 0, settledCount: 0 };
+        const settledCommission = settled.settledCommission || 0;
 
-        // Aggregate unsettled transactions
+        // Aggregate unsettled transactions (use stored commission so GST & any overrides are respected)
         const unsettledAgg = await Transaction.aggregate([
             { $match: { merchantId: merchantObjectId, status: 'paid', settlementStatus: 'unsettled' } },
             {
                 $group: {
                     _id: null,
                     unsettledRevenue: { $sum: '$amount' },
+                    unsettledCommission: { $sum: { $ifNull: ['$commission', 0] } },
                     unsettledCount: { $sum: 1 }
                 }
             }
         ]);
-        const unsettled = unsettledAgg[0] || { unsettledRevenue: 0, unsettledCount: 0 };
-        const unsettledCommission = unsettled.unsettledRevenue * COMMISSION_RATE;
+        const unsettled = unsettledAgg[0] || { unsettledRevenue: 0, unsettledCommission: 0, unsettledCount: 0 };
+        const unsettledCommission = unsettled.unsettledCommission || 0;
 
         // Get next settlement info
         const nextUnsettledTransaction = await Transaction.findOne({
@@ -299,7 +301,7 @@ exports.getMyBalance = async (req, res) => {
                 pending_payouts: totalPending.toFixed(2),
 
                 commission_structure: {
-                    payin: '3.8%',
+                    payin: '3.8% + 18% GST (4.484% effective)',
                     payout_500_to_1000: '₹30 ',
                     payout_above_1000: '(1.77%)'
                 }
