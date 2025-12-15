@@ -1329,8 +1329,9 @@ exports.getAllMerchantsData = async (req, res) => {
             
             const totalPaidOut = parseFloat((payoutStat.total_payout_completed || 0).toFixed(2));
             const totalPendingPayout = parseFloat((payoutStat.total_payout_pending || 0).toFixed(2));
+            const blockedBalance = parseFloat((merchant.blockedBalance || 0).toFixed(2));
             
-            const availableBalance = Math.max(0, parseFloat((settledNetRevenue - totalPaidOut - totalPendingPayout).toFixed(2)));
+            const availableBalance = Math.max(0, parseFloat((settledNetRevenue - totalPaidOut - totalPendingPayout - blockedBalance).toFixed(2)));
 
             // Calculate success rate
             const totalTxn = txnStat.total_transactions || 0;
@@ -1424,6 +1425,7 @@ exports.getAllMerchantsData = async (req, res) => {
                     settled_net_revenue: settledNetRevenue,
                     total_paid_out: totalPaidOut,
                     pending_payouts: totalPendingPayout,
+                    blocked_balance: blockedBalance,
                     available_balance: availableBalance,
                     can_request_payout: availableBalance > 0,
                     minimum_payout_amount: merchant.minimumPayoutAmount || 100
@@ -1749,6 +1751,94 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to update payment gateway settings',
+            detail: error.message
+        });
+    }
+};
+
+// ============ BLOCK/UNBLOCK MERCHANT FUNDS ============
+exports.blockMerchantFunds = async (req, res) => {
+    try {
+        const { merchantId } = req.params;
+        const { amount, action } = req.body; // action: 'block' or 'unblock'
+
+        console.log(`🔒 SuperAdmin ${req.user.name} ${action}ing funds for merchant ${merchantId}`);
+
+        if (!merchantId || !mongoose.Types.ObjectId.isValid(merchantId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Valid merchantId is required'
+            });
+        }
+
+        if (!action || !['block', 'unblock'].includes(action)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Action must be either "block" or "unblock"'
+            });
+        }
+
+        if (typeof amount !== 'number' || amount <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Amount must be a positive number'
+            });
+        }
+
+        // Find merchant
+        const merchant = await User.findById(merchantId);
+        if (!merchant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Merchant not found'
+            });
+        }
+
+        if (merchant.role !== 'admin') {
+            return res.status(400).json({
+                success: false,
+                error: 'User is not a merchant'
+            });
+        }
+
+        const currentBlocked = merchant.blockedBalance || 0;
+        let newBlockedBalance = 0;
+
+        if (action === 'block') {
+            newBlockedBalance = parseFloat((currentBlocked + amount).toFixed(2));
+        } else if (action === 'unblock') {
+            if (amount > currentBlocked) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Cannot unblock ₹${amount}. Only ₹${currentBlocked} is currently blocked.`
+                });
+            }
+            newBlockedBalance = parseFloat((currentBlocked - amount).toFixed(2));
+        }
+
+        // Update merchant
+        merchant.blockedBalance = newBlockedBalance;
+        await merchant.save();
+
+        console.log(`✅ Merchant ${merchant.email} - ${action}ed ₹${amount}. New blocked balance: ₹${newBlockedBalance}`);
+
+        res.json({
+            success: true,
+            message: `Successfully ${action}ed ₹${amount} for merchant ${merchant.email}`,
+            merchant: {
+                merchantId: merchant._id,
+                email: merchant.email,
+                name: merchant.name,
+                blockedBalance: newBlockedBalance,
+                previousBlockedBalance: currentBlocked
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Block/Unblock Merchant Funds Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to block/unblock merchant funds',
             detail: error.message
         });
     }

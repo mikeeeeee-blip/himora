@@ -42,6 +42,12 @@ const UserSchema = new mongoose.Schema({
     default: 5, // 5 free payouts for amounts under ₹500
     min: 0
 },
+    // Blocked Balance (funds that cannot be used for payout)
+    blockedBalance: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     // API Key
     apiKey: {
         type: String,

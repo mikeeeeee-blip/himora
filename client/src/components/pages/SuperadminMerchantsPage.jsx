@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FiTrash2, FiKey, FiX } from 'react-icons/fi';
+import { FiTrash2, FiKey, FiX, FiLock, FiUnlock } from 'react-icons/fi';
 import superadminPaymentService from '../../services/superadminPaymentService';
 import '../pages/PageLayout.css';
 import './SuperadminMerchantsPage.css';
@@ -136,9 +136,12 @@ export default function SuperadminMerchantsPage() {
   // Modal states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showBlockModal, setShowBlockModal] = useState(false);
   const [selectedMerchant, setSelectedMerchant] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [blockAmount, setBlockAmount] = useState('');
+  const [blockAction, setBlockAction] = useState('block'); // 'block' or 'unblock'
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -245,6 +248,44 @@ export default function SuperadminMerchantsPage() {
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       setActionError(err.message || 'Failed to change password');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle block/unblock funds
+  const handleBlockClick = (merchant, action) => {
+    setSelectedMerchant(merchant);
+    setBlockAction(action);
+    setBlockAmount('');
+    setActionError('');
+    setShowBlockModal(true);
+  };
+
+  const handleBlockFunds = async () => {
+    if (!selectedMerchant?.merchant_id) return;
+
+    // Validation
+    const amount = parseFloat(blockAmount);
+    if (!blockAmount || isNaN(amount) || amount <= 0) {
+      setActionError('Please enter a valid amount greater than 0');
+      return;
+    }
+
+    setActionLoading(true);
+    setActionError('');
+    try {
+      await superadminPaymentService.blockMerchantFunds(selectedMerchant.merchant_id, amount, blockAction);
+      setSuccessMessage(`Successfully ${blockAction}ed ₹${amount} for ${selectedMerchant.merchant_info?.email}`);
+      setShowBlockModal(false);
+      setSelectedMerchant(null);
+      setBlockAmount('');
+      // Reload merchants list
+      await loadMerchants();
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      setActionError(err.message || `Failed to ${blockAction} funds`);
     } finally {
       setActionLoading(false);
     }
@@ -407,9 +448,26 @@ export default function SuperadminMerchantsPage() {
                               <div>Available: ₹ {currency(m.balance_information?.available_balance)}</div>
                               <div>Paid Out: ₹ {currency(m.balance_information?.total_paid_out)}</div>
                               <div>Pending: ₹ {currency(m.balance_information?.pending_payouts)}</div>
+                              {m.balance_information?.blocked_balance && parseFloat(m.balance_information.blocked_balance) > 0 && (
+                                <div className="text-orange-400">Blocked: ₹ {currency(m.balance_information.blocked_balance)}</div>
+                              )}
                             </td>
                             <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                  onClick={() => handleBlockClick(m, 'block')}
+                                  className="p-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 rounded-lg text-orange-400 transition-all duration-200"
+                                  title="Block Funds"
+                                >
+                                  <FiLock className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleBlockClick(m, 'unblock')}
+                                  className="p-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg text-blue-400 transition-all duration-200"
+                                  title="Unblock Funds"
+                                >
+                                  <FiUnlock className="w-4 h-4" />
+                                </button>
                                 <button
                                   onClick={() => handlePasswordClick(m)}
                                   className="p-2 bg-accent/20 hover:bg-accent/30 border border-accent/30 rounded-lg text-accent transition-all duration-200"
@@ -579,6 +637,88 @@ export default function SuperadminMerchantsPage() {
                           }}
                           disabled={actionLoading}
                           className="flex-1 bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Block/Unblock Funds Modal */}
+              {showBlockModal && selectedMerchant && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                  <div className="bg-[#122D32] border border-white/10 rounded-xl shadow-2xl max-w-md w-full">
+                    <div className="flex items-center justify-between p-6 border-b border-white/10">
+                      <h3 className="text-xl font-semibold text-white font-['Albert_Sans']">
+                        {blockAction === 'block' ? 'Block Funds' : 'Unblock Funds'}
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setShowBlockModal(false);
+                          setSelectedMerchant(null);
+                          setBlockAmount('');
+                          setActionError('');
+                        }}
+                        className="text-white/60 hover:text-white transition-colors"
+                      >
+                        <FiX className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="p-6">
+                      <p className="text-white/80 font-['Albert_Sans'] mb-4">
+                        {blockAction === 'block' 
+                          ? `Block funds for `
+                          : `Unblock funds for `}
+                        <span className="font-semibold text-white">
+                          {selectedMerchant.merchant_info?.email}
+                        </span>
+                      </p>
+                      {blockAction === 'unblock' && selectedMerchant.balance_information?.blocked_balance > 0 && (
+                        <p className="text-blue-400 text-sm font-['Albert_Sans'] mb-4">
+                          Currently blocked: ₹{currency(selectedMerchant.balance_information?.blocked_balance || 0)}
+                        </p>
+                      )}
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-white/70 mb-2 font-['Albert_Sans']">
+                            Amount (₹)
+                          </label>
+                          <input
+                            type="number"
+                            value={blockAmount}
+                            onChange={(e) => setBlockAmount(e.target.value)}
+                            placeholder={`Enter amount to ${blockAction}`}
+                            min="0"
+                            step="0.01"
+                            className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                            disabled={actionLoading}
+                          />
+                        </div>
+                        {actionError && (
+                          <div className="text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-3 text-sm font-['Albert_Sans']">
+                            {actionError}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-6">
+                        <button
+                          onClick={handleBlockFunds}
+                          disabled={actionLoading || !blockAmount || parseFloat(blockAmount) <= 0}
+                          className="flex-1 bg-gradient-to-r from-accent to-accent/80 hover:from-accent/90 hover:to-accent/70 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200"
+                        >
+                          {actionLoading ? 'Processing...' : blockAction === 'block' ? 'Block Funds' : 'Unblock Funds'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowBlockModal(false);
+                            setSelectedMerchant(null);
+                            setBlockAmount('');
+                            setActionError('');
+                          }}
+                          disabled={actionLoading}
+                          className="px-5 py-2.5 bg-[#263F43] hover:bg-[#1a2d32] border border-white/10 text-white rounded-lg font-medium font-['Albert_Sans'] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Cancel
                         </button>

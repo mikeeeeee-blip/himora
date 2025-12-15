@@ -30,6 +30,15 @@ exports.getMyBalance = async (req, res) => {
     try {
         const merchantObjectId =  new mongoose.Types.ObjectId(req.merchantId);
 
+        // Fetch merchant to get blocked balance
+        const merchant = await User.findById(req.merchantId);
+        if (!merchant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Merchant not found'
+            });
+        }
+
         // Aggregate settled transactions (use stored commission so GST & any overrides are respected)
         const settledAgg = await Transaction.aggregate([
             { $match: { merchantId: merchantObjectId, status: 'paid', settlementStatus: 'settled' } },
@@ -249,7 +258,8 @@ exports.getMyBalance = async (req, res) => {
         
         // Calculations
         const settledNetRevenue = settled.settledRevenue - settled.settledRefunded - settledCommission;
-        const availableBalance = settledNetRevenue - totalPaidOut - totalPending;
+        const blockedBalance = merchant.blockedBalance || 0;
+        const availableBalance = Math.max(0, settledNetRevenue - totalPaidOut - totalPending - blockedBalance);
 
         const totalRevenue = settled.settledRevenue + unsettled.unsettledRevenue;
         const totalCommission = settledCommission + unsettledCommission;
@@ -285,6 +295,7 @@ exports.getMyBalance = async (req, res) => {
                 settled_commission: settledCommission.toFixed(2),
                 settled_net_revenue: settledNetRevenue.toFixed(2),
                 available_balance:  (availableBalance.toFixed(2)),
+                blocked_balance: blockedBalance.toFixed(2),
                 totalTodayRevenue : totalTodayRevenue,
                 totalPayinCommission : totalPayinCommission,
                 totalTodaysPayoutCommission : parseFloat(totalTodaysPayoutCommission.toFixed(2)),
@@ -1405,11 +1416,43 @@ exports.requestPayout = async (req, res) => {
     const totalReservedGross = completedPayouts.reduce((sum, p) => sum + (p.grossAmount || p.amount || 0), 0);
     console.log('Total reserved (gross) from payouts:', totalReservedGross);
 
-    const availableBalance = parseFloat((totalSettledAmount - totalReservedGross).toFixed(2));
-    console.log('Computed availableBalance:', availableBalance);
+    // fetch merchant to get blocked balance
+    const merchant = await User.findById(req.merchantId);
+    console.log('Merchant fetched:', merchant ? {
+      id: merchant._id,
+      name: merchant.name,
+      freePayoutsUnder500: merchant.freePayoutsUnder500,
+      blockedBalance: merchant.blockedBalance || 0
+    } : 'merchant not found');
+
+    if (!merchant) {
+      console.log('Merchant not found in DB');
+      return res.status(404).json({ success: false, error: 'Merchant not found' });
+    }
+
+    const blockedBalance = merchant.blockedBalance || 0;
+    console.log('Blocked balance:', blockedBalance);
+
+    // Calculate settled net revenue (amount - commission - refunds)
+    const settledNetRevenue = settledTransactions.reduce((sum, t) => {
+      const commission = t.commission || 0;
+      const refundAmount = t.refundAmount || 0;
+      return sum + t.amount - commission - refundAmount;
+    }, 0);
+
+    const availableBalance = Math.max(0, parseFloat((settledNetRevenue - totalReservedGross - blockedBalance).toFixed(2)));
+    console.log('Computed availableBalance (after blocked):', availableBalance);
     if (availableBalance <= 0) {
       console.log('Available balance <= 0');
-      return res.status(400).json({ success: false, error: 'No balance available for payout', availableBalance: 0 });
+      const reason = blockedBalance > 0 
+        ? `No balance available for payout. ₹${blockedBalance} is currently blocked.`
+        : 'No balance available for payout';
+      return res.status(400).json({ 
+        success: false, 
+        error: reason,
+        availableBalance: 0,
+        blockedBalance: blockedBalance
+      });
     }
 
     // Final requested net amount: use provided amount if valid, otherwise full available
@@ -1430,19 +1473,6 @@ exports.requestPayout = async (req, res) => {
     }
 
     console.log(`Payout requested: ₹${finalAmount} out of ₹${availableBalance} available`);
-
-    // fetch merchant
-    const merchant = await User.findById(req.merchantId);
-    console.log('Merchant fetched:', merchant ? {
-      id: merchant._id,
-      name: merchant.name,
-      freePayoutsUnder500: merchant.freePayoutsUnder500
-    } : 'merchant not found');
-
-    if (!merchant) {
-      console.log('Merchant not found in DB');
-      return res.status(404).json({ success: false, error: 'Merchant not found' });
-    }
 
     // calculate commission (pure function)
     let payoutCommissionInfo;

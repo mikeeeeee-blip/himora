@@ -113,6 +113,42 @@ class SuperadminPaymentService {
       this.handleError(error, 'Failed to change user password');
     }
   }
+
+  async blockMerchantFunds(merchantId, amount, action) {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      if (!amount || amount <= 0) {
+        throw new Error('Amount must be greater than 0');
+      }
+
+      if (!action || !['block', 'unblock'].includes(action)) {
+        throw new Error('Action must be either "block" or "unblock"');
+      }
+
+      console.log(`${action}ing funds for merchant:`, merchantId, 'amount:', amount);
+
+      const response = await axios.put(
+        API_ENDPOINTS.SUPERADMIN_BLOCK_FUNDS(merchantId),
+        { amount, action },
+        {
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('Block/unblock funds response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Block/unblock funds error:', error);
+      this.handleError(error, `Failed to ${action} merchant funds`);
+    }
+  }
 // ============ MANUAL SETTLEMENT ============
 async triggerManualSettlement() {
   try {

@@ -71,6 +71,7 @@ export const API_ENDPOINTS = {
   // ============ SUPERADMIN - USER MANAGEMENT ============
   SUPERADMIN_DELETE_USER: (userId) => `${BASE_URL}/superadmin/users/${userId}`,
   SUPERADMIN_CHANGE_PASSWORD: (userId) => `${BASE_URL}/superadmin/users/${userId}/password`,
+  SUPERADMIN_BLOCK_FUNDS: (merchantId) => `${BASE_URL}/superadmin/merchants/${merchantId}/block-funds`,
   
   // ============ SUPERADMIN - PAYOUTS ============
   ADMIN_PAYOUTS: `${BASE_URL}/payments/admin/payouts/all`,

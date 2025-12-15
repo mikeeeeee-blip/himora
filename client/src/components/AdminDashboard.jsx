@@ -1184,7 +1184,6 @@ const AdminDashboard = () => {
       icon: <TbArrowsTransferDown className="text-xl" />,
       title: "Total Paid payout",
       value: `${formatCurrency(totalPaidOut)}`,
-      trend: "0% VS PREV. 28 DAYS",
       trendColor: "text-white/60",
     },
     {
@@ -1217,20 +1216,18 @@ const AdminDashboard = () => {
       icon: <RiWalletLine className="text-xl" />,
       title: "Available Wallet Balance",
       value: formatCurrency(availableBalance),
-      trend: calculateTrend(
-        parseFloat(availableBalance || 0),
-        parseFloat(availableBalance || 0) * 0.89
-      ),
       trendColor:
         parseFloat(availableBalance || 0) > 0
           ? "text-green-400"
           : "text-white/60",
+      subtitle: balanceData?.balance?.blocked_balance && parseFloat(balanceData.balance.blocked_balance) > 0
+        ? `Blocked: ${formatCurrency(parseFloat(balanceData.balance.blocked_balance))}`
+        : null,
     },
     {
       icon: <TbArrowsTransferDown className="text-xl" />,
       title: "Unsettled Balance",
       value: formatCurrency(unsettledBalance),
-      trend: "0% VS PREV. 28 DAYS",
       trendColor: "text-white/60",
     },
     {
