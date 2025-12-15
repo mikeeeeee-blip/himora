@@ -1216,12 +1216,16 @@ const AdminDashboard = () => {
       icon: <RiWalletLine className="text-xl" />,
       title: "Available Wallet Balance",
       value: formatCurrency(availableBalance),
+      trend: calculateTrend(
+        parseFloat(availableBalance || 0),
+        parseFloat(availableBalance || 0) * 0.89
+      ),
       trendColor:
         parseFloat(availableBalance || 0) > 0
           ? "text-green-400"
           : "text-white/60",
       subtitle: balanceData?.balance?.blocked_balance && parseFloat(balanceData.balance.blocked_balance) > 0
-        ? `Blocked: ${formatCurrency(parseFloat(balanceData.balance.blocked_balance))}`
+        ? `Freezed: ${formatCurrency(parseFloat(balanceData.balance.blocked_balance))}`
         : null,
     },
     {

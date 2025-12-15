@@ -878,7 +878,7 @@ const handleInputChange = (field, value) => {
                   </div>
                         {balance.balance?.blocked_balance && parseFloat(balance.balance.blocked_balance) > 0 ? (
                           <div className="text-orange-400 text-xs font-['Albert_Sans']">
-                            ⚠️ Blocked: {formatCurrency(balance.balance.blocked_balance)}
+                            ⚠️ Freezed: {formatCurrency(balance.balance.blocked_balance)}
                           </div>
                         ) : (
                           <div className="text-green-400 text-xs font-['Albert_Sans']">

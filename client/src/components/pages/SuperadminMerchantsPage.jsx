@@ -449,7 +449,7 @@ export default function SuperadminMerchantsPage() {
                               <div>Paid Out: ₹ {currency(m.balance_information?.total_paid_out)}</div>
                               <div>Pending: ₹ {currency(m.balance_information?.pending_payouts)}</div>
                               {m.balance_information?.blocked_balance && parseFloat(m.balance_information.blocked_balance) > 0 && (
-                                <div className="text-orange-400">Blocked: ₹ {currency(m.balance_information.blocked_balance)}</div>
+                                <div className="text-orange-400">Freezed: ₹ {currency(m.balance_information.blocked_balance)}</div>
                               )}
                             </td>
                             <td className="px-4 py-3">
