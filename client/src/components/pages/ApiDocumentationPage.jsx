@@ -2568,26 +2568,25 @@ async function downloadTransactionReport(filters) {
                             immediately
                           </li>
                           <li>
-                            Store your API key securely - you cannot retrieve it
-                            again after creation
+                            Store your API key securely - you can retrieve it using GET /api/get
                           </li>
                           <li>
-                            If you lose your API key, you must regenerate it
-                            (old integrations will break)
+                            If you lose your API key, you can retrieve it from the dashboard or regenerate it
+                            (regenerating will break existing integrations)
                           </li>
                         </ul>
                       </div>
 
                       <ApiEndpoint
                         method="POST"
-                        path={`${BASE_URL}/api-key/create`}
+                        path={`${BASE_URL}/create`}
                         auth="JWT Token (x-auth-token)"
-                        description="Create a new API key. If you already have an API key, this will return an error. Use GET /api-key/get to retrieve existing key."
+                        description="Create a new API key. If you already have an API key, this will return an error. Use GET /api/get to retrieve existing key."
                         response={{
                           success: true,
-                          apiKey:
-                            "ak_live_abc123def456ghi789jkl012mno345pqr678stu901vwx234yz",
-                          message: "API key created successfully",
+                          apiKey: "ninexgroup_abc123def456ghi789jkl012mno345pqr678stu901vwx234yz",
+                          createdAt: "2024-01-15T10:00:00.000Z",
+                          message: "API key created successfully. Keep it secure!",
                         }}
                       />
 
@@ -2599,34 +2598,41 @@ async function downloadTransactionReport(filters) {
                           <FiAlertCircle /> Store Your API Key Immediately
                         </h4>
                         <p>
-                          The API key is returned only once during creation.
-                          Save it immediately in a secure location. You cannot
-                          retrieve it later without regenerating.
+                          The API key is returned when created. Save it immediately in a secure location.
+                          You can also retrieve it later using GET /api/get endpoint.
                         </p>
                       </div>
 
                       <ApiEndpoint
                         method="GET"
-                        path={`${BASE_URL}/api-key/get`}
+                        path={`${BASE_URL}/get`}
                         auth="JWT Token (x-auth-token)"
-                        description="Retrieve your existing API key. Returns the API key if one exists."
+                        description="Retrieve your existing API key. Returns the API key if one exists, along with creation date and user information."
                         response={{
                           success: true,
-                          apiKey:
-                            "ak_live_abc123def456ghi789jkl012mno345pqr678stu901vwx234yz",
+                          apiKey: "ninexgroup_abc123def456ghi789jkl012mno345pqr678stu901vwx234yz",
+                          createdAt: "2024-01-15T10:00:00.000Z",
+                          user: {
+                            id: "68e757305a9692e03a4b816d",
+                            name: "Merchant Name",
+                            email: "merchant@example.com",
+                            businessName: "Business Name",
+                          },
+                          hasApiKey: true,
+                          message: "API key retrieved successfully",
                         }}
                       />
 
                       <ApiEndpoint
                         method="POST"
-                        path={`${BASE_URL}/api-key/regenerate`}
+                        path={`${BASE_URL}/regenerate`}
                         auth="JWT Token (x-auth-token)"
                         description="Regenerate your API key. This creates a new API key and immediately invalidates the old one. All integrations using the old key will stop working."
                         response={{
                           success: true,
-                          apiKey:
-                            "ak_live_new_abc123def456ghi789jkl012mno345pqr678stu901vwx234yz",
-                          message: "API key regenerated successfully",
+                          apiKey: "ninexgroup_new_abc123def456ghi789jkl012mno345pqr678stu901vwx234yz",
+                          createdAt: "2024-01-15T10:00:00.000Z",
+                          message: "API key regenerated successfully. Update your integration with the new key.",
                         }}
                       />
 
@@ -2663,12 +2669,13 @@ async function downloadTransactionReport(filters) {
 
                       <ApiEndpoint
                         method="DELETE"
-                        path={`${BASE_URL}/api-key/delete`}
+                        path={`${BASE_URL}/delete`}
                         auth="JWT Token (x-auth-token)"
                         description="Delete your API key. This permanently removes your API key and disables all API access until you create a new one."
                         response={{
                           success: true,
                           message: "API key deleted successfully",
+                          deletedAt: "2024-01-15T10:00:00.000Z",
                         }}
                       />
 
@@ -2676,24 +2683,26 @@ async function downloadTransactionReport(filters) {
                         <h3>API Key Format</h3>
                         <p>API keys follow this format:</p>
                         <CodeBlock
-                          code={`ak_live_abc123def456ghi789jkl012mno345pqr678stu901vwx234yz`}
+                          code={`ninexgroup_abc123def456ghi789jkl012mno345pqr678stu901vwx234yz`}
                         />
                         <ul style={{ marginTop: "12px" }}>
                           <li>
-                            Prefix: <code>ak_live_</code>
+                            Prefix: <code>ninexgroup_</code>
                           </li>
                           <li>Length: Approximately 64 characters total</li>
-                          <li>Characters: Lowercase letters and numbers</li>
+                          <li>Characters: Lowercase letters and numbers (hexadecimal)</li>
+                          <li>Format: <code>ninexgroup_</code> + 48 hexadecimal characters</li>
                         </ul>
                       </div>
 
                       <div className="info-card" style={{ marginTop: "16px" }}>
                         <h3>Error Responses</h3>
                         <CodeBlock
-                          title="409 Conflict - API Key Already Exists"
+                          title="400 Bad Request - API Key Already Exists"
                           code={`{
   "success": false,
-  "error": "API key already exists. Use GET /api-key/get to retrieve it."
+  "error": "API key already exists. Please delete the existing key to create a new one.",
+  "existingKey": "ninexgroup_abc123def456ghi789jkl012mno345pqr678stu901vwx234yz"
 }`}
                           language="json"
                         />
@@ -2701,7 +2710,16 @@ async function downloadTransactionReport(filters) {
                           title="404 Not Found - No API Key"
                           code={`{
   "success": false,
-  "error": "No API key found. Create one using POST /api-key/create"
+  "error": "No API key found. Please create one first.",
+  "hasApiKey": false
+}`}
+                          language="json"
+                        />
+                        <CodeBlock
+                          title="400 Bad Request - No API Key to Delete"
+                          code={`{
+  "success": false,
+  "error": "No API key exists to delete"
 }`}
                           language="json"
                         />
