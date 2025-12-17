@@ -29,7 +29,7 @@ const ApiDocumentationPage = () => {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const mobileMenuRef = useRef(null);
 
-  const BASE_URL = "https://api.himora.art/api";
+  const BASE_URL = "https://himora.art/api";
   // const BASE_URL = 'http://localhost:5001/api'; // For development
 
   useEffect(() => {
