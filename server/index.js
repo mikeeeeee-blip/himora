@@ -82,6 +82,9 @@ app.get('/', (req, res) => {
 app.get('/shop.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'ecommerce', 'shop.html'));
 });
+app.get('/shop', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecommerce', 'shop.html'));
+});
 app.get('/collections.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'ecommerce', 'collections.html'));
 });
