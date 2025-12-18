@@ -4,6 +4,7 @@ const PaytmChecksum = require('../utils/PaytmChecksum'); // Official PaytmChecks
 const Transaction = require('../models/Transaction');
 const { sendMerchantWebhook } = require('./merchantWebhookController');
 const User = require('../models/User');
+const Settings = require('../models/Settings');
 const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
 
@@ -93,6 +94,21 @@ exports.createPaytmPaymentLink = async (req, res) => {
         }, null, 2));
         console.log('   Environment:', PAYTM_ENVIRONMENT);
         console.log('   Base URL:', PAYTM_BASE_URL);
+
+        // Check if Paytm is enabled in settings
+        const settings = await Settings.getSettings();
+        if (!settings.paymentGateways.paytm.enabled) {
+            console.error('❌ Paytm is not enabled in payment gateway settings');
+            return res.status(403).json({
+                success: false,
+                error: 'Paytm payment gateway is not enabled. Please contact administrator to enable it.',
+                details: {
+                    description: 'Paytm gateway is disabled',
+                    code: 'GATEWAY_DISABLED',
+                    hint: 'The administrator needs to enable Paytm in the payment gateway settings from the admin dashboard.'
+                }
+            });
+        }
 
         // Validate input
         if (!amount || !customer_name || !customer_email || !customer_phone) {

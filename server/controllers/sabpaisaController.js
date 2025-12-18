@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const Transaction = require('../models/Transaction');
 const { sendMerchantWebhook } = require('./merchantWebhookController');
 const User = require('../models/User');
+const Settings = require('../models/Settings');
 const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
 
@@ -293,6 +294,21 @@ exports.createSabpaisaPaymentLink = async (req, res) => {
         console.log('='.repeat(80));
         console.log('   Merchant:', merchantName, `(${merchantId})`);
         console.log('   Environment:', SABPAISA_ENVIRONMENT);
+
+        // Check if SabPaisa is enabled in settings
+        const settings = await Settings.getSettings();
+        if (!settings.paymentGateways.sabpaisa?.enabled) {
+            console.error('❌ SabPaisa is not enabled in payment gateway settings');
+            return res.status(403).json({
+                success: false,
+                error: 'SabPaisa payment gateway is not enabled. Please contact administrator to enable it.',
+                details: {
+                    description: 'SabPaisa gateway is disabled',
+                    code: 'GATEWAY_DISABLED',
+                    hint: 'The administrator needs to enable SabPaisa in the payment gateway settings from the admin dashboard.'
+                }
+            });
+        }
 
         // Re-check credentials at runtime (in case they weren't loaded at module init)
         // This handles cases where dotenv loads after module initialization

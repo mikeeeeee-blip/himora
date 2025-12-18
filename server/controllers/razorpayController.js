@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const Transaction = require('../models/Transaction');
 const { sendMerchantWebhook } = require('./merchantWebhookController');
 const User = require('../models/User');
+const Settings = require('../models/Settings');
 const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
 const axios = require('axios')    // Initialize Razorpay
 const {createPhonePePaymentLink} = require('./phonepeController');
@@ -31,6 +32,21 @@ exports.createRazorpayPaymentLink = async (req, res) => {
         const merchantName = req.merchantName;
 
         console.log('📤 Razorpay Payment Link request from:', merchantName);
+
+        // Check if Razorpay is enabled in settings
+        const settings = await Settings.getSettings();
+        if (!settings.paymentGateways.razorpay.enabled) {
+            console.error('❌ Razorpay is not enabled in payment gateway settings');
+            return res.status(403).json({
+                success: false,
+                error: 'Razorpay payment gateway is not enabled. Please contact administrator to enable it.',
+                details: {
+                    description: 'Razorpay gateway is disabled',
+                    code: 'GATEWAY_DISABLED',
+                    hint: 'The administrator needs to enable Razorpay in the payment gateway settings from the admin dashboard.'
+                }
+            });
+        }
 
         // Validate Razorpay credentials
         if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
@@ -256,6 +272,21 @@ exports.createPhonePeDeepLink = async (req, res) => {
     const upi_id =  "7049407951@ptaxis"
     const merchantId = req.merchantId;
     const merchantName = req.merchantName;
+
+    // Check if PhonePe is enabled in settings
+    const settings = await Settings.getSettings();
+    if (!settings.paymentGateways.phonepe.enabled) {
+      console.error('❌ PhonePe is not enabled in payment gateway settings');
+      return res.status(403).json({
+        success: false,
+        error: 'PhonePe payment gateway is not enabled. Please contact administrator to enable it.',
+        details: {
+          description: 'PhonePe gateway is disabled',
+          code: 'GATEWAY_DISABLED',
+          hint: 'The administrator needs to enable PhonePe in the payment gateway settings from the admin dashboard.'
+        }
+      });
+    }
 
     // Validation
     if (!amount || !customer_name || !customer_phone)
