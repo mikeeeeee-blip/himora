@@ -32,6 +32,19 @@ exports.createRazorpayPaymentLink = async (req, res) => {
 
         console.log('📤 Razorpay Payment Link request from:', merchantName);
 
+        // Validate Razorpay credentials
+        if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+            console.error('❌ Razorpay credentials not configured');
+            return res.status(500).json({
+                success: false,
+                error: 'Razorpay credentials not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables.',
+                details: {
+                    description: 'Razorpay credentials not configured',
+                    code: 'CONFIGURATION_ERROR'
+                }
+            });
+        }
+
         // Validate input
         if (!amount || !customer_name || !customer_email || !customer_phone) {
             return res.status(400).json({
@@ -189,6 +202,18 @@ exports.createRazorpayPaymentLink = async (req, res) => {
             // Razorpay SDK error structure
             errorMessage = error.error.description || error.error.message || errorMessage;
             errorDetails = error.error;
+            
+            // Check for authentication errors specifically
+            if (error.error.code === 'BAD_REQUEST_ERROR' && 
+                (errorMessage.toLowerCase().includes('authentication') || 
+                 errorMessage.toLowerCase().includes('unauthorized') ||
+                 errorMessage.toLowerCase().includes('invalid'))) {
+                errorMessage = 'Razorpay authentication failed. Please check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET environment variables.';
+                errorDetails = {
+                    ...error.error,
+                    hint: 'The Razorpay API credentials are invalid or missing. Please verify your RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in the server environment variables.'
+                };
+            }
         } else if (error.message) {
             // Standard error with message
             errorMessage = error.message;
