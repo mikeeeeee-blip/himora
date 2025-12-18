@@ -36,16 +36,13 @@ exports.createRazorpayPaymentLink = async (req, res) => {
         // Check if Razorpay is enabled in settings
         const settings = await Settings.getSettings();
         if (!settings.paymentGateways.razorpay.enabled) {
-            console.error('❌ Razorpay is not enabled in payment gateway settings');
-            return res.status(403).json({
-                success: false,
-                error: 'Razorpay payment gateway is not enabled. Please contact administrator to enable it.',
-                details: {
-                    description: 'Razorpay gateway is disabled',
-                    code: 'GATEWAY_DISABLED',
-                    hint: 'The administrator needs to enable Razorpay in the payment gateway settings from the admin dashboard.'
-                }
-            });
+            console.warn('⚠️ Razorpay is not enabled in payment gateway settings');
+            console.log('🔄 Falling back to unified payment gateway controller to use an enabled gateway');
+            
+            // Instead of returning an error, fallback to unified payment gateway controller
+            // This will automatically select an enabled gateway
+            const { createPaymentLink } = require('./paymentGatewayController');
+            return await createPaymentLink(req, res);
         }
 
         // Validate Razorpay credentials
