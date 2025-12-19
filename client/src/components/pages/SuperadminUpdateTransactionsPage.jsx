@@ -13,7 +13,8 @@ import {
   FiUser,
   FiDollarSign,
   FiFilter,
-  FiTrash2
+  FiTrash2,
+  FiSearch
 } from 'react-icons/fi';
 import { HiOutlineChartBar } from 'react-icons/hi2';
 
@@ -30,6 +31,7 @@ const SuperadminUpdateTransactionsPage = () => {
   const [merchantFilter, setMerchantFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [transactionIdSearch, setTransactionIdSearch] = useState('');
   const [pagination, setPagination] = useState({ page: 1, limit: 50, totalCount: 0 });
 
   const statusOptions = [
@@ -45,7 +47,7 @@ const SuperadminUpdateTransactionsPage = () => {
 
   useEffect(() => {
     fetchTransactions();
-  }, [pagination.page, statusFilter, merchantFilter, startDate, endDate]);
+  }, [pagination.page, statusFilter, merchantFilter, startDate, endDate, transactionIdSearch]);
 
   const fetchTransactions = async () => {
     setLoading(true);
@@ -69,6 +71,9 @@ const SuperadminUpdateTransactionsPage = () => {
       }
       if (endDate) {
         filters.endDate = endDate;
+      }
+      if (transactionIdSearch) {
+        filters.search = transactionIdSearch;
       }
       const response = await superadminPaymentService.getAdminTransactions(filters);
       setTransactions(response.transactions || []);
@@ -249,6 +254,37 @@ const SuperadminUpdateTransactionsPage = () => {
 
               {/* Filters */}
               <div className="mb-6">
+                {/* Transaction ID Search Bar */}
+                <div className="mb-4">
+                  <label className="flex items-center gap-2 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] mb-2">
+                    <FiSearch size={14} />
+                    Search by Transaction ID
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={transactionIdSearch}
+                      onChange={(e) => {
+                        setTransactionIdSearch(e.target.value);
+                        setPagination(prev => ({ ...prev, page: 1 }));
+                      }}
+                      placeholder="Enter Transaction ID (e.g., TXN_1766051565108_5cd77)"
+                      className="flex-1 bg-[#001D22] border border-white/10 rounded-lg px-3 py-2 text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                    />
+                    {transactionIdSearch && (
+                      <button
+                        onClick={() => {
+                          setTransactionIdSearch('');
+                          setPagination(prev => ({ ...prev, page: 1 }));
+                        }}
+                        className="px-4 py-2 bg-[#001D22] border border-white/10 hover:border-white/20 text-white rounded-lg text-xs sm:text-sm font-medium font-['Albert_Sans'] transition-all duration-200"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="flex items-center gap-2 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] mb-2">
@@ -320,7 +356,7 @@ const SuperadminUpdateTransactionsPage = () => {
                 </div>
 
                 {/* Clear Filters Button */}
-                {(statusFilter || merchantFilter || startDate || endDate) && (
+                {(statusFilter || merchantFilter || startDate || endDate || transactionIdSearch) && (
                   <div className="mt-4">
                     <button
                       onClick={() => {
@@ -328,6 +364,7 @@ const SuperadminUpdateTransactionsPage = () => {
                         setMerchantFilter('');
                         setStartDate('');
                         setEndDate('');
+                        setTransactionIdSearch('');
                         setPagination(prev => ({ ...prev, page: 1 }));
                       }}
                       className="flex items-center justify-center gap-2 bg-[#001D22] border border-white/10 hover:border-white/20 text-white px-4 py-2 rounded-full text-xs sm:text-sm font-medium font-['Albert_Sans'] transition-all duration-200"

@@ -35,6 +35,7 @@ const SuperadminTransactionsPage = () => {
   const [toast, setToast] = useState({ message: '', type: 'success' });
   const [showFilters, setShowFilters] = useState(false);
   const [settlingTransactionId, setSettlingTransactionId] = useState(null);
+  const [transactionIdSearch, setTransactionIdSearch] = useState('');
   
   const [filters, setFilters] = useState({
     page: 1,
@@ -53,8 +54,13 @@ const SuperadminTransactionsPage = () => {
   });
 
   useEffect(() => {
+    // Update filters.search when transactionIdSearch changes
+    setFilters(prev => ({ ...prev, search: transactionIdSearch, page: 1 }));
+  }, [transactionIdSearch]);
+
+  useEffect(() => {
     fetchTransactions();
-  }, [filters.page, filters.limit, filters.sortBy, filters.sortOrder]);
+  }, [filters.page, filters.limit, filters.sortBy, filters.sortOrder, filters.search]);
 
   const fetchTransactions = async () => {
     setLoading(true);
@@ -76,6 +82,10 @@ const SuperadminTransactionsPage = () => {
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value, page: 1 }));
+    // Sync transactionIdSearch when search field changes in filters panel
+    if (field === 'search') {
+      setTransactionIdSearch(value);
+    }
   };
 
   const handleApplyFilters = () => {
@@ -84,6 +94,7 @@ const SuperadminTransactionsPage = () => {
   };
 
   const handleClearFilters = () => {
+    setTransactionIdSearch('');
     setFilters({
       page: 1,
       limit: 50,
@@ -540,6 +551,31 @@ const SuperadminTransactionsPage = () => {
             </div>
           </div>
         )}
+
+              {/* Transaction ID Search Bar */}
+              <div className="mb-6">
+                <label className="flex items-center gap-2 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] mb-2">
+                  <FiSearch size={14} />
+                  Search by Transaction ID
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={transactionIdSearch}
+                    onChange={(e) => setTransactionIdSearch(e.target.value)}
+                    placeholder="Enter Transaction ID (e.g., TXN_1766051565108_5cd77)"
+                    className="flex-1 bg-[#001D22] border border-white/10 rounded-lg px-3 py-2 text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                  />
+                  {transactionIdSearch && (
+                    <button
+                      onClick={() => setTransactionIdSearch('')}
+                      className="px-4 py-2 bg-[#001D22] border border-white/10 hover:border-white/20 text-white rounded-lg text-xs sm:text-sm font-medium font-['Albert_Sans'] transition-all duration-200"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
         
               {/* Error Message */}
           {error && (
