@@ -284,47 +284,47 @@ TROUBLESHOOTING STEPS:
         console.log('   Our Order ID:', orderId);
         console.log('   Direct Payment URL from API:', directPaymentUrl || 'Not provided in response');
 
-        // Use direct payment URL if provided by Cashfree, otherwise construct it
-        let paymentUrl;
-        if (directPaymentUrl) {
-            paymentUrl = directPaymentUrl;
-            console.log('   ✅ Using direct payment URL from Cashfree API response');
-        } else {
-            // Construct payment URL - try multiple formats
-            // Format 1: Standard checkout URL with order_token (most common)
-            paymentUrl = `https://payments.cashfree.com/order/#/checkout?order_token=${paymentSessionId}`;
-            console.log('   ✅ Constructed payment URL (Format 1): Using order_token parameter');
-            console.log('   URL Format: https://payments.cashfree.com/order/#/checkout?order_token=<session_id>');
-        }
-        
-        console.log('\n🔗 Final Payment URL:');
-        console.log('   Full URL:', paymentUrl);
-        console.log('   URL Length:', paymentUrl.length);
-        console.log('   Contains order_token:', paymentUrl.includes('order_token'));
-        console.log('   Contains payment_session_id:', paymentUrl.includes(paymentSessionId));
-        
-        // Verify the order exists by fetching it (optional verification step)
+        // Try to get session details using /orders/sessions endpoint first (if available)
+        // This might provide a proper checkout URL
+        let sessionData = null;
+        let sessionCheckoutUrl = null;
         try {
-            console.log('\n🔍 Verifying order exists in Cashfree...');
-            const verifyEndpointUrl = `${cleanBaseUrl}/pg/orders/${cfOrderId}`;
-            const verifyResponse = await axios.get(verifyEndpointUrl, {
+            console.log('\n🔍 Attempting to fetch session details from Cashfree...');
+            // Extract session ID from payment_session_id (remove "session_" prefix if present)
+            const sessionId = paymentSessionId.startsWith('session_') 
+                ? paymentSessionId.substring(8) // Remove "session_" prefix
+                : paymentSessionId;
+            
+            const sessionsEndpointUrl = `${cleanBaseUrl}/pg/orders/sessions/${sessionId}`;
+            console.log('   Sessions Endpoint URL:', sessionsEndpointUrl);
+            const sessionResponse = await axios.get(sessionsEndpointUrl, {
                 headers: {
                     'x-api-version': CASHFREE_API_VERSION,
                     'x-client-id': CASHFREE_APP_ID,
                     'x-client-secret': CASHFREE_SECRET_KEY,
                     'Accept': 'application/json'
                 },
-                timeout: 10000
+                timeout: 10000,
+                validateStatus: (status) => status < 500 // Don't throw for 4xx
             });
             
-            if (verifyResponse.data) {
-                console.log('   ✅ Order verified successfully');
-                console.log('   Order Status:', verifyResponse.data.order_status || 'N/A');
-                console.log('   Order Amount:', verifyResponse.data.order_amount || 'N/A');
+            if (sessionResponse.status === 200 && sessionResponse.data) {
+                sessionData = sessionResponse.data;
+                console.log('   ✅ Session details retrieved successfully');
+                console.log('   Session Data:', JSON.stringify(sessionData, null, 2));
+                
+                // Check if session data contains a checkout URL
+                if (sessionData.checkout_url || sessionData.payment_url || sessionData.url) {
+                    const sessionCheckoutUrl = sessionData.checkout_url || sessionData.payment_url || sessionData.url;
+                    console.log('   ✅ Found checkout URL in session data:', sessionCheckoutUrl);
+                    paymentUrl = sessionCheckoutUrl;
+                }
+            } else {
+                console.log('   ℹ️ Sessions endpoint returned:', sessionResponse.status, sessionResponse.data?.message || 'No session data');
             }
-        } catch (verifyError) {
-            console.warn('   ⚠️ Order verification failed (non-critical):', verifyError.message);
-            // Don't fail the whole process if verification fails
+        } catch (sessionError) {
+            console.log('   ℹ️ Could not fetch session details (non-critical):', sessionError.response?.status || sessionError.message);
+            // Don't fail the whole process if session fetch fails
         }
 
         // Calculate commission
@@ -361,7 +361,7 @@ TROUBLESHOOTING STEPS:
         await transaction.save();
         console.log('✅ Transaction saved to database');
 
-        // Return response
+        // Return response with additional troubleshooting information
         res.json({
             success: true,
             transaction_id: transactionId,
@@ -376,7 +376,8 @@ TROUBLESHOOTING STEPS:
             callback_url: finalCallbackUrl,
             payment_session_id: paymentSessionId,
             cf_order_id: cfOrderId,
-            message: 'Payment link created successfully. Share this URL with customer.'
+            message: 'Payment link created successfully. Share this URL with customer.',
+            troubleshooting_note: 'If the payment URL shows "Bad URL" error, this may indicate a Cashfree account configuration issue. Please contact Cashfree support at https://merchant.cashfree.com/merchants/landing?env=prod&raise_issue=1 with your CF Order ID and mention that checkout page returns "Bad URL" error.'
         });
 
     } catch (error) {
