@@ -60,6 +60,17 @@ exports.createCashfreePaymentLink = async (req, res) => {
         console.log('   Environment:', CASHFREE_ENVIRONMENT);
         console.log('   Base URL (configured):', CASHFREE_BASE_URL);
         console.log('   API Version:', CASHFREE_API_VERSION);
+        
+        // Verify credentials are set
+        if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
+            console.error('   ❌ CRITICAL: Cashfree credentials are missing!');
+            console.error('      CASHFREE_APP_ID:', CASHFREE_APP_ID ? 'SET' : 'NOT SET');
+            console.error('      CASHFREE_SECRET_KEY:', CASHFREE_SECRET_KEY ? 'SET' : 'NOT SET');
+        } else {
+            console.log('   ✅ Credentials configured');
+            console.log('      App ID length:', CASHFREE_APP_ID.length);
+            console.log('      Secret Key length:', CASHFREE_SECRET_KEY.length);
+        }
 
         // Check if Cashfree is enabled in settings
         const settings = await Settings.getSettings();
@@ -212,7 +223,39 @@ exports.createCashfreePaymentLink = async (req, res) => {
         if (cashfreeResponse.status !== 200 && cashfreeResponse.status !== 201) {
             console.error('   ❌ Cashfree API returned error status:', cashfreeResponse.status);
             console.error('   Response data:', JSON.stringify(cashfreeResponse.data, null, 2));
-            throw new Error(`Cashfree API error (${cashfreeResponse.status}): ${cashfreeResponse.data?.message || JSON.stringify(cashfreeResponse.data)}`);
+            
+            const errorCode = cashfreeResponse.data?.code || '';
+            const errorMessage = cashfreeResponse.data?.message || JSON.stringify(cashfreeResponse.data);
+            
+            // Provide user-friendly error messages for common account configuration issues
+            let userFriendlyMessage = errorMessage;
+            let troubleshootingSteps = '';
+            
+            if (errorCode === 'request_failed' || errorMessage.includes('not enabled')) {
+                troubleshootingSteps = `
+TROUBLESHOOTING STEPS:
+1. Verify API access is enabled in Cashfree Dashboard:
+   - Login to https://merchant.cashfree.com
+   - Go to Developers > API Settings
+   - Ensure "Payment Gateway API" is enabled
+   
+2. Check if you're using correct environment credentials:
+   - Production: Use production App ID and Secret Key
+   - Test/Sandbox: Use sandbox credentials and set CASHFREE_ENVIRONMENT=sandbox
+   
+3. Verify IP Whitelisting:
+   - Check if your server IP needs to be whitelisted in Cashfree dashboard
+   - Settings > Security > IP Whitelisting
+   
+4. Contact Cashfree Support:
+   - Fill out support form: https://merchant.cashfree.com/merchants/landing?env=prod&raise_issue=1
+   - Request: "Enable Payment Gateway API access for order creation"
+   - Mention you can create payment links via web portal but API returns this error
+`;
+                userFriendlyMessage = `Cashfree account configuration issue: ${errorMessage}.${troubleshootingSteps}`;
+            }
+            
+            throw new Error(`Cashfree API error (${cashfreeResponse.status}): ${userFriendlyMessage}`);
         }
 
         console.log('✅ Cashfree Order Created');
@@ -220,17 +263,34 @@ exports.createCashfreePaymentLink = async (req, res) => {
 
         const paymentSessionId = cashfreeResponse.data?.payment_session_id;
         const cfOrderId = cashfreeResponse.data?.cf_order_id || orderId;
+        
+        // Check if Cashfree provides a direct payment URL in the response
+        const directPaymentUrl = cashfreeResponse.data?.payment_link || 
+                                 cashfreeResponse.data?.link_url ||
+                                 cashfreeResponse.data?.payment_url;
 
         if (!paymentSessionId) {
             throw new Error('Payment session ID not received from Cashfree');
         }
 
-        // Clean session ID if needed
-        const cleanedSessionId = cleanSessionId(paymentSessionId);
-        console.log('   Payment Session ID (cleaned):', cleanedSessionId);
+        console.log('   Payment Session ID (raw from API):', paymentSessionId);
+        console.log('   CF Order ID:', cfOrderId);
+        console.log('   Direct Payment URL from API:', directPaymentUrl || 'Not provided');
 
-        // Construct payment URL
-        const paymentUrl = `https://payments.cashfree.com/order/#/checkout?order_token=${cleanedSessionId}`;
+        // Use direct payment URL if provided by Cashfree, otherwise construct it
+        let paymentUrl;
+        if (directPaymentUrl) {
+            paymentUrl = directPaymentUrl;
+            console.log('   ✅ Using direct payment URL from Cashfree API response');
+        } else {
+            // Construct payment URL - Cashfree expects payment_session_id as order_token parameter
+            // Note: Do NOT URL encode the token - Cashfree expects it as-is in the query string
+            // The hash (#) in the URL means the token goes in the fragment, not as a query param
+            paymentUrl = `https://payments.cashfree.com/order/#/checkout?order_token=${paymentSessionId}`;
+            console.log('   ✅ Constructed payment URL using payment_session_id (raw, not encoded)');
+        }
+        
+        console.log('   Final Payment URL:', paymentUrl.substring(0, 100) + '...');
 
         // Calculate commission
         const commissionData = calculatePayinCommission(amountValue);
@@ -251,8 +311,8 @@ exports.createCashfreePaymentLink = async (req, res) => {
             description: description || `Payment for ${merchantName}`,
             status: 'created',
             paymentGateway: 'cashfree',
-            cashfreeOrderToken: cleanedSessionId,
-            cashfreePaymentId: cleanedSessionId,
+            cashfreeOrderToken: paymentSessionId, // Store original session ID
+            cashfreePaymentId: paymentSessionId,
             cashfreeOrderId: cfOrderId,
             successUrl: finalCallbackUrl,
             failureUrl: finalFailureUrl,
@@ -279,7 +339,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
             merchant_id: merchantId.toString(),
             merchant_name: merchantName,
             callback_url: finalCallbackUrl,
-            payment_session_id: cleanedSessionId,
+            payment_session_id: paymentSessionId,
             cf_order_id: cfOrderId,
             message: 'Payment link created successfully. Share this URL with customer.'
         });

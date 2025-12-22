@@ -1,7 +1,7 @@
 // constants/api.js
 
 export const BASE_URL = 'https://himora.art/api';
-// export const BASE_URL = 'http://localhost:5001/api';
+// export const BASE_URL = 'http://localhost:5001/api'
 
 export const API_ENDPOINTS = {
   // ============ AUTH ============
@@ -9,6 +9,7 @@ export const API_ENDPOINTS = {
   SIGNUP: `${BASE_URL}/auth/signup`,
   PROFILE: `${BASE_URL}/auth/profile`,
   UPDATE_PROFILE: `${BASE_URL}/auth/profile`,
+
    
   // ============ API KEYS ============
   CREATE_API_KEY: `${BASE_URL}/create`,
