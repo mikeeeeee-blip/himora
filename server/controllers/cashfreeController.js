@@ -259,23 +259,30 @@ TROUBLESHOOTING STEPS:
         }
 
         console.log('✅ Cashfree Order Created');
-        console.log('   Response:', JSON.stringify(cashfreeResponse.data, null, 2));
+        console.log('   Full API Response:', JSON.stringify(cashfreeResponse.data, null, 2));
 
         const paymentSessionId = cashfreeResponse.data?.payment_session_id;
         const cfOrderId = cashfreeResponse.data?.cf_order_id || orderId;
         
-        // Check if Cashfree provides a direct payment URL in the response
+        // Check all possible fields for payment URL in response
         const directPaymentUrl = cashfreeResponse.data?.payment_link || 
                                  cashfreeResponse.data?.link_url ||
-                                 cashfreeResponse.data?.payment_url;
+                                 cashfreeResponse.data?.payment_url ||
+                                 cashfreeResponse.data?.checkout_url ||
+                                 cashfreeResponse.data?.url;
 
         if (!paymentSessionId) {
+            console.error('   ❌ Payment Session ID missing in response');
+            console.error('   Available fields:', Object.keys(cashfreeResponse.data || {}));
             throw new Error('Payment session ID not received from Cashfree');
         }
 
-        console.log('   Payment Session ID (raw from API):', paymentSessionId);
+        console.log('\n📋 Order Details from Cashfree:');
+        console.log('   Payment Session ID:', paymentSessionId);
+        console.log('   Payment Session ID length:', paymentSessionId.length);
         console.log('   CF Order ID:', cfOrderId);
-        console.log('   Direct Payment URL from API:', directPaymentUrl || 'Not provided');
+        console.log('   Our Order ID:', orderId);
+        console.log('   Direct Payment URL from API:', directPaymentUrl || 'Not provided in response');
 
         // Use direct payment URL if provided by Cashfree, otherwise construct it
         let paymentUrl;
@@ -283,14 +290,42 @@ TROUBLESHOOTING STEPS:
             paymentUrl = directPaymentUrl;
             console.log('   ✅ Using direct payment URL from Cashfree API response');
         } else {
-            // Construct payment URL - Cashfree expects payment_session_id as order_token parameter
-            // Note: Do NOT URL encode the token - Cashfree expects it as-is in the query string
-            // The hash (#) in the URL means the token goes in the fragment, not as a query param
+            // Construct payment URL - try multiple formats
+            // Format 1: Standard checkout URL with order_token (most common)
             paymentUrl = `https://payments.cashfree.com/order/#/checkout?order_token=${paymentSessionId}`;
-            console.log('   ✅ Constructed payment URL using payment_session_id (raw, not encoded)');
+            console.log('   ✅ Constructed payment URL (Format 1): Using order_token parameter');
+            console.log('   URL Format: https://payments.cashfree.com/order/#/checkout?order_token=<session_id>');
         }
         
-        console.log('   Final Payment URL:', paymentUrl.substring(0, 100) + '...');
+        console.log('\n🔗 Final Payment URL:');
+        console.log('   Full URL:', paymentUrl);
+        console.log('   URL Length:', paymentUrl.length);
+        console.log('   Contains order_token:', paymentUrl.includes('order_token'));
+        console.log('   Contains payment_session_id:', paymentUrl.includes(paymentSessionId));
+        
+        // Verify the order exists by fetching it (optional verification step)
+        try {
+            console.log('\n🔍 Verifying order exists in Cashfree...');
+            const verifyEndpointUrl = `${cleanBaseUrl}/pg/orders/${cfOrderId}`;
+            const verifyResponse = await axios.get(verifyEndpointUrl, {
+                headers: {
+                    'x-api-version': CASHFREE_API_VERSION,
+                    'x-client-id': CASHFREE_APP_ID,
+                    'x-client-secret': CASHFREE_SECRET_KEY,
+                    'Accept': 'application/json'
+                },
+                timeout: 10000
+            });
+            
+            if (verifyResponse.data) {
+                console.log('   ✅ Order verified successfully');
+                console.log('   Order Status:', verifyResponse.data.order_status || 'N/A');
+                console.log('   Order Amount:', verifyResponse.data.order_amount || 'N/A');
+            }
+        } catch (verifyError) {
+            console.warn('   ⚠️ Order verification failed (non-critical):', verifyError.message);
+            // Don't fail the whole process if verification fails
+        }
 
         // Calculate commission
         const commissionData = calculatePayinCommission(amountValue);
