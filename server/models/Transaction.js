@@ -39,6 +39,11 @@ const TransactionSchema = new mongoose.Schema({
     sabpaisaPaymentId: String,
     sabpaisaReferenceId: String,
     
+    // Cashfree Fields
+    cashfreeOrderToken: String,
+    cashfreePaymentId: String,
+    cashfreeOrderId: String,
+    
     // Payment Gateway
     paymentGateway: String, // 'razorpay', 'paytm', 'phonepe', 'cashfree', 'easebuzz', or 'sabpaisa'
     
@@ -196,6 +201,9 @@ TransactionSchema.index({ easebuzzOrderId: 1 });
 TransactionSchema.index({ easebuzzPaymentId: 1 });
 TransactionSchema.index({ sabpaisaClientTxnId: 1 });
 TransactionSchema.index({ sabpaisaPaymentId: 1 });
+TransactionSchema.index({ cashfreeOrderId: 1 });
+TransactionSchema.index({ cashfreePaymentId: 1 });
+TransactionSchema.index({ cashfreeOrderToken: 1 });
 TransactionSchema.index({ customerEmail: 1 });
 TransactionSchema.index({ customerPhone: 1 });
 

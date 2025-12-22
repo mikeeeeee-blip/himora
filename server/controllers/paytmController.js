@@ -781,23 +781,6 @@ exports.handlePaytmCallback = async (req, res) => {
             return res.redirect(`${frontendUrl}/payment-failed?error=transaction_not_found`);
         }
 
-        // Verify checksum from Paytm response (if present)
-        // Note: Paytm may not always send checksum in callback, so we verify payment status via API instead
-        if (paytmResponse.CHECKSUMHASH) {
-            console.log('\n🔍 Verifying Paytm Callback Checksum using official SDK...');
-            const isValidChecksum = await verifyPaytmChecksum(paytmResponse, PAYTM_MERCHANT_KEY, paytmResponse.CHECKSUMHASH);
-            if (!isValidChecksum) {
-                console.warn('❌ Invalid Paytm checksum in callback');
-                console.warn('   - Received Checksum:', paytmResponse.CHECKSUMHASH.substring(0, 30) + '...');
-                console.warn('   - This might be okay if Paytm callback format differs');
-                console.warn('   - We will verify payment status via Paytm API instead');
-            } else {
-                console.log('✅ Paytm callback checksum verified successfully');
-            }
-        } else {
-            console.log('⚠️ No checksum in Paytm callback, will verify via API');
-        }
-
         // Check payment status
         const status = paytmResponse.STATUS || paytmResponse.RESPCODE;
         const orderId = paytmResponse.ORDERID;
@@ -814,19 +797,34 @@ exports.handlePaytmCallback = async (req, res) => {
         console.log('   TXNAMOUNT:', paytmResponse.TXNAMOUNT, '-> parsed:', amount);
         console.log('   Transaction Status (current):', transaction.status);
 
-        // If payment was successful, verify with Paytm API
-        if (status === 'TXN_SUCCESS' || paytmResponse.RESPCODE === '01') {
-            try {
-                // Verify payment status with Paytm
-                const verificationResult = await verifyPaytmPayment(orderId);
+        // Check if we should skip API verification (faster callback)
+        const SKIP_PAYTM_API_VERIFICATION = process.env.SKIP_PAYTM_API_VERIFICATION === 'true';
+        
+        // Verify checksum if present (for fast path optimization)
+        let checksumValid = false;
+        if (paytmResponse.CHECKSUMHASH) {
+            console.log('\n🔍 Verifying Paytm Callback Checksum...');
+            checksumValid = await verifyPaytmChecksum(paytmResponse, PAYTM_MERCHANT_KEY, paytmResponse.CHECKSUMHASH);
+            if (checksumValid) {
+                console.log('✅ Paytm callback checksum verified - using fast path');
+            } else {
+                console.warn('⚠️ Invalid Paytm checksum - will verify via API if needed');
+            }
+        } else {
+            console.log('⚠️ No checksum in Paytm callback');
+        }
 
-                if (verificationResult && verificationResult.STATUS === 'TXN_SUCCESS') {
-                    // Payment is successful, update transaction if not already updated
-                    if (transaction.status !== 'paid') {
+        // If payment was successful
+        if (status === 'TXN_SUCCESS' || paytmResponse.RESPCODE === '01') {
+            // OPTIMIZATION: If checksum is valid, trust the callback and update immediately
+            // This avoids waiting for Paytm API verification which can be slow
+            const shouldTrustCallback = SKIP_PAYTM_API_VERIFICATION || checksumValid;
+            
+            if (shouldTrustCallback && transaction.status !== 'paid') {
+                console.log('⚡ Fast path: Valid checksum detected, updating transaction immediately');
+                try {
                         const paidAt = new Date();
                         const expectedSettlement = calculateExpectedSettlementDate(paidAt);
-
-                        // Calculate commission if not already set
                         const commissionData = calculatePayinCommission(amount);
 
                         const update = {
@@ -850,13 +848,40 @@ exports.handlePaytmCallback = async (req, res) => {
                             webhookData: paytmResponse
                         };
 
-                        const updatedTransaction = await Transaction.findOneAndUpdate(
+                    await Transaction.findOneAndUpdate(
                             { transactionId: finalTransactionId },
                             update,
                             { new: true }
-                        ).populate('merchantId');
+                    );
 
-                        if (updatedTransaction && updatedTransaction.merchantId.webhookEnabled) {
+                    console.log('✅ Transaction updated immediately via fast path');
+                } catch (error) {
+                    console.error('❌ Error updating transaction (fast path):', error);
+                }
+            }
+
+            // Process verification and webhook asynchronously (fire and forget)
+            // This allows redirect to happen immediately while verification happens in background
+            (async () => {
+                try {
+                    // Only verify with API if checksum was invalid and verification not disabled
+                    if (!shouldTrustCallback && !SKIP_PAYTM_API_VERIFICATION) {
+                        console.log('🔍 Verifying payment with Paytm API (async)...');
+                        const verificationResult = await verifyPaytmPayment(orderId);
+                        
+                        if (verificationResult && verificationResult.STATUS === 'TXN_SUCCESS') {
+                            console.log('✅ Paytm API verification successful (async)');
+                        } else {
+                            console.warn('⚠️ Paytm API verification failed or status mismatch (async)');
+                        }
+                    }
+
+                    // Send webhook asynchronously if transaction was updated
+                    const updatedTransaction = await Transaction.findOne({ transactionId: finalTransactionId })
+                        .populate('merchantId');
+
+                    if (updatedTransaction && updatedTransaction.status === 'paid' && 
+                        updatedTransaction.merchantId && updatedTransaction.merchantId.webhookEnabled) {
                             const webhookPayload = {
                                 event: 'payment.success',
                                 timestamp: new Date().toISOString(),
@@ -894,15 +919,13 @@ exports.handlePaytmCallback = async (req, res) => {
                             };
 
                             await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
-                        }
-
-                        console.log('✅ Transaction updated via callback:', transaction_id);
-                    }
+                        console.log('✅ Webhook sent (async)');
                 }
             } catch (error) {
-                console.error('❌ Error verifying payment with Paytm:', error);
-                // Continue to redirect even if verification fails
+                    console.error('❌ Error in async verification/webhook processing:', error);
+                    // Don't throw - this is fire and forget
             }
+            })(); // Immediately invoked async function - runs in background
         } else {
             // Payment failed
             const failureReason = paytmResponse.RESPMSG || paytmResponse.STATUS || 'Payment failed';
