@@ -164,7 +164,9 @@ exports.createCashfreePaymentLink = async (req, res) => {
             order_meta: {
                 return_url: finalCallbackUrl,
                 notify_url: cashfreeCallbackUrl,
-                payment_methods: 'cc,dc,upi,netbanking,wallet,paylater,emi', // All payment methods
+                // Cashfree payment method codes: cc,dc,ppc,ccc,emi,paypal,upi,nb,app,paylater,applepay
+                // nb = netbanking, app = wallet
+                payment_methods: 'cc,dc,upi,nb,app,paylater,emi', // All payment methods
                 return_params: {
                     transaction_id: transactionId
                 }
