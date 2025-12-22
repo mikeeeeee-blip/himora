@@ -284,48 +284,65 @@ TROUBLESHOOTING STEPS:
         console.log('   Our Order ID:', orderId);
         console.log('   Direct Payment URL from API:', directPaymentUrl || 'Not provided in response');
 
-        // Try to get session details using /orders/sessions endpoint first (if available)
-        // This might provide a proper checkout URL
-        let sessionData = null;
-        let sessionCheckoutUrl = null;
-        try {
-            console.log('\n🔍 Attempting to fetch session details from Cashfree...');
-            // Extract session ID from payment_session_id (remove "session_" prefix if present)
-            const sessionId = paymentSessionId.startsWith('session_') 
-                ? paymentSessionId.substring(8) // Remove "session_" prefix
-                : paymentSessionId;
-            
-            const sessionsEndpointUrl = `${cleanBaseUrl}/pg/orders/sessions/${sessionId}`;
-            console.log('   Sessions Endpoint URL:', sessionsEndpointUrl);
-            const sessionResponse = await axios.get(sessionsEndpointUrl, {
-                headers: {
-                    'x-api-version': CASHFREE_API_VERSION,
-                    'x-client-id': CASHFREE_APP_ID,
-                    'x-client-secret': CASHFREE_SECRET_KEY,
-                    'Accept': 'application/json'
-                },
-                timeout: 10000,
-                validateStatus: (status) => status < 500 // Don't throw for 4xx
-            });
-            
-            if (sessionResponse.status === 200 && sessionResponse.data) {
-                sessionData = sessionResponse.data;
-                console.log('   ✅ Session details retrieved successfully');
-                console.log('   Session Data:', JSON.stringify(sessionData, null, 2));
+        // Initialize paymentUrl - will be set from various sources
+        let paymentUrl;
+        
+        // Priority 1: Use direct payment URL from API response if available
+        if (directPaymentUrl) {
+            paymentUrl = directPaymentUrl;
+            console.log('   ✅ Using direct payment URL from Cashfree API response');
+        } else {
+            // Priority 2: Try to get checkout URL from sessions endpoint
+            try {
+                console.log('\n🔍 Attempting to fetch session details from Cashfree...');
+                // Extract session ID from payment_session_id (remove "session_" prefix if present)
+                const sessionId = paymentSessionId.startsWith('session_') 
+                    ? paymentSessionId.substring(8) // Remove "session_" prefix
+                    : paymentSessionId;
                 
-                // Check if session data contains a checkout URL
-                if (sessionData.checkout_url || sessionData.payment_url || sessionData.url) {
+                const sessionsEndpointUrl = `${cleanBaseUrl}/pg/orders/sessions/${sessionId}`;
+                console.log('   Sessions Endpoint URL:', sessionsEndpointUrl);
+                const sessionResponse = await axios.get(sessionsEndpointUrl, {
+                    headers: {
+                        'x-api-version': CASHFREE_API_VERSION,
+                        'x-client-id': CASHFREE_APP_ID,
+                        'x-client-secret': CASHFREE_SECRET_KEY,
+                        'Accept': 'application/json'
+                    },
+                    timeout: 10000,
+                    validateStatus: (status) => status < 500 // Don't throw for 4xx
+                });
+                
+                if (sessionResponse.status === 200 && sessionResponse.data) {
+                    const sessionData = sessionResponse.data;
+                    console.log('   ✅ Session details retrieved successfully');
+                    
+                    // Check if session data contains a checkout URL
                     const sessionCheckoutUrl = sessionData.checkout_url || sessionData.payment_url || sessionData.url;
-                    console.log('   ✅ Found checkout URL in session data:', sessionCheckoutUrl);
-                    paymentUrl = sessionCheckoutUrl;
+                    if (sessionCheckoutUrl) {
+                        paymentUrl = sessionCheckoutUrl;
+                        console.log('   ✅ Using checkout URL from session data');
+                    }
+                } else {
+                    console.log('   ℹ️ Sessions endpoint returned:', sessionResponse.status, sessionResponse.data?.message || 'No session data');
                 }
-            } else {
-                console.log('   ℹ️ Sessions endpoint returned:', sessionResponse.status, sessionResponse.data?.message || 'No session data');
+            } catch (sessionError) {
+                console.log('   ℹ️ Could not fetch session details (non-critical):', sessionError.response?.status || sessionError.message);
+                // Don't fail the whole process if session fetch fails
             }
-        } catch (sessionError) {
-            console.log('   ℹ️ Could not fetch session details (non-critical):', sessionError.response?.status || sessionError.message);
-            // Don't fail the whole process if session fetch fails
+            
+            // Priority 3: Construct payment URL using standard format (fallback)
+            if (!paymentUrl) {
+                paymentUrl = `https://payments.cashfree.com/order/#/checkout?order_token=${paymentSessionId}`;
+                console.log('   ✅ Constructed payment URL using payment_session_id as order_token');
+            }
         }
+        
+        console.log('\n🔗 Final Payment URL:');
+        console.log('   Full URL:', paymentUrl);
+        console.log('   URL Length:', paymentUrl.length);
+        console.log('   Contains order_token:', paymentUrl.includes('order_token'));
+        console.log('   Contains payment_session_id:', paymentUrl.includes(paymentSessionId));
 
         // Calculate commission
         const commissionData = calculatePayinCommission(amountValue);
