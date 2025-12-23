@@ -52,6 +52,37 @@ const {
     getCombinedReport
 } = require('../controllers/adminController.js');
 
+// ============ UNIFIED WEBHOOK ENDPOINT (No Auth - from Payment Gateways) ============
+// Unified webhook endpoint that routes to appropriate gateway handler based on payload
+router.post('/webhook', async (req, res) => {
+    try {
+        const payload = req.body || {};
+        
+        console.log('\n🔔 UNIFIED PAYMENT WEBHOOK RECEIVED');
+        console.log('   Payload:', JSON.stringify(payload, null, 2));
+        
+        // Detect gateway from payload structure
+        // Cashfree webhook typically has: orderId, paymentId, paymentStatus, orderAmount
+        if (payload.orderId || payload.order_id || (payload.paymentStatus || payload.payment_status)) {
+            console.log('   Detected gateway: Cashfree');
+            return await handleCashfreeWebhook(req, res);
+        }
+        
+        // If we can't detect the gateway, return error
+        console.warn('⚠️ Could not detect payment gateway from webhook payload');
+        return res.status(400).json({
+            success: false,
+            error: 'Unable to detect payment gateway from webhook payload'
+        });
+    } catch (error) {
+        console.error('❌ Unified webhook error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Webhook processing failed'
+        });
+    }
+});
+
 // ============ MERCHANT APIs (API Key Auth) ============
 
 // Unified payment link creation (uses enabled gateway from settings)

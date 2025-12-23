@@ -98,6 +98,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
         // Build callback URLs
         const backendBaseUrl = (process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5001').replace(/\/$/, '');
         const cashfreeCallbackUrl = `${backendBaseUrl}/api/cashfree/callback?transaction_id=${encodeURIComponent(transactionId)}`;
+        const cashfreeWebhookUrl = `${backendBaseUrl}/api/payments/webhook`;
 
         // Use provided URLs or defaults
         const finalCallbackUrl = callback_url || success_url || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
@@ -163,6 +164,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
             merchant_name: merchantName,
             callback_url: finalCallbackUrl,
             failure_url: finalFailureUrl,
+            webhook_url: cashfreeWebhookUrl,
             environment: responseEnvironment,
             gateway_used: 'cashfree',
             gateway_name: 'Cashfree',
@@ -218,6 +220,176 @@ exports.createCashfreePaymentLink = async (req, res) => {
             success: false,
             error: 'Failed to create payment link',
             detail: error.response?.data?.message || error.message,
+        });
+    }
+};
+
+// ============ CASHFREE WEBHOOK HANDLER ============
+/**
+ * Handle Cashfree payment webhook
+ * Processes webhook notifications from Cashfree
+ */
+exports.handleCashfreeWebhook = async (req, res) => {
+    try {
+        const payload = req.body || {};
+
+        console.log('\n' + '='.repeat(80));
+        console.log('🔔 CASHFREE WEBHOOK RECEIVED');
+        console.log('='.repeat(80));
+        console.log('   Method:', req.method);
+        console.log('   Headers:', JSON.stringify(req.headers, null, 2));
+        console.log('   Payload:', JSON.stringify(payload, null, 2));
+
+        // Extract payment information from webhook payload
+        const orderId = payload.orderId || payload.order_id || payload.data?.order?.order_id;
+        const paymentId = payload.paymentId || payload.payment_id || payload.data?.payment?.payment_id;
+        const paymentStatus = payload.paymentStatus || payload.payment_status || payload.data?.payment?.payment_status;
+        const orderAmount = payload.orderAmount || payload.order_amount || payload.data?.order?.order_amount;
+
+        console.log('\n📊 Webhook Data Extraction:');
+        console.log('   Order ID:', orderId);
+        console.log('   Payment ID:', paymentId);
+        console.log('   Payment Status:', paymentStatus);
+        console.log('   Order Amount:', orderAmount);
+
+        if (!orderId) {
+            console.warn('⚠️ Missing orderId in webhook payload');
+            return res.status(400).json({
+                success: false,
+                error: 'Missing orderId in webhook payload'
+            });
+        }
+
+        // Find transaction by order ID
+        let transaction = await Transaction.findOne({ orderId: orderId }).populate('merchantId');
+
+        if (!transaction) {
+            console.warn('⚠️ Transaction not found for orderId:', orderId);
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found',
+                orderId: orderId
+            });
+        }
+
+        console.log('✅ Transaction found:', transaction.transactionId);
+        console.log('   Current Status:', transaction.status);
+
+        // Process payment based on status
+        if (paymentStatus === 'SUCCESS' && transaction.status !== 'paid') {
+            console.log('   ✅ PAYMENT SUCCESSFUL - Updating transaction...');
+            
+            const paidAt = new Date();
+            const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+            const commissionData = calculatePayinCommission(transaction.amount);
+            
+            const update = {
+                status: 'paid',
+                paidAt: paidAt,
+                cashfreeOrderId: orderId,
+                cashfreePaymentId: paymentId || transaction.cashfreePaymentId,
+                updatedAt: new Date(),
+                settlementStatus: 'unsettled',
+                expectedSettlementDate: expectedSettlement,
+                commission: commissionData.commission,
+                netAmount: parseFloat((transaction.amount - commissionData.commission).toFixed(2)),
+                webhookData: payload
+            };
+            
+            const updatedTransaction = await Transaction.findOneAndUpdate(
+                { _id: transaction._id },
+                update,
+                { new: true }
+            ).populate('merchantId');
+            
+            // Send webhook to merchant if enabled
+            if (updatedTransaction && updatedTransaction.merchantId && updatedTransaction.merchantId.webhookEnabled) {
+                try {
+                    const webhookPayload = {
+                        event: 'payment.success',
+                        timestamp: new Date().toISOString(),
+                        transaction_id: updatedTransaction.transactionId,
+                        order_id: updatedTransaction.orderId,
+                        merchant_id: updatedTransaction.merchantId._id.toString(),
+                        data: {
+                            transaction_id: updatedTransaction.transactionId,
+                            order_id: updatedTransaction.orderId,
+                            cashfree_order_id: updatedTransaction.cashfreeOrderId,
+                            cashfree_payment_id: updatedTransaction.cashfreePaymentId,
+                            amount: updatedTransaction.amount,
+                            currency: updatedTransaction.currency,
+                            status: updatedTransaction.status,
+                            payment_method: updatedTransaction.paymentMethod,
+                            paid_at: updatedTransaction.paidAt.toISOString(),
+                            settlement_status: updatedTransaction.settlementStatus,
+                            expected_settlement_date: updatedTransaction.expectedSettlementDate.toISOString(),
+                            customer: {
+                                customer_id: updatedTransaction.customerId,
+                                name: updatedTransaction.customerName,
+                                email: updatedTransaction.customerEmail,
+                                phone: updatedTransaction.customerPhone
+                            },
+                            merchant: {
+                                merchant_id: updatedTransaction.merchantId._id.toString(),
+                                merchant_name: updatedTransaction.merchantName
+                            },
+                            description: updatedTransaction.description,
+                            created_at: updatedTransaction.createdAt.toISOString(),
+                            updated_at: updatedTransaction.updatedAt.toISOString()
+                        }
+                    };
+                    
+                    await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
+                    console.log('✅ Webhook sent to merchant');
+                } catch (webhookError) {
+                    console.error('⚠️ Failed to send webhook to merchant:', webhookError.message);
+                }
+            }
+            
+            console.log('✅ Transaction updated successfully to "paid"');
+            return res.status(200).json({
+                success: true,
+                message: 'Webhook processed successfully',
+                transaction_id: transaction.transactionId,
+                status: 'paid'
+            });
+        } else if (paymentStatus === 'FAILED' && transaction.status !== 'failed') {
+            console.log('   ❌ PAYMENT FAILED - Updating transaction...');
+            
+            await Transaction.findOneAndUpdate(
+                { _id: transaction._id },
+                {
+                    status: 'failed',
+                    failureReason: payload.paymentMessage || payload.message || 'Payment failed',
+                    updatedAt: new Date(),
+                    webhookData: payload
+                }
+            );
+            
+            console.log('✅ Transaction updated to "failed"');
+            return res.status(200).json({
+                success: true,
+                message: 'Webhook processed successfully',
+                transaction_id: transaction.transactionId,
+                status: 'failed'
+            });
+        } else {
+            console.log('   ℹ️ Transaction already has status:', transaction.status);
+            return res.status(200).json({
+                success: true,
+                message: 'Webhook received but transaction already processed',
+                transaction_id: transaction.transactionId,
+                status: transaction.status
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Cashfree Webhook Handler Error:', error);
+        console.error('   Stack:', error.stack);
+        return res.status(500).json({
+            success: false,
+            message: 'Webhook processing error',
+            error: error.message || 'webhook_error'
         });
     }
 };
@@ -437,7 +609,7 @@ exports.handleCashfreeCallback = async (req, res) => {
                     status: 'failed'
                 });
             } else {
-                // Ambiguous callback - default to success (Cashfree redirects to success URL after payment)
+                // Ambiguous callback - default to success (Cashfree typically redirects to success URL after payment)
                 console.log('   ⚠️ Callback URL is ambiguous, defaulting to success (optimistic update)');
                 
                 const paidAt = new Date();
