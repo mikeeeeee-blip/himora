@@ -52,6 +52,10 @@ const {
     getCombinedReport
 } = require('../controllers/adminController.js');
 
+const {
+    handleCashfreeWebhook
+} = require('../controllers/cashfreeController.js');
+
 // ============ UNIFIED WEBHOOK ENDPOINT (No Auth - from Payment Gateways) ============
 // Unified webhook endpoint that routes to appropriate gateway handler based on payload
 router.post('/webhook', async (req, res) => {
