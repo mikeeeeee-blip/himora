@@ -183,9 +183,8 @@ exports.createCashfreePaymentLink = async (req, res) => {
         // Determine environment from CASHFREE_ENVIRONMENT or default to production
         const responseEnvironment = CASHFREE_ENVIRONMENT === 'sandbox' ? 'sandbox' : 'production';
 
-        // Construct checkout URL - use localhost:3001 for local development, otherwise use environment variable
-        const isLocalhost = process.env.NODE_ENV !== 'production' || !process.env.VITE_CHECKOUT_URL;
-        const checkoutBaseUrl = process.env.VITE_CHECKOUT_URL || (isLocalhost ? 'http://localhost:3001' : 'https://www.shaktisewafoudation.in');
+        // Construct checkout URL - always use NEXTJS_API_URL environment variable
+        const checkoutBaseUrl = process.env.NEXTJS_API_URL || 'https://www.shaktisewafoudation.in';
         const checkoutUrl = new URL(`${checkoutBaseUrl}/checkout`);
         checkoutUrl.searchParams.set('amount', amountValue);
         checkoutUrl.searchParams.set('customer_name', customer_name);
