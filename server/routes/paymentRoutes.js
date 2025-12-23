@@ -61,6 +61,16 @@ router.post('/webhook', async (req, res) => {
         console.log('\n🔔 UNIFIED PAYMENT WEBHOOK RECEIVED');
         console.log('   Payload:', JSON.stringify(payload, null, 2));
         
+        // Log for debugging - match the log format the user is seeing
+        if (payload.orderId && payload.paymentStatus) {
+            console.log('Payment webhook received:', {
+                orderId: payload.orderId,
+                paymentId: payload.paymentId,
+                paymentStatus: payload.paymentStatus,
+                orderAmount: payload.orderAmount
+            });
+        }
+        
         // Detect gateway from payload structure
         // Cashfree webhook typically has: orderId, paymentId, paymentStatus, orderAmount
         if (payload.orderId || payload.order_id || (payload.paymentStatus || payload.payment_status)) {

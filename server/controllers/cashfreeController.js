@@ -274,9 +274,14 @@ exports.handleCashfreeWebhook = async (req, res) => {
 
         console.log('✅ Transaction found:', transaction.transactionId);
         console.log('   Current Status:', transaction.status);
+        console.log('   Payment Status from webhook:', paymentStatus);
+
+        // Normalize payment status - handle different case variations
+        const normalizedPaymentStatus = paymentStatus ? String(paymentStatus).toUpperCase().trim() : null;
+        console.log('   Normalized Payment Status:', normalizedPaymentStatus);
 
         // Process payment based on status
-        if (paymentStatus === 'SUCCESS' && transaction.status !== 'paid') {
+        if (normalizedPaymentStatus === 'SUCCESS' && transaction.status !== 'paid') {
             console.log('   ✅ PAYMENT SUCCESSFUL - Updating transaction...');
             
             const paidAt = new Date();
@@ -353,7 +358,7 @@ exports.handleCashfreeWebhook = async (req, res) => {
                 transaction_id: transaction.transactionId,
                 status: 'paid'
             });
-        } else if (paymentStatus === 'FAILED' && transaction.status !== 'failed') {
+        } else if (normalizedPaymentStatus === 'FAILED' && transaction.status !== 'failed') {
             console.log('   ❌ PAYMENT FAILED - Updating transaction...');
             
             await Transaction.findOneAndUpdate(
