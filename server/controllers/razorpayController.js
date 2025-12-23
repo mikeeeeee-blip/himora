@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const Transaction = require('../models/Transaction');
 const { sendMerchantWebhook } = require('./merchantWebhookController');
 const User = require('../models/User');
+const Settings = require('../models/Settings');
 const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
 const axios = require('axios')    // Initialize Razorpay
 const {createPhonePePaymentLink} = require('./phonepeController');
@@ -31,6 +32,31 @@ exports.createRazorpayPaymentLink = async (req, res) => {
         const merchantName = req.merchantName;
 
         console.log('📤 Razorpay Payment Link request from:', merchantName);
+
+        // Check if Razorpay is enabled in settings
+        const settings = await Settings.getSettings();
+        if (!settings.paymentGateways.razorpay.enabled) {
+            console.warn('⚠️ Razorpay is not enabled in payment gateway settings');
+            console.log('🔄 Falling back to unified payment gateway controller to use an enabled gateway');
+            
+            // Instead of returning an error, fallback to unified payment gateway controller
+            // This will automatically select an enabled gateway
+            const { createPaymentLink } = require('./paymentGatewayController');
+            return await createPaymentLink(req, res);
+        }
+
+        // Validate Razorpay credentials
+        if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+            console.error('❌ Razorpay credentials not configured');
+            return res.status(500).json({
+                success: false,
+                error: 'Razorpay credentials not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables.',
+                details: {
+                    description: 'Razorpay credentials not configured',
+                    code: 'CONFIGURATION_ERROR'
+                }
+            });
+        }
 
         // Validate input
         if (!amount || !customer_name || !customer_email || !customer_phone) {
@@ -189,6 +215,18 @@ exports.createRazorpayPaymentLink = async (req, res) => {
             // Razorpay SDK error structure
             errorMessage = error.error.description || error.error.message || errorMessage;
             errorDetails = error.error;
+            
+            // Check for authentication errors specifically
+            if (error.error.code === 'BAD_REQUEST_ERROR' && 
+                (errorMessage.toLowerCase().includes('authentication') || 
+                 errorMessage.toLowerCase().includes('unauthorized') ||
+                 errorMessage.toLowerCase().includes('invalid'))) {
+                errorMessage = 'Razorpay authentication failed. Please check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET environment variables.';
+                errorDetails = {
+                    ...error.error,
+                    hint: 'The Razorpay API credentials are invalid or missing. Please verify your RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in the server environment variables.'
+                };
+            }
         } else if (error.message) {
             // Standard error with message
             errorMessage = error.message;
@@ -231,6 +269,21 @@ exports.createPhonePeDeepLink = async (req, res) => {
     const upi_id =  "7049407951@ptaxis"
     const merchantId = req.merchantId;
     const merchantName = req.merchantName;
+
+    // Check if PhonePe is enabled in settings
+    const settings = await Settings.getSettings();
+    if (!settings.paymentGateways.phonepe.enabled) {
+      console.error('❌ PhonePe is not enabled in payment gateway settings');
+      return res.status(403).json({
+        success: false,
+        error: 'PhonePe payment gateway is not enabled. Please contact administrator to enable it.',
+        details: {
+          description: 'PhonePe gateway is disabled',
+          code: 'GATEWAY_DISABLED',
+          hint: 'The administrator needs to enable PhonePe in the payment gateway settings from the admin dashboard.'
+        }
+      });
+    }
 
     // Validation
     if (!amount || !customer_name || !customer_phone)

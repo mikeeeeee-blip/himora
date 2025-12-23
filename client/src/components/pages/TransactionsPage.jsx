@@ -75,7 +75,7 @@ const TransactionsPage = () => {
   // Filter states
   const [filters, setFilters] = useState({
     page: 1,
-    limit: 20,
+    limit: 999999, // Show all transactions (no pagination)
     status: "",
     payment_gateway: "",
     payment_method: "",
@@ -255,6 +255,19 @@ const TransactionsPage = () => {
       ...prev,
       page: newPage,
     }));
+  };
+
+  // Calculate total paid amount from filtered transactions
+  const calculateTotalPaidAmount = () => {
+    if (activeTab === "payin" || activeTab === "settlement") {
+      return transactions
+        .filter((txn) => txn.status === "paid" || txn.status === "success")
+        .reduce((total, txn) => {
+          const amount = parseFloat(txn.amount || 0);
+          return total + amount;
+        }, 0);
+    }
+    return 0;
   };
 
   // Open download modal
@@ -952,6 +965,34 @@ const TransactionsPage = () => {
                     </div>
                   </motion.div>
 
+                  {/* Total Paid Amount Summary */}
+                  {(activeTab === "payin" || activeTab === "settlement") && transactions.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.25 }}
+                      className="bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30 rounded-xl p-4 sm:p-6"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-white/70 text-sm font-medium font-['Albert_Sans'] mb-1">
+                            Total Paid Amount (Filtered Results)
+                          </h3>
+                          <p className="text-2xl sm:text-3xl font-bold text-green-400 font-['Albert_Sans']">
+                            ₹{calculateTotalPaidAmount().toLocaleString("en-IN", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </p>
+                          <p className="text-white/60 text-xs font-['Albert_Sans'] mt-1">
+                            Based on {transactions.filter(txn => txn.status === "paid" || txn.status === "success").length} paid transaction(s)
+                          </p>
+                        </div>
+                        <FiTrendingUp className="text-green-400 text-4xl sm:text-5xl opacity-50" />
+                      </div>
+                    </motion.div>
+                  )}
+
                   {/* Reports section */}
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -1030,6 +1071,9 @@ const TransactionsPage = () => {
                                   Commission
                                 </th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                                  GST Rate Amount
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
                                   Net Amount
                                 </th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
@@ -1099,6 +1143,23 @@ const TransactionsPage = () => {
                                   </td>
                                   <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
                                     {formatAmount(transaction.commission)}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                                    {(() => {
+                                      // Calculate GST amount
+                                      // GST rate is 18% (from commissionCalculator.js)
+                                      const baseRate = 3.8; // 3.8% base commission rate
+                                      const gstRate = 18; // 18% GST rate
+                                      let gstAmount = 0;
+                                      
+                                      if (transaction.amount && transaction.amount > 0) {
+                                        // Calculate base commission first, then GST on it
+                                        const baseCommission = (transaction.amount * baseRate) / 100;
+                                        gstAmount = (baseCommission * gstRate) / 100;
+                                      }
+                                      
+                                      return formatAmount(gstAmount);
+                                    })()}
                                   </td>
                                   <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
                                     {formatAmount(transaction.netAmount)}
@@ -1263,6 +1324,9 @@ const TransactionsPage = () => {
                                   Commission
                                 </th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
+                                  GST Rate Amount
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
                                   Net Amount
                                 </th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
@@ -1325,6 +1389,23 @@ const TransactionsPage = () => {
                                     <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
                                       {formatAmount(txn.commission)}
                                     </td>
+                                    <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                                      {(() => {
+                                        // Calculate GST amount
+                                        // GST rate is 18% (from commissionCalculator.js)
+                                        const baseRate = 3.8; // 3.8% base commission rate
+                                        const gstRate = 18; // 18% GST rate
+                                        let gstAmount = 0;
+                                        
+                                        if (txn.amount && txn.amount > 0) {
+                                          // Calculate base commission first, then GST on it
+                                          const baseCommission = (txn.amount * baseRate) / 100;
+                                          gstAmount = (baseCommission * gstRate) / 100;
+                                        }
+                                        
+                                        return formatAmount(gstAmount);
+                                      })()}
+                                    </td>
                                     <td className="px-4 py-3 text-sm text-green-400 font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
                                       {formatAmount(txn.netAmount)}
                                     </td>
@@ -1374,61 +1455,6 @@ const TransactionsPage = () => {
                           </p>
                         </div>
                       ) : null}
-
-                      {/* Pagination */}
-                      {pagination && Object.keys(pagination).length > 0 && (
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6">
-                          <div className="text-white/70 text-sm font-['Albert_Sans']">
-                            Showing{" "}
-                            <span className="text-white font-semibold">
-                              {(pagination.currentPage - 1) * pagination.limit +
-                                1}
-                            </span>{" "}
-                            to{" "}
-                            <span className="text-white font-semibold">
-                              {Math.min(
-                                pagination.currentPage * pagination.limit,
-                                pagination.totalCount
-                              )}
-                            </span>{" "}
-                            of{" "}
-                            <span className="text-white font-semibold">
-                              {pagination.totalCount}
-                            </span>{" "}
-                            {activeTab === "payin" ? "transactions" : "payouts"}
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={() =>
-                                handlePageChange(pagination.currentPage - 1)
-                              }
-                              disabled={!pagination.hasPrevPage || loading}
-                              className="px-4 py-2 bg-accent hover:bg-accent/90 text-white rounded-lg font-medium font-['Albert_Sans'] disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg disabled:transform-none disabled:hover:bg-accent"
-                            >
-                              Previous
-                            </button>
-                            <span className="text-white/80 text-sm font-medium font-['Albert_Sans'] px-3">
-                              Page{" "}
-                              <span className="text-white font-semibold">
-                                {pagination.currentPage}
-                              </span>{" "}
-                              of{" "}
-                              <span className="text-white font-semibold">
-                                {pagination.totalPages}
-                              </span>
-                            </span>
-                            <button
-                              onClick={() =>
-                                handlePageChange(pagination.currentPage + 1)
-                              }
-                              disabled={!pagination.hasNextPage || loading}
-                              className="px-4 py-2 bg-accent hover:bg-accent/90 text-white rounded-lg font-medium font-['Albert_Sans'] disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg disabled:transform-none disabled:hover:bg-accent"
-                            >
-                              Next
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>

@@ -79,6 +79,11 @@ const MetricCard = ({
             <div className="text-xl font-semibold text-white font-['Albert_Sans']">
               {value}
             </div>
+            {subtitle && (
+              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                {subtitle}
+              </div>
+            )}
           </div>
         </div>
         {showChart && (

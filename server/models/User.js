@@ -42,6 +42,12 @@ const UserSchema = new mongoose.Schema({
     default: 5, // 5 free payouts for amounts under ₹500
     min: 0
 },
+    // Blocked Balance (funds that cannot be used for payout)
+    blockedBalance: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     // API Key
     apiKey: {
         type: String,
@@ -138,8 +144,8 @@ const UserSchema = new mongoose.Schema({
 });
 
 // ✅ ADD INDEX FOR FASTER QUERIES
-UserSchema.index({ email: 1 });
-UserSchema.index({ apiKey: 1 });
+// Note: email and apiKey already have unique indexes from schema definition
+// Only add non-unique indexes here if needed for compound queries
 
 // ✅ UPDATE updatedAt ON SAVE
 UserSchema.pre('save', function(next) {

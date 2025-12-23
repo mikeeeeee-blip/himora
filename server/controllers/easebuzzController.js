@@ -3,6 +3,7 @@ const axios = require('axios');
 const Transaction = require('../models/Transaction');
 const { sendMerchantWebhook } = require('./merchantWebhookController');
 const User = require('../models/User');
+const Settings = require('../models/Settings');
 const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
 
@@ -145,6 +146,21 @@ exports.createEasebuzzPaymentLink = async (req, res) => {
         const merchantName = req.merchantName;
 
         console.log('📤 Easebuzz Payment Link request from:', merchantName);
+
+        // Check if Easebuzz is enabled in settings
+        const settings = await Settings.getSettings();
+        if (!settings.paymentGateways.easebuzz.enabled) {
+            console.error('❌ Easebuzz is not enabled in payment gateway settings');
+            return res.status(403).json({
+                success: false,
+                error: 'Easebuzz payment gateway is not enabled. Please contact administrator to enable it.',
+                details: {
+                    description: 'Easebuzz gateway is disabled',
+                    code: 'GATEWAY_DISABLED',
+                    hint: 'The administrator needs to enable Easebuzz in the payment gateway settings from the admin dashboard.'
+                }
+            });
+        }
 
         // Validate credentials
         if (!EASEBUZZ_MERCHANT_ID || !EASEBUZZ_SALT_KEY) {

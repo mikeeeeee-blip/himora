@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const Settings = require('../models/Settings');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
+const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
 const { sendMerchantWebhook, sendPayoutWebhook } = require('./merchantWebhookController');
 const mongoose = require('mongoose');
 const COMMISSION_RATE = 0.038; // 3.8%
@@ -653,14 +654,40 @@ exports.updateTransactionStatus = async (req, res) => {
             }
         };
 
-        // If setting to 'paid', also set paidAt
-        if (status === 'paid' && !transaction.paidAt) {
-            updateOperation.$set.paidAt = new Date();
+        // If setting to 'paid', recalculate commission and sync all data
+        if (status === 'paid') {
+            const paidAt = transaction.paidAt || new Date();
+            
+            // Calculate commission using the commission calculator
+            const commissionData = calculatePayinCommission(transaction.amount);
+            
+            // Calculate expected settlement date
+            const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+            
+            // Update all relevant fields
+            updateOperation.$set.paidAt = paidAt;
+            updateOperation.$set.commission = commissionData.commission;
+            updateOperation.$set.netAmount = parseFloat((transaction.amount - commissionData.commission).toFixed(2));
+            updateOperation.$set.settlementStatus = 'unsettled';
+            updateOperation.$set.expectedSettlementDate = expectedSettlement;
+            
+            console.log(`💰 Commission recalculated for transaction ${transactionId}:`);
+            console.log(`   Amount: ₹${transaction.amount}`);
+            console.log(`   Commission: ₹${commissionData.commission}`);
+            console.log(`   Net Amount: ₹${updateOperation.$set.netAmount}`);
+            console.log(`   Expected Settlement: ${expectedSettlement.toISOString()}`);
         }
 
-        // If changing from 'paid' to another status, remove paidAt
+        // If changing from 'paid' to another status, remove paidAt and reset commission-related fields
         if (transaction.status === 'paid' && status !== 'paid') {
-            updateOperation.$unset = { paidAt: "" };
+            updateOperation.$unset = { 
+                paidAt: "",
+                commission: "",
+                netAmount: "",
+                settlementStatus: "",
+                expectedSettlementDate: "",
+                settlementDate: ""
+            };
         }
 
         const updatedTransaction = await Transaction.findOneAndUpdate(
@@ -673,7 +700,7 @@ exports.updateTransactionStatus = async (req, res) => {
 
         res.json({
             success: true,
-            message: `Transaction status updated successfully`,
+            message: `Transaction status updated successfully${status === 'paid' ? ' - Commission recalculated and data synced' : ''}`,
             transaction: {
                 transactionId: updatedTransaction.transactionId,
                 orderId: updatedTransaction.orderId,
@@ -683,6 +710,10 @@ exports.updateTransactionStatus = async (req, res) => {
                 merchantName: updatedTransaction.merchantName,
                 customerName: updatedTransaction.customerName,
                 paidAt: updatedTransaction.paidAt,
+                commission: updatedTransaction.commission,
+                netAmount: updatedTransaction.netAmount,
+                settlementStatus: updatedTransaction.settlementStatus,
+                expectedSettlementDate: updatedTransaction.expectedSettlementDate,
                 updatedAt: updatedTransaction.updatedAt
             }
         });
@@ -692,6 +723,56 @@ exports.updateTransactionStatus = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to update transaction status',
+            details: error.message
+        });
+    }
+};
+
+// ============ DELETE TRANSACTION (SUPER ADMIN) ============
+/**
+ * Deletes a transaction (Super Admin only)
+ * 
+ * DELETE /api/payments/admin/transactions/:transactionId
+ * Headers: x-auth-token (JWT token - Super Admin)
+ */
+exports.deleteTransaction = async (req, res) => {
+    try {
+        const { transactionId } = req.params;
+
+        // Find the transaction
+        const transaction = await Transaction.findOne({ transactionId });
+
+        if (!transaction) {
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found'
+            });
+        }
+
+        // Check if transaction is settled or part of a payout
+        if (transaction.settlementStatus === 'settled') {
+            return res.status(400).json({
+                success: false,
+                error: 'Cannot delete a settled transaction. Please contact support if this is necessary.'
+            });
+        }
+
+        // Delete the transaction
+        await Transaction.deleteOne({ transactionId });
+
+        console.log(`🗑️ Super Admin deleted transaction ${transactionId}`);
+
+        res.json({
+            success: true,
+            message: 'Transaction deleted successfully',
+            transactionId: transactionId
+        });
+
+    } catch (error) {
+        console.error('❌ Delete Transaction Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete transaction',
             details: error.message
         });
     }
@@ -1248,8 +1329,9 @@ exports.getAllMerchantsData = async (req, res) => {
             
             const totalPaidOut = parseFloat((payoutStat.total_payout_completed || 0).toFixed(2));
             const totalPendingPayout = parseFloat((payoutStat.total_payout_pending || 0).toFixed(2));
+            const blockedBalance = parseFloat((merchant.blockedBalance || 0).toFixed(2));
             
-            const availableBalance = Math.max(0, parseFloat((settledNetRevenue - totalPaidOut - totalPendingPayout).toFixed(2)));
+            const availableBalance = Math.max(0, parseFloat((settledNetRevenue - totalPaidOut - totalPendingPayout - blockedBalance).toFixed(2)));
 
             // Calculate success rate
             const totalTxn = txnStat.total_transactions || 0;
@@ -1343,6 +1425,7 @@ exports.getAllMerchantsData = async (req, res) => {
                     settled_net_revenue: settledNetRevenue,
                     total_paid_out: totalPaidOut,
                     pending_payouts: totalPendingPayout,
+                    blocked_balance: blockedBalance,
                     available_balance: availableBalance,
                     can_request_payout: availableBalance > 0,
                     minimum_payout_amount: merchant.minimumPayoutAmount || 100
@@ -1668,6 +1751,94 @@ exports.updatePaymentGatewaySettings = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to update payment gateway settings',
+            detail: error.message
+        });
+    }
+};
+
+// ============ BLOCK/UNBLOCK MERCHANT FUNDS ============
+exports.blockMerchantFunds = async (req, res) => {
+    try {
+        const { merchantId } = req.params;
+        const { amount, action } = req.body; // action: 'block' or 'unblock'
+
+        console.log(`🔒 SuperAdmin ${req.user.name} ${action}ing funds for merchant ${merchantId}`);
+
+        if (!merchantId || !mongoose.Types.ObjectId.isValid(merchantId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Valid merchantId is required'
+            });
+        }
+
+        if (!action || !['block', 'unblock'].includes(action)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Action must be either "block" or "unblock"'
+            });
+        }
+
+        if (typeof amount !== 'number' || amount <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Amount must be a positive number'
+            });
+        }
+
+        // Find merchant
+        const merchant = await User.findById(merchantId);
+        if (!merchant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Merchant not found'
+            });
+        }
+
+        if (merchant.role !== 'admin') {
+            return res.status(400).json({
+                success: false,
+                error: 'User is not a merchant'
+            });
+        }
+
+        const currentBlocked = merchant.blockedBalance || 0;
+        let newBlockedBalance = 0;
+
+        if (action === 'block') {
+            newBlockedBalance = parseFloat((currentBlocked + amount).toFixed(2));
+        } else if (action === 'unblock') {
+            if (amount > currentBlocked) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Cannot unblock ₹${amount}. Only ₹${currentBlocked} is currently blocked.`
+                });
+            }
+            newBlockedBalance = parseFloat((currentBlocked - amount).toFixed(2));
+        }
+
+        // Update merchant
+        merchant.blockedBalance = newBlockedBalance;
+        await merchant.save();
+
+        console.log(`✅ Merchant ${merchant.email} - ${action}ed ₹${amount}. New blocked balance: ₹${newBlockedBalance}`);
+
+        res.json({
+            success: true,
+            message: `Successfully ${action}ed ₹${amount} for merchant ${merchant.email}`,
+            merchant: {
+                merchantId: merchant._id,
+                email: merchant.email,
+                name: merchant.name,
+                blockedBalance: newBlockedBalance,
+                previousBlockedBalance: currentBlocked
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Block/Unblock Merchant Funds Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to block/unblock merchant funds',
             detail: error.message
         });
     }

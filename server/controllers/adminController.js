@@ -30,7 +30,16 @@ exports.getMyBalance = async (req, res) => {
     try {
         const merchantObjectId =  new mongoose.Types.ObjectId(req.merchantId);
 
-        // Aggregate settled transactions
+        // Fetch merchant to get blocked balance
+        const merchant = await User.findById(req.merchantId);
+        if (!merchant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Merchant not found'
+            });
+        }
+
+        // Aggregate settled transactions (use stored commission so GST & any overrides are respected)
         const settledAgg = await Transaction.aggregate([
             { $match: { merchantId: merchantObjectId, status: 'paid', settlementStatus: 'settled' } },
             {
@@ -38,26 +47,28 @@ exports.getMyBalance = async (req, res) => {
                     _id: null,
                     settledRevenue: { $sum: '$amount' },
                     settledRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
+                    settledCommission: { $sum: { $ifNull: ['$commission', 0] } },
                     settledCount: { $sum: 1 }
                 }
             }
         ]);
-        const settled = settledAgg[0] || { settledRevenue: 0, settledRefunded: 0, settledCount: 0 };
-        const settledCommission = settled.settledRevenue * COMMISSION_RATE;
+        const settled = settledAgg[0] || { settledRevenue: 0, settledRefunded: 0, settledCommission: 0, settledCount: 0 };
+        const settledCommission = settled.settledCommission || 0;
 
-        // Aggregate unsettled transactions
+        // Aggregate unsettled transactions (use stored commission so GST & any overrides are respected)
         const unsettledAgg = await Transaction.aggregate([
             { $match: { merchantId: merchantObjectId, status: 'paid', settlementStatus: 'unsettled' } },
             {
                 $group: {
                     _id: null,
                     unsettledRevenue: { $sum: '$amount' },
+                    unsettledCommission: { $sum: { $ifNull: ['$commission', 0] } },
                     unsettledCount: { $sum: 1 }
                 }
             }
         ]);
-        const unsettled = unsettledAgg[0] || { unsettledRevenue: 0, unsettledCount: 0 };
-        const unsettledCommission = unsettled.unsettledRevenue * COMMISSION_RATE;
+        const unsettled = unsettledAgg[0] || { unsettledRevenue: 0, unsettledCommission: 0, unsettledCount: 0 };
+        const unsettledCommission = unsettled.unsettledCommission || 0;
 
         // Get next settlement info
         const nextUnsettledTransaction = await Transaction.findOne({
@@ -247,7 +258,8 @@ exports.getMyBalance = async (req, res) => {
         
         // Calculations
         const settledNetRevenue = settled.settledRevenue - settled.settledRefunded - settledCommission;
-        const availableBalance = settledNetRevenue - totalPaidOut - totalPending;
+        const blockedBalance = merchant.blockedBalance || 0;
+        const availableBalance = Math.max(0, settledNetRevenue - totalPaidOut - totalPending - blockedBalance);
 
         const totalRevenue = settled.settledRevenue + unsettled.unsettledRevenue;
         const totalCommission = settledCommission + unsettledCommission;
@@ -283,6 +295,7 @@ exports.getMyBalance = async (req, res) => {
                 settled_commission: settledCommission.toFixed(2),
                 settled_net_revenue: settledNetRevenue.toFixed(2),
                 available_balance:  (availableBalance.toFixed(2)),
+                blocked_balance: blockedBalance.toFixed(2),
                 totalTodayRevenue : totalTodayRevenue,
                 totalPayinCommission : totalPayinCommission,
                 totalTodaysPayoutCommission : parseFloat(totalTodaysPayoutCommission.toFixed(2)),
@@ -299,7 +312,7 @@ exports.getMyBalance = async (req, res) => {
                 pending_payouts: totalPending.toFixed(2),
 
                 commission_structure: {
-                    payin: '3.8%',
+                    payin: '3.8% + 18% GST (4.484% effective)',
                     payout_500_to_1000: '₹30 ',
                     payout_above_1000: '(1.77%)'
                 }
@@ -1403,11 +1416,43 @@ exports.requestPayout = async (req, res) => {
     const totalReservedGross = completedPayouts.reduce((sum, p) => sum + (p.grossAmount || p.amount || 0), 0);
     console.log('Total reserved (gross) from payouts:', totalReservedGross);
 
-    const availableBalance = parseFloat((totalSettledAmount - totalReservedGross).toFixed(2));
-    console.log('Computed availableBalance:', availableBalance);
+    // fetch merchant to get blocked balance
+    const merchant = await User.findById(req.merchantId);
+    console.log('Merchant fetched:', merchant ? {
+      id: merchant._id,
+      name: merchant.name,
+      freePayoutsUnder500: merchant.freePayoutsUnder500,
+      blockedBalance: merchant.blockedBalance || 0
+    } : 'merchant not found');
+
+    if (!merchant) {
+      console.log('Merchant not found in DB');
+      return res.status(404).json({ success: false, error: 'Merchant not found' });
+    }
+
+    const blockedBalance = merchant.blockedBalance || 0;
+    console.log('Blocked balance:', blockedBalance);
+
+    // Calculate settled net revenue (amount - commission - refunds)
+    const settledNetRevenue = settledTransactions.reduce((sum, t) => {
+      const commission = t.commission || 0;
+      const refundAmount = t.refundAmount || 0;
+      return sum + t.amount - commission - refundAmount;
+    }, 0);
+
+    const availableBalance = Math.max(0, parseFloat((settledNetRevenue - totalReservedGross - blockedBalance).toFixed(2)));
+    console.log('Computed availableBalance (after blocked):', availableBalance);
     if (availableBalance <= 0) {
       console.log('Available balance <= 0');
-      return res.status(400).json({ success: false, error: 'No balance available for payout', availableBalance: 0 });
+      const reason = blockedBalance > 0 
+        ? `No balance available for payout. ₹${blockedBalance} is currently blocked.`
+        : 'No balance available for payout';
+      return res.status(400).json({ 
+        success: false, 
+        error: reason,
+        availableBalance: 0,
+        blockedBalance: blockedBalance
+      });
     }
 
     // Final requested net amount: use provided amount if valid, otherwise full available
@@ -1428,19 +1473,6 @@ exports.requestPayout = async (req, res) => {
     }
 
     console.log(`Payout requested: ₹${finalAmount} out of ₹${availableBalance} available`);
-
-    // fetch merchant
-    const merchant = await User.findById(req.merchantId);
-    console.log('Merchant fetched:', merchant ? {
-      id: merchant._id,
-      name: merchant.name,
-      freePayoutsUnder500: merchant.freePayoutsUnder500
-    } : 'merchant not found');
-
-    if (!merchant) {
-      console.log('Merchant not found in DB');
-      return res.status(404).json({ success: false, error: 'Merchant not found' });
-    }
 
     // calculate commission (pure function)
     let payoutCommissionInfo;

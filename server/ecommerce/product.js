@@ -260,7 +260,7 @@ function showProductNotFound() {
             <div class="product-not-found-dark">
                 <h2>Product Not Found</h2>
                 <p>Sorry, the product you're looking for doesn't exist or has been removed.</p>
-                <a href="/shop.html" class="btn-primary-dark">Back to Shop</a>
+                <a href="/shop" class="btn-primary-dark">Back to Shop</a>
             </div>
         `;
     }

@@ -4,6 +4,7 @@ const { createPaytmPaymentLink } = require('./paytmController');
 const { createEasebuzzPaymentLink } = require('./easebuzzController');
 const { createPhonePeDeepLink } = require('./razorpayController');
 const { createSabpaisaPaymentLink } = require('./sabpaisaController');
+const { createCashfreePaymentLink } = require('./cashfreeController');
 
 /**
  * Unified payment link creation endpoint
@@ -14,31 +15,90 @@ const { createSabpaisaPaymentLink } = require('./sabpaisaController');
  */
 exports.createPaymentLink = async (req, res) => {
     try {
+        console.log('\n' + '='.repeat(80));
+        console.log('🔗 PAYMENT LINK CREATION REQUEST');
+        console.log('='.repeat(80));
+        console.log(`   Timestamp: ${new Date().toISOString()}`);
+        console.log(`   Request Method: ${req.method}`);
+        console.log(`   Request URL: ${req.originalUrl}`);
+        console.log(`   Merchant ID: ${req.merchantId || 'N/A'}`);
+        console.log(`   Merchant Name: ${req.merchantName || 'N/A'}`);
+        
         // Get payment gateway settings
         const settings = await Settings.getSettings();
         const enabledGateways = settings.getEnabledGateways();
 
-        // Check if any gateway is enabled
-        if (enabledGateways.length === 0) {
+        console.log('\n📋 Payment Gateway Configuration:');
+        console.log(`   All enabled gateways (from settings): [${enabledGateways.join(', ') || 'none'}]`);
+        
+        // List of implemented/available gateways
+        const implementedGateways = ['razorpay', 'paytm', 'phonepe', 'easebuzz', 'sabpaisa', 'cashfree'];
+        console.log(`   Implemented gateways: [${implementedGateways.join(', ')}]`);
+        
+        // Filter out unimplemented gateways from enabled list
+        const availableGateways = enabledGateways.filter(gateway => implementedGateways.includes(gateway));
+        const unimplementedInEnabled = enabledGateways.filter(gateway => !implementedGateways.includes(gateway));
+        
+        console.log(`   Available gateways (implemented & enabled): [${availableGateways.join(', ') || 'none'}]`);
+        if (unimplementedInEnabled.length > 0) {
+            console.warn(`   ⚠️  WARNING: Unimplemented gateway(s) enabled: [${unimplementedInEnabled.join(', ')}]`);
+            console.warn(`   ⚠️  These will be filtered out and cannot be used for payment links.`);
+        }
+
+        // Check if any gateway is enabled and implemented
+        if (availableGateways.length === 0) {
+            console.error('\n❌ PAYMENT LINK CREATION FAILED:');
+            console.error(`   Reason: No implemented payment gateway is enabled`);
+            console.error(`   Enabled gateways: [${enabledGateways.join(', ') || 'none'}]`);
+            console.error(`   Unimplemented gateways in enabled list: [${unimplementedInEnabled.join(', ') || 'none'}]`);
+            console.error(`   Solution: Enable at least one of: ${implementedGateways.join(', ')}`);
+            console.error('='.repeat(80) + '\n');
+            
+            if (unimplementedInEnabled.length > 0) {
+                return res.status(503).json({
+                    success: false,
+                    error: `The enabled gateway(s) [${unimplementedInEnabled.join(', ')}] are not yet implemented.`,
+                    message: `Please enable one of the implemented gateways: ${implementedGateways.map(g => g.charAt(0).toUpperCase() + g.slice(1)).join(', ')}.`,
+                    details: {
+                        enabled_gateways: enabledGateways,
+                        unimplemented_gateways: unimplementedInEnabled,
+                        implemented_gateways: implementedGateways,
+                        solution: `Go to Super Admin → Payment Gateway Settings → Disable ${unimplementedInEnabled.join(', ')} → Enable one of: ${implementedGateways.join(', ')}`
+                    }
+                });
+            }
             return res.status(503).json({
                 success: false,
                 error: 'No payment gateway is enabled. Please contact administrator.',
-                message: 'The administrator needs to enable at least one payment gateway in the system settings.'
+                message: `The administrator needs to enable at least one payment gateway in the system settings. Available gateways: ${implementedGateways.map(g => g.charAt(0).toUpperCase() + g.slice(1)).join(', ')}.`,
+                details: {
+                    enabled_gateways: enabledGateways,
+                    available_gateways: implementedGateways
+                }
             });
         }
 
         // Gateway selection logic - Use round-robin/alternating rotation or first gateway if disabled
-        const sortedEnabledGateways = [...enabledGateways].sort();
+        // Use availableGateways (filtered to only include implemented gateways) instead of all enabledGateways
+        const sortedEnabledGateways = [...availableGateways].sort();
         const isRoundRobinEnabled = settings.roundRobinRotation?.enabled !== false;
         
-        console.log(`🔍 Gateway Selection Debug Info:`);
-        console.log(`   Enabled gateways: ${sortedEnabledGateways.join(', ')}`);
-        console.log(`   Round-robin enabled: ${isRoundRobinEnabled}`);
-        console.log(`   Current roundRobinRotation state:`, JSON.stringify(settings.roundRobinRotation));
+        console.log('\n🔍 Gateway Selection Process:');
+        console.log(`   Available gateways (sorted): [${sortedEnabledGateways.join(', ')}]`);
+        console.log(`   Round-robin rotation: ${isRoundRobinEnabled ? 'ENABLED' : 'DISABLED'}`);
+        if (settings.roundRobinRotation) {
+            console.log(`   Round-robin state:`, JSON.stringify({
+                enabled: settings.roundRobinRotation.enabled,
+                lastUsedGatewayIndex: settings.roundRobinRotation.lastUsedGatewayIndex,
+                customCounts: settings.roundRobinRotation.customCounts ? 
+                    Object.fromEntries(settings.roundRobinRotation.customCounts) : null,
+                currentRotationState: settings.roundRobinRotation.currentRotationState
+            }, null, 2));
+        }
         
         // Get current active gateway (before rotation) for display
         const currentActiveGateway = settings.getCurrentActiveGateway();
-        console.log(`   Current active gateway (before): ${currentActiveGateway}`);
+        console.log(`   Current active gateway (before selection): ${currentActiveGateway || 'N/A'}`);
         
         let selectedGateway;
         let rotationMode;
@@ -46,40 +106,68 @@ exports.createPaymentLink = async (req, res) => {
         if (isRoundRobinEnabled) {
             // Get next gateway using round-robin (alternates between enabled gateways or custom rotation)
             // This will update the lastUsedGatewayIndex or currentRotationState
+            console.log(`   Using round-robin logic to select next gateway...`);
             selectedGateway = settings.getNextGatewayRoundRobin();
             rotationMode = settings.roundRobinRotation?.customCounts?.size > 0 ? 'custom-rotation' : 'round-robin';
+            
+            console.log(`   Gateway selected by round-robin: ${selectedGateway || 'NONE'}`);
+            
+            // Ensure selected gateway is implemented (filter out unimplemented like cashfree)
+            if (selectedGateway && !implementedGateways.includes(selectedGateway)) {
+                console.warn(`   ⚠️  WARNING: Selected gateway '${selectedGateway}' is not implemented!`);
+                console.warn(`   ⚠️  Falling back to first available gateway: ${sortedEnabledGateways[0]}`);
+                selectedGateway = sortedEnabledGateways[0];
+                rotationMode = 'fallback';
+            }
         } else {
             // Round-robin disabled - use first enabled gateway
             selectedGateway = sortedEnabledGateways[0];
             rotationMode = 'disabled';
-            console.log(`⚠️ Round-robin disabled - using first enabled gateway: ${selectedGateway}`);
+            console.log(`   Round-robin disabled → Using first available gateway: ${selectedGateway}`);
         }
         
         if (!selectedGateway) {
+            console.error('\n❌ GATEWAY SELECTION FAILED:');
+            console.error(`   No gateway could be selected from available gateways: [${sortedEnabledGateways.join(', ')}]`);
+            console.error('='.repeat(80) + '\n');
+            
             return res.status(503).json({
                 success: false,
                 error: 'No gateway selected. Gateway selection failed.',
-                message: 'Failed to select a payment gateway.'
+                message: 'Failed to select a payment gateway. Please check gateway configuration.',
+                details: {
+                    available_gateways: sortedEnabledGateways,
+                    round_robin_enabled: isRoundRobinEnabled
+                }
             });
         }
         
+        console.log(`\n✅ Gateway Selected: ${selectedGateway.toUpperCase()} (Mode: ${rotationMode})`);
+        
         // Mark as modified and save settings to persist rotation state (only if round-robin is enabled)
         if (isRoundRobinEnabled) {
+            try {
             settings.markModified('roundRobinRotation');
             await settings.save();
+                console.log(`   ✅ Round-robin state saved successfully`);
+            } catch (saveError) {
+                console.error(`   ⚠️  WARNING: Failed to save round-robin state:`, saveError.message);
+                // Continue anyway - rotation state save failure shouldn't block payment link creation
+            }
         }
         
-        console.log(`🔄 Gateway Selection: Using gateway ${selectedGateway} (Mode: ${rotationMode})`);
-        console.log(`   Enabled gateways: ${sortedEnabledGateways.join(', ')}`);
+        console.log(`\n🔄 Gateway Selection Summary:`);
+        console.log(`   Selected Gateway: ${selectedGateway.toUpperCase()}`);
+        console.log(`   Selection Mode: ${rotationMode}`);
+        console.log(`   Available Gateways: [${sortedEnabledGateways.join(', ')}]`);
         if (isRoundRobinEnabled) {
-            console.log(`   Rotation: ${rotationMode === 'custom-rotation' ? 'Custom counts' : 'Alternating'} between ${sortedEnabledGateways.length} enabled gateway(s)`);
-            console.log(`   Previous gateway: ${currentActiveGateway || 'N/A'} → Selected gateway: ${selectedGateway}`);
-            console.log(`   Saved roundRobinRotation state:`, JSON.stringify(settings.roundRobinRotation));
+            console.log(`   Rotation Type: ${rotationMode === 'custom-rotation' ? 'Custom counts' : 'Alternating'} between ${sortedEnabledGateways.length} gateway(s)`);
+            console.log(`   Rotation Flow: ${currentActiveGateway || 'N/A'} → ${selectedGateway}`);
         }
 
-        console.log(`🔀 Routing payment link creation to ${selectedGateway} gateway`);
-        console.log(`   Enabled gateways: ${sortedEnabledGateways.join(', ')}`);
-        console.log(`   Selected gateway: ${selectedGateway}`);
+        console.log(`\n🔀 Routing to Gateway Controller:`);
+        console.log(`   Gateway: ${selectedGateway}`);
+        console.log(`   Controller function: create${selectedGateway.charAt(0).toUpperCase() + selectedGateway.slice(1)}PaymentLink`);
 
         // Store original json method to intercept response
         const originalJson = res.json.bind(res);
@@ -145,6 +233,9 @@ exports.createPaymentLink = async (req, res) => {
             case 'sabpaisa':
                 return await createSabpaisaPaymentLink(req, res);
             
+            case 'cashfree':
+                return await createCashfreePaymentLink(req, res);
+            
             default:
                 return res.status(503).json({
                     success: false,
@@ -154,12 +245,21 @@ exports.createPaymentLink = async (req, res) => {
         }
 
     } catch (error) {
-        console.error('❌ Unified Payment Link Creation Error:', error);
+        console.error('\n' + '='.repeat(80));
+        console.error('❌ PAYMENT LINK CREATION ERROR');
+        console.error('='.repeat(80));
+        console.error(`   Error Type: ${error.constructor.name}`);
+        console.error(`   Error Message: ${error.message}`);
+        console.error(`   Stack Trace:`, error.stack);
+        console.error(`   Timestamp: ${new Date().toISOString()}`);
+        console.error('='.repeat(80) + '\n');
+        
         res.status(500).json({
             success: false,
             error: 'Failed to create payment link',
             detail: error.message,
-            message: 'An error occurred while creating the payment link. Please try again or contact support.'
+            message: 'An error occurred while creating the payment link. Please try again or contact support.',
+            timestamp: new Date().toISOString()
         });
     }
 };

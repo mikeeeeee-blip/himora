@@ -1,7 +1,7 @@
 // constants/api.js
 
-export const BASE_URL = 'https://himora.art/api';
-// export const BASE_URL = 'http://localhost:5001/api';
+// export const BASE_URL = 'https://himora.art/api';
+export const BASE_URL = 'http://localhost:5001/api'
 
 export const API_ENDPOINTS = {
   // ============ AUTH ============
@@ -9,6 +9,7 @@ export const API_ENDPOINTS = {
   SIGNUP: `${BASE_URL}/auth/signup`,
   PROFILE: `${BASE_URL}/auth/profile`,
   UPDATE_PROFILE: `${BASE_URL}/auth/profile`,
+
    
   // ============ API KEYS ============
   CREATE_API_KEY: `${BASE_URL}/create`,
@@ -71,6 +72,7 @@ export const API_ENDPOINTS = {
   // ============ SUPERADMIN - USER MANAGEMENT ============
   SUPERADMIN_DELETE_USER: (userId) => `${BASE_URL}/superadmin/users/${userId}`,
   SUPERADMIN_CHANGE_PASSWORD: (userId) => `${BASE_URL}/superadmin/users/${userId}/password`,
+  SUPERADMIN_BLOCK_FUNDS: (merchantId) => `${BASE_URL}/superadmin/merchants/${merchantId}/block-funds`,
   
   // ============ SUPERADMIN - PAYOUTS ============
   ADMIN_PAYOUTS: `${BASE_URL}/payments/admin/payouts/all`,
@@ -83,6 +85,7 @@ export const API_ENDPOINTS = {
   ADMIN_TRANSACTIONS: `${BASE_URL}/payments/admin/transactions`,
   ADMIN_SETTLE_TRANSACTION: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}/settle`,
   ADMIN_UPDATE_TRANSACTION_STATUS: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}/status`,
+  ADMIN_DELETE_TRANSACTION: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}`,
   
   // ============ PAYTM WEBHOOK (No Auth) ============
   PAYTM_WEBHOOK: `${BASE_URL}/paytm/webhook`,

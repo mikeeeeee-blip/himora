@@ -114,7 +114,7 @@ const getStatusConfig = (status) => {
     
     // Amount section
     doc.setFillColor(...bgLight);
-    doc.rect(0, 50, 210, 30, 'F');
+    doc.rect(0, 50, 210, 50, 'F');
     
     doc.setFontSize(28);
     doc.setTextColor(...primaryBlue);
@@ -126,8 +126,22 @@ const getStatusConfig = (status) => {
     doc.setFont('helvetica', 'normal');
     doc.text(transaction.currency || 'INR', 105, 77, { align: 'center' });
     
+    // Commission and GST details
+    if (transaction.commission !== undefined && transaction.commission !== null) {
+      const baseRate = 3.8;
+      const gstRate = 18;
+      const baseCommission = (transaction.amount * baseRate) / 100;
+      const gstAmount = (baseCommission * gstRate) / 100;
+      
+      doc.setFontSize(9);
+      doc.setTextColor(...textSecondary);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Commission: ₹${Number(transaction.commission).toFixed(2)}`, 105, 85, { align: 'center' });
+      doc.text(`GST (18%): ₹${Number(gstAmount).toFixed(2)}`, 105, 92, { align: 'center' });
+    }
+    
     // Transaction Details
-    let yPos = 95;
+    let yPos = transaction.commission !== undefined && transaction.commission !== null ? 105 : 95;
     
     doc.setFontSize(14);
     doc.setTextColor(...textPrimary);
@@ -519,7 +533,7 @@ if (transaction.utr || transaction.acquirerData?.utr || transaction.bank_transac
                 {/* Hero Card */}
                 <motion.div
                   variants={itemVariants}
-                  className="relative bg-gradient-to-br from-accent/20 to-accent/10 border border-white/10 rounded-xl p-6 sm:p-8 overflow-hidden"
+                  className="relative bg-gradient-to-br from-accent/40 to-accent/70 border border-white/10 rounded-xl p-6 sm:p-8 overflow-hidden"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent pointer-events-none"></div>
                   <div className="relative text-center">
@@ -619,6 +633,83 @@ if (transaction.utr || transaction.acquirerData?.utr || transaction.bank_transac
                           {transaction.description}
                         </span>
                       </div>
+                    </div>
+                  </motion.div>
+
+                  {/* Financial Details */}
+                  <motion.div
+                    variants={itemVariants}
+                    className="bg-[#122D32] border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all duration-200"
+                  >
+                    <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-white/10 bg-gradient-to-r from-white/5 to-transparent">
+                      <FiDollarSign className="text-accent text-xl" />
+                      <h3 className="text-lg font-semibold text-white font-['Albert_Sans']">
+                        Financial Details
+                      </h3>
+                    </div>
+                    <div className="p-4 sm:p-6 space-y-4">
+                      <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                        <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                          Amount
+                        </span>
+                        <span className="text-sm text-white font-semibold text-right font-['Albert_Sans']">
+                          ₹{transaction.amount?.toLocaleString('en-IN', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                        <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                          Commission
+                        </span>
+                        <span className="text-sm text-white font-semibold text-right font-['Albert_Sans']">
+                          {transaction.commission !== undefined && transaction.commission !== null
+                            ? `₹${Number(transaction.commission).toLocaleString('en-IN', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}`
+                            : "₹0.00"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                        <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                          GST Rate Amount
+                        </span>
+                        <span className="text-sm text-white font-semibold text-right font-['Albert_Sans']">
+                          {(() => {
+                            // Calculate GST amount
+                            // GST rate is 18% (from commissionCalculator.js)
+                            const baseRate = 3.8; // 3.8% base commission rate
+                            const gstRate = 18; // 18% GST rate
+                            let gstAmount = 0;
+                            
+                            if (transaction.amount && transaction.amount > 0) {
+                              // Calculate base commission first, then GST on it
+                              const baseCommission = (transaction.amount * baseRate) / 100;
+                              gstAmount = (baseCommission * gstRate) / 100;
+                            }
+                            
+                            return `₹${Number(gstAmount).toLocaleString('en-IN', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}`;
+                          })()}
+                        </span>
+                      </div>
+                      {transaction.netAmount !== undefined && transaction.netAmount !== null && (
+                        <div className="flex justify-between items-start py-2 border-b border-white/10 last:border-0">
+                          <span className="text-sm text-white/60 font-medium font-['Albert_Sans']">
+                            Net Amount
+                          </span>
+                          <span className="text-sm text-white font-semibold text-right font-['Albert_Sans']">
+                            ₹{Number(transaction.netAmount).toLocaleString('en-IN', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                   {/* Payment References - UTR, Bank Details */}

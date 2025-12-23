@@ -102,12 +102,31 @@ ssh -i "$KEY_FILE" "$SERVER_USER@$SERVER_HOST" << 'ENDSSH'
     
     echo -e "\n✅ Build completed successfully"
     
-    # Restart PM2 processes
+    # Create logs directory if it doesn't exist
+    echo -e "\n📁 Ensuring logs directory exists..."
+    mkdir -p server/logs || true
+    
+    # Restart PM2 processes using ecosystem config
     echo -e "\n🔄 Restarting PM2 processes..."
-    pm2 restart all || {
-        echo "❌ Error: PM2 restart failed!"
-        exit 1
-    }
+    cd server
+    
+    # Stop existing process if running
+    pm2 stop ninex-group-api 2>/dev/null || true
+    pm2 delete ninex-group-api 2>/dev/null || true
+    
+    # Start with ecosystem config
+    if [ -f "ecosystem.config.js" ]; then
+        pm2 start ecosystem.config.js || {
+            echo "❌ Error: PM2 start with ecosystem config failed!"
+            echo "Falling back to direct start..."
+            pm2 start index.js --name ninex-group-api --log server/logs/pm2-out.log --error server/logs/pm2-error.log --time
+        }
+    else
+        echo "⚠️  ecosystem.config.js not found, starting directly..."
+        pm2 start index.js --name ninex-group-api --log server/logs/pm2-out.log --error server/logs/pm2-error.log --time
+    fi
+    
+    cd ..
     
     # Save PM2 configuration
     pm2 save
@@ -118,9 +137,20 @@ ssh -i "$KEY_FILE" "$SERVER_USER@$SERVER_HOST" << 'ENDSSH'
     echo -e "\n📊 PM2 Status:"
     pm2 status
     
-    # Show recent logs
-    echo -e "\n📋 Recent logs (last 20 lines):"
-    pm2 logs --lines 20 --nostream
+    # Show recent logs from files
+    echo -e "\n📋 Recent logs from files (last 30 lines):"
+    if [ -f "server/logs/pm2-out.log" ]; then
+        echo "--- stdout logs ---"
+        tail -n 30 server/logs/pm2-out.log || echo "No stdout logs yet"
+    fi
+    if [ -f "server/logs/pm2-error.log" ]; then
+        echo "--- error logs ---"
+        tail -n 30 server/logs/pm2-error.log || echo "No error logs yet"
+    fi
+    
+    # Also show PM2 logs
+    echo -e "\n📋 PM2 live logs (last 20 lines):"
+    pm2 logs ninex-group-api --lines 20 --nostream || pm2 logs --lines 20 --nostream
     
     echo -e "\n${GREEN}✅ Deployment completed successfully!${NC}"
     echo "=========================================="

@@ -876,9 +876,15 @@ const handleInputChange = (field, value) => {
                         <div className="text-white text-2xl font-semibold font-['Albert_Sans'] mb-1">
                     {formatCurrency(balance.balance?.available_balance || 0)} 
                   </div>
-                        <div className="text-green-400 text-xs font-['Albert_Sans']">
-                    ✓ Ready to withdraw
-                  </div>
+                        {balance.balance?.blocked_balance && parseFloat(balance.balance.blocked_balance) > 0 ? (
+                          <div className="text-orange-400 text-xs font-['Albert_Sans']">
+                            ⚠️ Freezed: {formatCurrency(balance.balance.blocked_balance)}
+                          </div>
+                        ) : (
+                          <div className="text-green-400 text-xs font-['Albert_Sans']">
+                            ✓ Ready to withdraw
+                          </div>
+                        )}
                 </div>
               </div>
 

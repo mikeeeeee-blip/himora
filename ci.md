@@ -1,5 +1,11 @@
 # CI/CD Deployment Guide
 
+ssh -i "payments.ninexgroup.mumbai.pem" ubuntu@ec2-13-235-49-20.ap-south-1.compute.amazonaws.com
+
+cd server
+npm run flush:user-transactions -- mayanksahu0024@gmail.com --yes
+
+
 ## Server Information
 
 **Server:** EC2 Instance (eu-north-1)  

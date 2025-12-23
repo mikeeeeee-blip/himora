@@ -3,19 +3,19 @@
 // ============ PAYIN COMMISSION CALCULATOR ============
 function calculatePayinCommission(amount) {
     const baseRate = 3.8; // 3.8%
-    const gstRate = 0; // 18% GST
+    const gstRate = 18; // 18% GST
     
     // Calculate base commission
     const baseCommission = (amount * baseRate) / 100;
     
-    // Calculate GST on the commission
-    const gstAmount = baseCommission * gstRate;
+    // Calculate GST on the commission (gstRate is 18, so divide by 100 to get 0.18)
+    const gstAmount = (baseCommission * gstRate) / 100;
     
     // Total commission = base + GST
     const totalCommission = baseCommission + gstAmount;
     
-    // Effective rate
-    const effectiveRate = baseRate + (baseRate * gstRate); // 3.8% + (3.8% × 18%) = 4.484%
+    // Effective rate: 3.8% + (3.8% × 18%) = 3.8% + 0.684% = 4.484%
+    const effectiveRate = baseRate + (baseRate * gstRate / 100);
     
     return {
         commission: parseFloat(totalCommission.toFixed(2)),
@@ -24,11 +24,11 @@ function calculatePayinCommission(amount) {
         breakdown: {
             baseAmount: amount,
             baseRate: `${baseRate}%`,
-            baseCommission: baseCommission.toFixed(2),
-            gstRate: '0%',
-            gstAmount: gstAmount.toFixed(2),
-            effectiveRate: `${effectiveRate}%`,
-            totalCommission: totalCommission.toFixed(2)
+            baseCommission: parseFloat(baseCommission.toFixed(2)),
+            gstRate: `${gstRate}%`,
+            gstAmount: parseFloat(gstAmount.toFixed(2)),
+            effectiveRate: `${effectiveRate.toFixed(3)}%`,
+            totalCommission: parseFloat(totalCommission.toFixed(2))
         }
     };
 }

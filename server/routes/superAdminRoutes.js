@@ -5,7 +5,8 @@ const {
     getDashboardStats, 
     getAllMerchantsData,
     getPaymentGatewaySettings,
-    updatePaymentGatewaySettings
+    updatePaymentGatewaySettings,
+    blockMerchantFunds
 } = require('../controllers/superAdminController');
 const { deleteUser, changeUserPassword } = require('../controllers/authController');
 
@@ -21,5 +22,8 @@ router.put('/settings/payment-gateways', auth, updatePaymentGatewaySettings);
 // User management routes (SuperAdmin only)
 router.delete('/users/:userId', auth, deleteUser);
 router.put('/users/:userId/password', auth, changeUserPassword);
+
+// Block/Unblock merchant funds
+router.put('/merchants/:merchantId/block-funds', auth, blockMerchantFunds);
 
 module.exports = router;

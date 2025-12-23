@@ -21,7 +21,8 @@ const {
     rejectPayout,
     processPayout,
     settleTransaction,
-    updateTransactionStatus
+    updateTransactionStatus,
+    deleteTransaction
 } = require('../controllers/superAdminController.js');
 
 // ✅ MAKE SURE ALL THESE FUNCTIONS EXIST IN THE CONTROLLER
@@ -86,6 +87,7 @@ router.post('/admin/payout/:payoutId/process', superAdminAuth, processPayout);
 router.get('/admin/transactions', superAdminAuth, getAllTransactions);
 router.put('/admin/transactions/:transactionId/settle', superAdminAuth, settleTransaction);
 router.put('/admin/transactions/:transactionId/status', superAdminAuth, updateTransactionStatus);
+router.delete('/admin/transactions/:transactionId', superAdminAuth, deleteTransaction);
 router.get('/merchant/transactions/search', auth, searchTransactions); // For transactions
 
 

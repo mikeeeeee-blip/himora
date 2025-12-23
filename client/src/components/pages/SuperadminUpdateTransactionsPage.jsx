@@ -11,8 +11,12 @@ import {
   FiX,
   FiAlertCircle,
   FiUser,
-  FiDollarSign
+  FiDollarSign,
+  FiFilter,
+  FiTrash2,
+  FiSearch
 } from 'react-icons/fi';
+import { HiOutlineChartBar } from 'react-icons/hi2';
 
 const SuperadminUpdateTransactionsPage = () => {
   const [transactions, setTransactions] = useState([]);
@@ -21,16 +25,13 @@ const SuperadminUpdateTransactionsPage = () => {
   const [success, setSuccess] = useState('');
   const [updatingId, setUpdatingId] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [newStatus, setNewStatus] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [merchantFilter, setMerchantFilter] = useState('');
-  // Set default to November 13 of current year
-  const getNov13Date = () => {
-    const currentYear = new Date().getFullYear();
-    return `${currentYear}-11-13`;
-  };
-  const [startDate, setStartDate] = useState(getNov13Date());
-  const [endDate, setEndDate] = useState(getNov13Date());
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [transactionIdSearch, setTransactionIdSearch] = useState('');
   const [pagination, setPagination] = useState({ page: 1, limit: 50, totalCount: 0 });
 
   const statusOptions = [
@@ -46,7 +47,7 @@ const SuperadminUpdateTransactionsPage = () => {
 
   useEffect(() => {
     fetchTransactions();
-  }, [pagination.page, statusFilter, merchantFilter, startDate, endDate]);
+  }, [pagination.page, statusFilter, merchantFilter, startDate, endDate, transactionIdSearch]);
 
   const fetchTransactions = async () => {
     setLoading(true);
@@ -70,6 +71,9 @@ const SuperadminUpdateTransactionsPage = () => {
       }
       if (endDate) {
         filters.endDate = endDate;
+      }
+      if (transactionIdSearch) {
+        filters.search = transactionIdSearch;
       }
       const response = await superadminPaymentService.getAdminTransactions(filters);
       setTransactions(response.transactions || []);
@@ -122,16 +126,37 @@ const SuperadminUpdateTransactionsPage = () => {
     }
   };
 
+  const handleDelete = async (transactionId) => {
+    if (!window.confirm(`Are you sure you want to delete transaction ${transactionId}? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingId(transactionId);
+    setError('');
+    setSuccess('');
+
+    try {
+      await superadminPaymentService.deleteTransaction(transactionId);
+      setSuccess(`Transaction ${transactionId} deleted successfully!`);
+      // Refresh the list
+      await fetchTransactions();
+    } catch (e) {
+      setError(e.message || 'Failed to delete transaction');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const getStatusConfig = (status) => {
     const configs = {
-      paid: { icon: FiCheckCircle, color: '#10b981', bg: '#d1fae5', label: 'PAID' },
-      failed: { icon: FiXCircle, color: '#ef4444', bg: '#fee2e2', label: 'FAILED' },
-      pending: { icon: FiClock, color: '#f59e0b', bg: '#fef3c7', label: 'PENDING' },
-      created: { icon: FiClock, color: '#3b82f6', bg: '#dbeafe', label: 'CREATED' },
-      cancelled: { icon: FiXCircle, color: '#64748b', bg: '#f1f5f9', label: 'CANCELLED' },
-      expired: { icon: FiXCircle, color: '#94a3b8', bg: '#f8fafc', label: 'EXPIRED' },
-      refunded: { icon: FiXCircle, color: '#8b5cf6', bg: '#ede9fe', label: 'REFUNDED' },
-      partial_refund: { icon: FiXCircle, color: '#a78bfa', bg: '#f3e8ff', label: 'PARTIAL REFUND' },
+      paid: { icon: FiCheckCircle, color: '#10b981', bg: 'bg-green-500/20', textColor: 'text-green-400', label: 'PAID' },
+      failed: { icon: FiXCircle, color: '#ef4444', bg: 'bg-red-500/20', textColor: 'text-red-400', label: 'FAILED' },
+      pending: { icon: FiClock, color: '#f59e0b', bg: 'bg-yellow-500/20', textColor: 'text-yellow-400', label: 'PENDING' },
+      created: { icon: FiClock, color: '#3b82f6', bg: 'bg-blue-500/20', textColor: 'text-blue-400', label: 'CREATED' },
+      cancelled: { icon: FiXCircle, color: '#64748b', bg: 'bg-gray-500/20', textColor: 'text-gray-400', label: 'CANCELLED' },
+      expired: { icon: FiXCircle, color: '#94a3b8', bg: 'bg-gray-500/20', textColor: 'text-gray-400', label: 'EXPIRED' },
+      refunded: { icon: FiXCircle, color: '#8b5cf6', bg: 'bg-purple-500/20', textColor: 'text-purple-400', label: 'REFUNDED' },
+      partial_refund: { icon: FiXCircle, color: '#a78bfa', bg: 'bg-purple-500/20', textColor: 'text-purple-400', label: 'PARTIAL REFUND' },
     };
     return configs[status?.toLowerCase()] || configs.pending;
   };
@@ -159,363 +184,483 @@ const SuperadminUpdateTransactionsPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="max-w-7xl mx-auto"
-        >
-          {/* Header */}
-          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                  Update All Transactions
-                </h1>
-                <p className="text-gray-600">
-                  Super Admin: View and update the status of all transactions across all merchants
-                </p>
-              </div>
-              <button
-                onClick={fetchTransactions}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <FiRefreshCw className={loading ? 'animate-spin' : ''} />
-                Refresh
-              </button>
-            </div>
+    <div className="min-h-screen bg-[#001D22]">
+      {/* Fixed X Graphic - Background Layer */}
+      <div
+        className="fixed inset-0 flex items-center justify-center pointer-events-none z-0"
+        style={{ top: "4rem" }}
+      >
+        <img
+          src="/X.png"
+          alt="X graphic"
+          className="object-contain hidden sm:block"
+          style={{
+            filter: "drop-shadow(0 0 40px rgba(94, 234, 212, 0.5))",
+            width: "120%",
+            height: "85%",
+            maxWidth: "none",
+            maxHeight: "none",
+          }}
+        />
+        <img
+          src="/X.png"
+          alt="X graphic"
+          className="object-contain sm:hidden"
+          style={{
+            filter: "drop-shadow(0 0 20px rgba(94, 234, 212, 0.5))",
+            width: "100%",
+            height: "70%",
+            maxWidth: "none",
+            maxHeight: "none",
+          }}
+        />
+      </div>
 
-            {/* Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Filter by Status
-                </label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setPagination(prev => ({ ...prev, page: 1 }));
-                  }}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">All Statuses</option>
-                  {statusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Filter by Merchant ID
-                </label>
-                <input
-                  type="text"
-                  value={merchantFilter}
-                  onChange={(e) => {
-                    setMerchantFilter(e.target.value);
-                    setPagination(prev => ({ ...prev, page: 1 }));
-                  }}
-                  placeholder="Enter Merchant ID"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => {
-                    setStartDate(e.target.value);
-                    setPagination(prev => ({ ...prev, page: 1 }));
-                  }}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => {
-                    setEndDate(e.target.value);
-                    setPagination(prev => ({ ...prev, page: 1 }));
-                  }}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
+      {/* Scrollable Content Section - Overlays on top */}
+      <section className="relative z-10 min-h-screen bg-transparent">
+        {/* Spacer to show 70% of image initially */}
+        <div className="h-[calc(50vh-4rem)] sm:h-[calc(55vh-4rem)]"></div>
 
-            {/* Clear Filters Button */}
-            {(statusFilter || merchantFilter || startDate || endDate) && (
-              <div className="mt-4">
-                <button
-                  onClick={() => {
-                    setStatusFilter('');
-                    setMerchantFilter('');
-                    setStartDate('');
-                    setEndDate('');
-                    setPagination(prev => ({ ...prev, page: 1 }));
-                  }}
-                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Clear All Filters
-                </button>
-              </div>
-            )}
+        {/* Cards Section - Scrolls over image */}
+        <div className="bg-transparent pt-2 pb-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-[1400px] mx-auto">
+            {/* Rounded Container with #122D32 background */}
+            <div className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6">
+              {/* Header */}
+              <div className="mb-4">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
+                  {/* Left Section - Title */}
+                  <div>
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-2 font-['Albert_Sans'] flex items-center gap-3">
+                      <HiOutlineChartBar className="text-accent" />
+                      Update All Transactions
+                    </h1>
+                    <p className="text-white/70 text-xs sm:text-sm font-['Albert_Sans']">
+                      Super Admin: View and update the status of all transactions across all merchants
+                    </p>
+                  </div>
 
-            {/* Stats */}
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="text-sm text-gray-600">Total Transactions</div>
-                <div className="text-2xl font-bold text-blue-600">{pagination.totalCount}</div>
-              </div>
-              <div className="bg-green-50 p-4 rounded-lg">
-                <div className="text-sm text-gray-600">Paid</div>
-                <div className="text-2xl font-bold text-green-600">
-                  {transactions.filter(t => t.status === 'paid').length}
+                  {/* Right Section - Refresh Button */}
+                  <button
+                    onClick={fetchTransactions}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 sm:px-5 py-2 rounded-full text-sm sm:text-base font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none w-full sm:w-auto whitespace-nowrap"
+                  >
+                    <FiRefreshCw className={loading ? "animate-spin" : ""} />
+                    <span>{loading ? "Loading..." : "Refresh"}</span>
+                  </button>
                 </div>
               </div>
-              <div className="bg-yellow-50 p-4 rounded-lg">
-                <div className="text-sm text-gray-600">Pending</div>
-                <div className="text-2xl font-bold text-yellow-600">
-                  {transactions.filter(t => t.status === 'pending').length}
-                </div>
-              </div>
-              <div className="bg-red-50 p-4 rounded-lg">
-                <div className="text-sm text-gray-600">Failed</div>
-                <div className="text-2xl font-bold text-red-600">
-                  {transactions.filter(t => t.status === 'failed').length}
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Error/Success Messages */}
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-4 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg flex items-center gap-2"
-            >
-              <FiAlertCircle />
-              {error}
-            </motion.div>
-          )}
-
-          {success && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-4 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex items-center gap-2"
-            >
-              <FiCheckCircle />
-              {success}
-            </motion.div>
-          )}
-
-          {/* Transactions Table */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            {loading ? (
-              <div className="p-8 text-center">
-                <FiRefreshCw className="animate-spin text-4xl text-blue-600 mx-auto mb-4" />
-                <p className="text-gray-600">Loading transactions...</p>
-              </div>
-            ) : transactions.length === 0 ? (
-              <div className="p-8 text-center">
-                <FiAlertCircle className="text-4xl text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No transactions found</p>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-200">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Transaction ID
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Merchant
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Customer
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Amount
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Created At
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Updated At
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {transactions.map((transaction) => {
-                        const statusConfig = getStatusConfig(transaction.status);
-                        const StatusIcon = statusConfig.icon;
-                        const isEditing = editingId === transaction.transactionId;
-                        const isUpdating = updatingId === transaction.transactionId;
-
-                        return (
-                          <tr key={transaction.transactionId} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900">
-                                {transaction.transactionId}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {transaction.orderId}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm text-gray-900">
-                                {transaction.merchantName || (transaction.merchantId?.name) || 'N/A'}
-                              </div>
-                              {transaction.merchantId && (
-                                <div className="text-xs text-gray-500">
-                                  ID: {transaction.merchantId._id || transaction.merchantId}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm text-gray-900">
-                                {transaction.customerName}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {transaction.customerEmail}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900">
-                                {formatAmount(transaction.amount, transaction.currency)}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {isEditing ? (
-                                <select
-                                  value={newStatus}
-                                  onChange={(e) => setNewStatus(e.target.value)}
-                                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                                >
-                                  {statusOptions.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span
-                                  className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium"
-                                  style={{
-                                    backgroundColor: statusConfig.bg,
-                                    color: statusConfig.color,
-                                  }}
-                                >
-                                  <StatusIcon />
-                                  {statusConfig.label}
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-600">
-                                {formatDate(transaction.createdAt)}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-600">
-                                {formatDate(transaction.updatedAt)}
-                              </div>
-                              {transaction.updatedAt && transaction.createdAt && 
-                               new Date(transaction.updatedAt).getTime() !== new Date(transaction.createdAt).getTime() && (
-                                <div className="text-xs text-blue-600 mt-1">
-                                  Updated
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {isEditing ? (
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => handleUpdate(transaction.transactionId)}
-                                    disabled={isUpdating}
-                                    className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Save"
-                                  >
-                                    <FiSave className={isUpdating ? 'animate-spin' : ''} />
-                                  </button>
-                                  <button
-                                    onClick={handleCancel}
-                                    disabled={isUpdating}
-                                    className="p-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Cancel"
-                                  >
-                                    <FiX />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => handleEdit(transaction)}
-                                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                  title="Edit Status"
-                                >
-                                  <FiEdit3 />
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination */}
-                {pagination.totalPages > 1 && (
-                  <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                    <div className="text-sm text-gray-600">
-                      Showing page {pagination.page} of {pagination.totalPages} 
-                      ({pagination.totalCount} total transactions)
-                    </div>
-                    <div className="flex gap-2">
+              {/* Filters */}
+              <div className="mb-6">
+                {/* Transaction ID Search Bar */}
+                <div className="mb-4">
+                  <label className="flex items-center gap-2 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] mb-2">
+                    <FiSearch size={14} />
+                    Search by Transaction ID
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={transactionIdSearch}
+                      onChange={(e) => {
+                        setTransactionIdSearch(e.target.value);
+                        setPagination(prev => ({ ...prev, page: 1 }));
+                      }}
+                      placeholder="Enter Transaction ID (e.g., TXN_1766051565108_5cd77)"
+                      className="flex-1 bg-[#001D22] border border-white/10 rounded-lg px-3 py-2 text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                    />
+                    {transactionIdSearch && (
                       <button
-                        onClick={() => handlePageChange(pagination.page - 1)}
-                        disabled={pagination.page === 1}
-                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => {
+                          setTransactionIdSearch('');
+                          setPagination(prev => ({ ...prev, page: 1 }));
+                        }}
+                        className="px-4 py-2 bg-[#001D22] border border-white/10 hover:border-white/20 text-white rounded-lg text-xs sm:text-sm font-medium font-['Albert_Sans'] transition-all duration-200"
                       >
-                        Previous
+                        Clear
                       </button>
-                      <button
-                        onClick={() => handlePageChange(pagination.page + 1)}
-                        disabled={pagination.page >= pagination.totalPages}
-                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Next
-                      </button>
-                    </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <label className="flex items-center gap-2 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] mb-2">
+                      <FiFilter size={14} />
+                      Filter by Status
+                    </label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => {
+                        setStatusFilter(e.target.value);
+                        setPagination(prev => ({ ...prev, page: 1 }));
+                      }}
+                      className="w-full bg-[#001D22] border border-white/10 rounded-lg px-3 py-2 text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                    >
+                      <option value="">All Statuses</option>
+                      {statusOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] mb-2">
+                      <FiUser size={14} />
+                      Filter by Merchant ID
+                    </label>
+                    <input
+                      type="text"
+                      value={merchantFilter}
+                      onChange={(e) => {
+                        setMerchantFilter(e.target.value);
+                        setPagination(prev => ({ ...prev, page: 1 }));
+                      }}
+                      placeholder="Enter Merchant ID"
+                      className="w-full bg-[#001D22] border border-white/10 rounded-lg px-3 py-2 text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] mb-2">
+                      <FiClock size={14} />
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => {
+                        setStartDate(e.target.value);
+                        setPagination(prev => ({ ...prev, page: 1 }));
+                      }}
+                      className="w-full bg-[#001D22] border border-white/10 rounded-lg px-3 py-2 text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] mb-2">
+                      <FiClock size={14} />
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => {
+                        setEndDate(e.target.value);
+                        setPagination(prev => ({ ...prev, page: 1 }));
+                      }}
+                      className="w-full bg-[#001D22] border border-white/10 rounded-lg px-3 py-2 text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                    />
+                  </div>
+                </div>
+
+                {/* Clear Filters Button */}
+                {(statusFilter || merchantFilter || startDate || endDate || transactionIdSearch) && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() => {
+                        setStatusFilter('');
+                        setMerchantFilter('');
+                        setStartDate('');
+                        setEndDate('');
+                        setTransactionIdSearch('');
+                        setPagination(prev => ({ ...prev, page: 1 }));
+                      }}
+                      className="flex items-center justify-center gap-2 bg-[#001D22] border border-white/10 hover:border-white/20 text-white px-4 py-2 rounded-full text-xs sm:text-sm font-medium font-['Albert_Sans'] transition-all duration-200"
+                    >
+                      <FiX />
+                      Clear All Filters
+                    </button>
                   </div>
                 )}
-              </>
-            )}
+              </div>
+
+              {/* Stats */}
+              <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+                <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2 flex-1">
+                      <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                        <HiOutlineChartBar />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                          Total Transactions
+                        </h3>
+                        <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                          {pagination.totalCount}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2 flex-1">
+                      <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
+                        <FiCheckCircle />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                          Paid
+                        </h3>
+                        <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                          {transactions.filter(t => t.status === 'paid').length}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2 flex-1">
+                      <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 flex-shrink-0">
+                        <FiClock />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                          Pending
+                        </h3>
+                        <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                          {transactions.filter(t => t.status === 'pending').length}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2 flex-1">
+                      <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 flex-shrink-0">
+                        <FiXCircle />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                          Failed
+                        </h3>
+                        <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                          {transactions.filter(t => t.status === 'failed').length}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Error/Success Messages */}
+              {error && (
+                <div className="mb-4 text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
+                  <FiAlertCircle />
+                  {error}
+                </div>
+              )}
+
+              {success && (
+                <div className="mb-4 text-green-400 bg-green-500/20 border border-green-500/40 rounded-lg p-4 flex items-center gap-2 font-['Albert_Sans']">
+                  <FiCheckCircle />
+                  {success}
+                </div>
+              )}
+
+              {/* Transactions Table */}
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-20 px-5">
+                  <div className="w-10 h-10 border-4 border-white/30 border-t-accent rounded-full animate-spin mb-5"></div>
+                  <p className="text-white/80 font-['Albert_Sans']">Loading transactions...</p>
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 px-5">
+                  <HiOutlineChartBar className="text-6xl text-white/50 mb-4" />
+                  <h3 className="text-xl font-medium text-white mb-2 font-['Albert_Sans']">No Transactions Found</h3>
+                  <p className="text-white/70 text-sm font-['Albert_Sans']">No transactions match your current filters.</p>
+                </div>
+              ) : (
+                <div className="bg-[#263F43] border border-white/10 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-[#001D22] border-b border-white/10">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">
+                            Transaction ID
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">
+                            Merchant
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">
+                            Customer
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">
+                            Amount
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell">
+                            Created At
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell">
+                            Updated At
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-transparent divide-y divide-white/5">
+                        {transactions.map((transaction) => {
+                          const statusConfig = getStatusConfig(transaction.status);
+                          const StatusIcon = statusConfig.icon;
+                          const isEditing = editingId === transaction.transactionId;
+                          const isUpdating = updatingId === transaction.transactionId;
+
+                          return (
+                            <tr key={transaction.transactionId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                              <td className="px-4 py-3">
+                                <div className="text-sm font-medium text-white font-['Albert_Sans'] font-mono">
+                                  {transaction.transactionId?.slice(-12) || 'N/A'}
+                                </div>
+                                <div className="text-xs text-white/50 font-['Albert_Sans'] hidden md:block">
+                                  {transaction.orderId}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 hidden lg:table-cell">
+                                <div className="text-sm text-white font-['Albert_Sans']">
+                                  {transaction.merchantName || (transaction.merchantId?.name) || 'N/A'}
+                                </div>
+                                {transaction.merchantId && (
+                                  <div className="text-xs text-white/50 font-['Albert_Sans']">
+                                    ID: {String(transaction.merchantId._id || transaction.merchantId).slice(0, 12)}...
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 hidden lg:table-cell">
+                                <div className="text-sm text-white font-['Albert_Sans']">
+                                  {transaction.customerName || 'Anonymous'}
+                                </div>
+                                <div className="text-xs text-white/50 font-['Albert_Sans']">
+                                  {transaction.customerEmail || 'No email'}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-sm font-medium text-white font-['Albert_Sans']">
+                                  {formatAmount(transaction.amount, transaction.currency)}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                {isEditing ? (
+                                  <select
+                                    value={newStatus}
+                                    onChange={(e) => setNewStatus(e.target.value)}
+                                    className="px-3 py-2 bg-[#001D22] border border-white/10 rounded-lg text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                                  >
+                                    {statusOptions.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium font-['Albert_Sans'] ${statusConfig.bg} ${statusConfig.textColor}`}>
+                                    <StatusIcon size={14} />
+                                    {statusConfig.label}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 hidden md:table-cell">
+                                <div className="text-sm text-white/70 font-['Albert_Sans']">
+                                  {formatDate(transaction.createdAt)}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 hidden md:table-cell">
+                                <div className="text-sm text-white/70 font-['Albert_Sans']">
+                                  {formatDate(transaction.updatedAt)}
+                                </div>
+                                {transaction.updatedAt && transaction.createdAt && 
+                                 new Date(transaction.updatedAt).getTime() !== new Date(transaction.createdAt).getTime() && (
+                                  <div className="text-xs text-accent mt-1 font-['Albert_Sans']">
+                                    Updated
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {isEditing ? (
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => handleUpdate(transaction.transactionId)}
+                                      disabled={isUpdating}
+                                      className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title="Save"
+                                    >
+                                      <FiSave className={isUpdating ? 'animate-spin' : ''} size={16} />
+                                    </button>
+                                    <button
+                                      onClick={handleCancel}
+                                      disabled={isUpdating}
+                                      className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title="Cancel"
+                                    >
+                                      <FiX size={16} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => handleEdit(transaction)}
+                                      className="p-2 bg-accent/20 hover:bg-accent/30 text-accent rounded-lg transition-colors"
+                                      title="Edit Status"
+                                    >
+                                      <FiEdit3 size={16} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(transaction.transactionId)}
+                                      disabled={deletingId === transaction.transactionId || transaction.settlementStatus === 'settled'}
+                                      className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title={transaction.settlementStatus === 'settled' ? 'Cannot delete settled transaction' : 'Delete Transaction'}
+                                    >
+                                      <FiTrash2 className={deletingId === transaction.transactionId ? 'animate-spin' : ''} size={16} />
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination */}
+                  {pagination.totalPages > 1 && (
+                    <div className="px-4 py-4 border-t border-white/10 flex items-center justify-between">
+                      <div className="text-sm text-white/70 font-['Albert_Sans']">
+                        Showing page {pagination.page} of {pagination.totalPages} 
+                        ({pagination.totalCount} total transactions)
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handlePageChange(pagination.page - 1)}
+                          disabled={pagination.page === 1}
+                          className="px-4 py-2 bg-[#001D22] border border-white/10 rounded-lg hover:bg-white/10 text-white font-['Albert_Sans'] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => handlePageChange(pagination.page + 1)}
+                          disabled={pagination.page >= pagination.totalPages}
+                          className="px-4 py-2 bg-[#001D22] border border-white/10 rounded-lg hover:bg-white/10 text-white font-['Albert_Sans'] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </motion.div>
-      </div>
+        </div>
+      </section>
     </div>
   );
 };
