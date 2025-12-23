@@ -43,6 +43,7 @@ const TransactionSchema = new mongoose.Schema({
     cashfreeOrderToken: String,
     cashfreePaymentId: String,
     cashfreeOrderId: String,
+    cashfreeEnvironment: String, // 'sandbox' or 'production' - stored when transaction is created
     
     // Payment Gateway
     paymentGateway: String, // 'razorpay', 'paytm', 'phonepe', 'cashfree', 'easebuzz', or 'sabpaisa'

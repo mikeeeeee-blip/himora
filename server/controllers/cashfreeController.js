@@ -6,10 +6,17 @@ const Settings = require('../models/Settings');
 const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
 
-// Cashfree Configuration
-const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
-const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
-const CASHFREE_ENVIRONMENT = process.env.CASHFREE_ENVIRONMENT || 'production'; // 'sandbox' or 'production'
+// Cashfree Configuration - Support both sandbox and production credentials
+// Check both CASHFREE_ENV and CASHFREE_ENVIRONMENT for compatibility
+const CASHFREE_ENVIRONMENT = (process.env.CASHFREE_ENV || process.env.CASHFREE_ENVIRONMENT || 'production').toLowerCase(); // 'sandbox' or 'production'
+
+// Use TEST_ prefixed credentials when in SANDBOX mode, otherwise use production credentials
+const CASHFREE_APP_ID = CASHFREE_ENVIRONMENT === 'sandbox' 
+    ? (process.env.TEST_CASHFREE_APP_ID || process.env.CASHFREE_APP_ID)
+    : process.env.CASHFREE_APP_ID;
+const CASHFREE_SECRET_KEY = CASHFREE_ENVIRONMENT === 'sandbox'
+    ? (process.env.TEST_CASHFREE_SECRET_KEY || process.env.CASHFREE_SECRET_KEY)
+    : process.env.CASHFREE_SECRET_KEY;
 
 // Cashfree API base URLs - remove /pg if included in env var
 let baseUrl = process.env.CASHFREE_BASE_URL || '';
@@ -39,8 +46,18 @@ function cleanSessionId(sessionId) {
 // ============ CREATE CASHFREE PAYMENT LINK ============
 exports.createCashfreePaymentLink = async (req, res) => {
     let transactionId = null;
-    
     try {
+        // Get merchant info from apiKeyAuth middleware (sets req.merchantId and req.merchantName)
+        const merchantId = req.merchantId || req.user?._id;
+        const merchantName = req.merchantName || req.user?.name;
+        
+        if (!merchantId || !merchantName) {
+            return res.status(401).json({
+                success: false,
+                error: 'Merchant authentication required. Please provide a valid API key in x-api-key header.'
+            });
+        }
+
         const {
             amount,
             customer_name,
@@ -52,104 +69,41 @@ exports.createCashfreePaymentLink = async (req, res) => {
             failure_url
         } = req.body;
 
-        // Get merchant info from apiKeyAuth middleware
-        const merchantId = req.merchantId;
-        const merchantName = req.merchantName;
-
-        console.log('\n' + '='.repeat(80));
-        console.log('📤 Cashfree Payment Link Creation Request');
-        console.log('='.repeat(80));
-        console.log('   Merchant:', merchantName, `(${merchantId})`);
-        console.log('   Payment data will be passed to Next.js checkout page');
-        
-        // Check if Cashfree is enabled in settings
-        const settings = await Settings.getSettings();
-        if (!settings.paymentGateways.cashfree.enabled) {
-            console.error('❌ Cashfree is not enabled in payment gateway settings');
-            return res.status(403).json({
-                success: false,
-                error: 'Cashfree payment gateway is not enabled. Please contact administrator to enable it.',
-                details: {
-                    description: 'Cashfree gateway is disabled',
-                    code: 'GATEWAY_DISABLED',
-                    hint: 'The administrator needs to enable Cashfree in the payment gateway settings from the admin dashboard.'
-                }
-            });
-        }
-
-        // Validate input
-        if (!amount || !customer_name || !customer_email || !customer_phone) {
+        // Validate required fields
+        if (!amount || amount <= 0) {
             return res.status(400).json({
                 success: false,
-                error: 'Missing required fields: amount, customer_name, customer_email, customer_phone'
+                error: 'Invalid amount'
             });
         }
 
-        // Validate phone (remove any non-digits first)
+        if (!customer_name || !customer_email || !customer_phone) {
+            return res.status(400).json({
+                success: false,
+                error: 'Customer details are required'
+            });
+        }
+
+        // Clean phone number
         const cleanPhone = customer_phone.replace(/\D/g, '');
-        if (!/^[0-9]{10}$/.test(cleanPhone)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Invalid phone number. Must be 10 digits.'
-            });
-        }
 
-        // Validate email
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer_email)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Invalid email address'
-            });
-        }
+        // Generate transaction and order IDs
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        transactionId = `TXN_${timestamp}_${randomSuffix}`;
+        const orderId = `ORDER_${timestamp}_${randomSuffix}`;
 
-        // Validate amount
         const amountValue = parseFloat(amount);
-        if (isNaN(amountValue) || amountValue < 1) {
-            return res.status(400).json({
-                success: false,
-                error: 'Amount must be at least ₹1'
-            });
-        }
 
-        // Generate unique transaction ID and order ID
-        transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        const orderId = `ORDER_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        // Build callback URLs
+        const backendBaseUrl = (process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5001').replace(/\/$/, '');
+        const cashfreeCallbackUrl = `${backendBaseUrl}/api/cashfree/callback?transaction_id=${encodeURIComponent(transactionId)}`;
 
-        // Get merchant's configured URLs or use provided ones
-        const merchant = await User.findById(merchantId);
+        // Use provided URLs or defaults
+        const finalCallbackUrl = callback_url || success_url || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
+        const finalFailureUrl = failure_url || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`;
 
-        // Priority: API provided URL > Merchant configured URL > Default URL
-        const finalCallbackUrl = callback_url ||
-            merchant?.successUrl ||
-            `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
-
-        const finalFailureUrl = failure_url ||
-            merchant?.failureUrl ||
-            `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`;
-
-        // Cashfree callback URL
-        const backendBaseUrl = (process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000').replace(/\/$/, '');
-        const cashfreeCallbackUrl = `${backendBaseUrl}/api/cashfree/callback?transaction_id=${transactionId}`;
-
-        console.log('   Transaction ID:', transactionId);
-        console.log('   Order ID:', orderId);
-        console.log('   Amount: ₹', amountValue);
-        console.log('   Callback URL:', cashfreeCallbackUrl);
-        console.log('   Success URL:', finalCallbackUrl);
-        console.log('   Failure URL:', finalFailureUrl);
-
-        // Don't call Cashfree API here - just prepare payment data for frontend
-        // The Next.js checkout page will handle Cashfree API calls directly
-        console.log('\n📋 Payment data prepared for Next.js checkout page');
-        console.log('   Order ID:', orderId);
-        console.log('   Amount: ₹', amountValue);
-        console.log('   Customer:', customer_name, `(${customer_email})`);
-        console.log('   Phone:', cleanPhone);
-        
-        // Payment URL will be generated by Next.js checkout page after creating session
-        const paymentUrl = `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-pending`;
-
-        // Calculate commission
+        // Calculate commission and settlement
         const commissionData = calculatePayinCommission(amountValue);
         const expectedSettlement = calculateExpectedSettlementDate(new Date());
 
@@ -174,7 +128,9 @@ exports.createCashfreePaymentLink = async (req, res) => {
             commission: commissionData.commission,
             netAmount: parseFloat((amountValue - commissionData.commission).toFixed(2)),
             settlementStatus: 'unsettled',
-            expectedSettlementDate: expectedSettlement
+            expectedSettlementDate: expectedSettlement,
+            // Store the environment used for this transaction so callback can use correct credentials
+            cashfreeEnvironment: CASHFREE_ENVIRONMENT
         });
 
         await transaction.save();
@@ -194,7 +150,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
         checkoutUrl.searchParams.set('transaction_id', transactionId);
         checkoutUrl.searchParams.set('merchant_id', merchantId.toString());
         checkoutUrl.searchParams.set('merchant_name', merchantName);
-        if (description) checkoutUrl.searchParams.set('description', description);
+        checkoutUrl.searchParams.set('description', description || 'Product purchase');
         checkoutUrl.searchParams.set('environment', responseEnvironment);
 
         const responseData = {
@@ -207,52 +163,26 @@ exports.createCashfreePaymentLink = async (req, res) => {
             merchant_name: merchantName,
             callback_url: finalCallbackUrl,
             failure_url: finalFailureUrl,
-            environment: responseEnvironment, // Include environment for frontend
+            environment: responseEnvironment,
             gateway_used: 'cashfree',
             gateway_name: 'Cashfree',
-            // Next.js checkout URL - this is the payment link for Cashfree
-            payment_url: checkoutUrl.toString(),
-            paymentLink: checkoutUrl.toString(),
-            // Payment details to pass to Next.js checkout page
             payment_data: {
                 amount: amountValue,
                 currency: 'INR',
                 customer_name: customer_name,
                 customer_email: customer_email,
                 customer_phone: cleanPhone,
-                description: description || `Payment for ${merchantName}`,
+                description: description || 'Product purchase',
                 order_id: orderId,
                 transaction_id: transactionId,
                 merchant_id: merchantId.toString(),
                 merchant_name: merchantName
             },
-            message: 'Payment link created successfully. Share this URL with customer. Gateway: Cashfree.',
-            note: 'Round-robin rotation: Payment gateways alternate between enabled gateways. Next payment will use a different gateway.',
-            gateway_message: 'Payment link created using Cashfree gateway (round-robin)',
-            rotation_mode: 'round-robin',
-            rotation_enabled: true,
-            current_active_gateway: 'cashfree',
-            next_active_gateway: 'cashfree',
-            last_used_gateway_index: -1,
-            enabled_gateways_count: 1,
-            enabled_gateways: ['cashfree']
+            message: 'Payment data prepared. Redirect to checkout page to proceed with payment. Gateway: Cashfree.',
+            payment_url: checkoutUrl.toString(),
+            paymentLink: checkoutUrl.toString()
         };
 
-        console.log('\n' + '='.repeat(80));
-        console.log('✅ CASHFREE PAYMENT LINK CREATED SUCCESSFULLY');
-        console.log('='.repeat(80));
-        console.log('   Transaction ID:', transactionId);
-        console.log('   Order ID:', orderId);
-        console.log('   Amount:', amountValue, 'INR');
-        console.log('   Merchant:', merchantName, '(' + merchantId + ')');
-        console.log('   Customer:', customer_name, '(' + customer_email + ')');
-        console.log('   Environment:', responseEnvironment);
-        console.log('   Gateway: Cashfree');
-        console.log('\n   Next.js Checkout URL:');
-        console.log('   ' + checkoutUrl.toString());
-        console.log('='.repeat(80) + '\n');
-
-        // Return payment data for Next.js checkout page to handle Cashfree integration
         res.json(responseData);
 
     } catch (error) {
@@ -284,11 +214,10 @@ exports.createCashfreePaymentLink = async (req, res) => {
             }
         }
 
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             error: 'Failed to create payment link',
             detail: error.response?.data?.message || error.message,
-            message: 'An error occurred while creating the payment link. Please try again or contact support.'
         });
     }
 };
@@ -296,6 +225,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
 // ============ CASHFREE CALLBACK HANDLER ============
 /**
  * Handle Cashfree payment callback/webhook
+ * Determines payment status based on success/failure URL, NO API verification
  */
 exports.handleCashfreeCallback = async (req, res) => {
     try {
@@ -309,6 +239,8 @@ exports.handleCashfreeCallback = async (req, res) => {
         console.log('   Transaction ID (query):', transaction_id);
         console.log('   Transaction ID (payload):', payload.transaction_id);
         console.log('   Payload:', JSON.stringify(payload, null, 2));
+        console.log('   Request URL:', req.url);
+        console.log('   Referer:', req.headers.referer || 'none');
 
         // Extract transaction_id or order_id from query or payload
         const transactionIdFromQuery = transaction_id || payload.transaction_id || req.query.transaction_id;
@@ -337,176 +269,212 @@ exports.handleCashfreeCallback = async (req, res) => {
         }
         
         const transactionIdForLogging = transactionIdFromQuery || transaction.transactionId;
-
-        // Extract payment status from payload
-        const orderStatus = payload.order_status || payload.status;
-        const paymentStatus = payload.payment_status || payload.paymentStatus;
         const cfOrderId = payload.cf_order_id || payload.order_id || orderIdFromQuery || transaction.cashfreeOrderId || transaction.orderId;
         const paymentMessage = payload.payment_message || payload.message || '';
-
+        
+        // Get the request URL to determine if this is from success or failure URL
+        const requestUrl = req.url || '';
+        const referer = req.headers.referer || '';
+        const fullUrl = referer || requestUrl;
+        
         console.log('\n📊 Payment Status Analysis:');
-        console.log('   Order Status:', orderStatus);
-        console.log('   Payment Status:', paymentStatus);
         console.log('   CF Order ID:', cfOrderId);
-        console.log('   Payment Message:', paymentMessage);
         console.log('   Transaction Status (current):', transaction.status);
-
-                // Verify payment status with Cashfree API
-        if (cfOrderId) {
-            try {
-                console.log('\n🔍 Verifying payment status with Cashfree API...');
-                
-                // Construct the correct endpoint URL for order status
-                const cleanBaseUrl = CASHFREE_BASE_URL.replace(/\/pg\/?$/, '').replace(/\/$/, '');
-                const statusEndpointUrl = `${cleanBaseUrl}/pg/orders/${cfOrderId}`;
-                console.log('   Status Check Endpoint URL:', statusEndpointUrl);
-                
-                const statusResponse = await axios.get(
-                    statusEndpointUrl,
-                    {
-                        headers: {
-                            'x-api-version': CASHFREE_API_VERSION,
-                            'x-client-id': CASHFREE_APP_ID,
-                            'x-client-secret': CASHFREE_SECRET_KEY
-                        },
-                        timeout: 30000
-                    }
-                );
-
-                const orderData = statusResponse.data;
-                console.log('   Cashfree Order Status:', orderData.order_status);
-                console.log('   Payment Status:', orderData.payment_status);
-
-                // Update transaction based on Cashfree response
-                if (orderData.order_status === 'PAID' || orderData.payment_status === 'SUCCESS') {
-                    if (transaction.status !== 'paid') {
-                        console.log('\n✅ PAYMENT SUCCESSFUL - Updating transaction...');
-                        
-                        const paidAt = new Date(orderData.payment_time || Date.now());
-                        const expectedSettlement = calculateExpectedSettlementDate(paidAt);
-                        const commissionData = calculatePayinCommission(transaction.amount);
-
-                        const update = {
-                            status: 'paid',
-                            paidAt: paidAt,
-                            paymentMethod: orderData.payment_method || 'unknown',
-                            cashfreeOrderId: cfOrderId,
-                            cashfreePaymentId: orderData.cf_payment_id || transaction.cashfreePaymentId,
-                            updatedAt: new Date(),
-                            acquirerData: {
-                                utr: orderData.payment_utr || null,
-                                bank_transaction_id: orderData.payment_utr || null,
-                                payment_method: orderData.payment_method || null
-                            },
-                            settlementStatus: 'unsettled',
-                            expectedSettlementDate: expectedSettlement,
-                            commission: commissionData.commission,
-                            netAmount: parseFloat((transaction.amount - commissionData.commission).toFixed(2)),
-                            webhookData: orderData
-                        };
-
-                        const updatedTransaction = await Transaction.findOneAndUpdate(
-                            { _id: transaction._id },
-                            update,
-                            { new: true }
-                        ).populate('merchantId');
-
-                        // Send webhook if enabled
-                        if (updatedTransaction && updatedTransaction.merchantId && updatedTransaction.merchantId.webhookEnabled) {
-                            const webhookPayload = {
-                                event: 'payment.success',
-                                timestamp: new Date().toISOString(),
-                                transaction_id: updatedTransaction.transactionId,
-                                order_id: updatedTransaction.orderId,
-                                merchant_id: updatedTransaction.merchantId._id.toString(),
-                                data: {
-                                    transaction_id: updatedTransaction.transactionId,
-                                    order_id: updatedTransaction.orderId,
-                                    cashfree_order_id: updatedTransaction.cashfreeOrderId,
-                                    cashfree_payment_id: updatedTransaction.cashfreePaymentId,
-                                    amount: updatedTransaction.amount,
-                                    currency: updatedTransaction.currency,
-                                    status: updatedTransaction.status,
-                                    payment_method: updatedTransaction.paymentMethod,
-                                    paid_at: updatedTransaction.paidAt.toISOString(),
-                                    settlement_status: updatedTransaction.settlementStatus,
-                                    expected_settlement_date: updatedTransaction.expectedSettlementDate.toISOString(),
-                                    acquirer_data: updatedTransaction.acquirerData,
-                                    customer: {
-                                        customer_id: updatedTransaction.customerId,
-                                        name: updatedTransaction.customerName,
-                                        email: updatedTransaction.customerEmail,
-                                        phone: updatedTransaction.customerPhone
-                                    },
-                                    merchant: {
-                                        merchant_id: updatedTransaction.merchantId._id.toString(),
-                                        merchant_name: updatedTransaction.merchantName
-                                    },
-                                    description: updatedTransaction.description,
-                                    created_at: updatedTransaction.createdAt.toISOString(),
-                                    updated_at: updatedTransaction.updatedAt.toISOString()
-                                }
-                            };
-
-                            await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
-                            console.log('✅ Webhook sent to merchant');
-                        }
-
-                        console.log('✅ Transaction updated successfully');
-                    } else {
-                        console.log('ℹ️ Transaction already marked as paid');
-                    }
-
-                    // Return success response - no redirect (callback page will close tab)
-                    console.log('   ✅ Payment confirmed, returning success response');
-                    return res.status(200).json({ 
-                        success: true, 
-                        message: 'Payment confirmed and transaction updated',
-                        transaction_id: transactionIdForLogging,
-                        status: 'paid'
-                    });
-                } else if (orderData.order_status === 'ACTIVE' || orderData.payment_status === 'PENDING') {
-                    console.log('ℹ️ Payment is still pending');
-                    // Return pending response - callback page will close tab
-                    return res.status(200).json({ 
-                        success: true, 
-                        message: 'Payment is still pending',
-                        transaction_id: transactionIdForLogging,
-                        status: 'pending'
-                    });
-                } else {
-                    // Payment failed
-                    console.log('\n❌ PAYMENT FAILED');
-                    if (transaction.status !== 'failed') {
-                        await Transaction.findOneAndUpdate(
-                            { _id: transaction._id },
-                            {
-                                status: 'failed',
-                                failureReason: paymentMessage || orderData.payment_message || 'Payment failed',
-                                updatedAt: new Date(),
-                                webhookData: orderData
-                            }
-                        );
-                        console.log('✅ Transaction status updated to "failed"');
-                    }
-
-                    // Return failure response - callback page will close tab
-                    console.log('   ❌ Payment failed, returning failure response');
-                    return res.status(200).json({ 
-                        success: false, 
-                        message: paymentMessage || 'Payment failed',
-                        transaction_id: transactionIdForLogging,
-                        status: 'failed'
-                    });
+        console.log('   Request URL:', requestUrl);
+        console.log('   Referer:', referer);
+        console.log('   Transaction Success URL:', transaction.successUrl || 'not set');
+        console.log('   Transaction Failure URL:', transaction.failureUrl || 'not set');
+        
+        // Determine payment status based on URL
+        // Check if URL contains success/failure indicators or matches stored URLs
+        const successUrlPattern = transaction.successUrl ? new URL(transaction.successUrl).pathname : '';
+        const failureUrlPattern = transaction.failureUrl ? new URL(transaction.failureUrl).pathname : '';
+        
+        const isFromSuccessUrl = 
+            fullUrl.includes('/payment-success') || 
+            fullUrl.includes('success') ||
+            (successUrlPattern && (requestUrl.includes(successUrlPattern) || referer.includes(successUrlPattern)));
+            
+        const isFromFailureUrl = 
+            fullUrl.includes('/payment-failed') || 
+            fullUrl.includes('failed') || 
+            fullUrl.includes('failure') ||
+            (failureUrlPattern && (requestUrl.includes(failureUrlPattern) || referer.includes(failureUrlPattern)));
+        
+        console.log('   Is from Success URL:', isFromSuccessUrl);
+        console.log('   Is from Failure URL:', isFromFailureUrl);
+        
+        // Process payment based on URL
+        if (isFromSuccessUrl && transaction.status !== 'paid') {
+            // Payment successful - mark as paid
+            console.log('   ✅ PAYMENT SUCCESSFUL - Updating transaction...');
+            
+            const paidAt = new Date();
+            const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+            const commissionData = calculatePayinCommission(transaction.amount);
+            
+            const update = {
+                status: 'paid',
+                paidAt: paidAt,
+                paymentMethod: payload.payment_method || 'unknown',
+                cashfreeOrderId: cfOrderId,
+                updatedAt: new Date(),
+                acquirerData: {
+                    utr: payload.payment_utr || null,
+                    bank_transaction_id: payload.payment_utr || null,
+                    payment_method: payload.payment_method || null
+                },
+                settlementStatus: 'unsettled',
+                expectedSettlementDate: expectedSettlement,
+                commission: commissionData.commission,
+                netAmount: parseFloat((transaction.amount - commissionData.commission).toFixed(2)),
+                webhookData: {
+                    ...payload,
+                    callback_source: 'success_url',
+                    callback_timestamp: new Date().toISOString()
                 }
-            } catch (apiError) {
-                console.error('❌ Error verifying payment with Cashfree API:', apiError.message);
-                // Continue with callback data if API verification fails
+            };
+            
+            const updatedTransaction = await Transaction.findOneAndUpdate(
+                { _id: transaction._id },
+                update,
+                { new: true }
+            ).populate('merchantId');
+            
+            // Send webhook to merchant if enabled
+            if (updatedTransaction && updatedTransaction.merchantId && updatedTransaction.merchantId.webhookEnabled) {
+                try {
+                    const webhookPayload = {
+                        event: 'payment.success',
+                        timestamp: new Date().toISOString(),
+                        transaction_id: updatedTransaction.transactionId,
+                        order_id: updatedTransaction.orderId,
+                        merchant_id: updatedTransaction.merchantId._id.toString(),
+                        data: {
+                            transaction_id: updatedTransaction.transactionId,
+                            order_id: updatedTransaction.orderId,
+                            cashfree_order_id: updatedTransaction.cashfreeOrderId,
+                            cashfree_payment_id: updatedTransaction.cashfreePaymentId,
+                            amount: updatedTransaction.amount,
+                            currency: updatedTransaction.currency,
+                            status: updatedTransaction.status,
+                            payment_method: updatedTransaction.paymentMethod,
+                            paid_at: updatedTransaction.paidAt.toISOString(),
+                            settlement_status: updatedTransaction.settlementStatus,
+                            expected_settlement_date: updatedTransaction.expectedSettlementDate.toISOString(),
+                            acquirer_data: updatedTransaction.acquirerData,
+                            customer: {
+                                customer_id: updatedTransaction.customerId,
+                                name: updatedTransaction.customerName,
+                                email: updatedTransaction.customerEmail,
+                                phone: updatedTransaction.customerPhone
+                            },
+                            merchant: {
+                                merchant_id: updatedTransaction.merchantId._id.toString(),
+                                merchant_name: updatedTransaction.merchantName
+                            },
+                            description: updatedTransaction.description,
+                            created_at: updatedTransaction.createdAt.toISOString(),
+                            updated_at: updatedTransaction.updatedAt.toISOString()
+                        }
+                    };
+                    
+                    await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
+                    console.log('✅ Webhook sent to merchant');
+                } catch (webhookError) {
+                    console.error('⚠️ Failed to send webhook to merchant:', webhookError.message);
+                }
+            }
+            
+            console.log('✅ Transaction updated successfully to "paid"');
+            return res.status(200).json({ 
+                success: true, 
+                message: 'Payment confirmed and transaction updated',
+                transaction_id: transactionIdForLogging,
+                status: 'paid'
+            });
+        } else if (isFromFailureUrl && transaction.status !== 'failed') {
+            // Payment failed - mark as failed
+            console.log('   ❌ PAYMENT FAILED - Updating transaction...');
+            
+            await Transaction.findOneAndUpdate(
+                { _id: transaction._id },
+                {
+                    status: 'failed',
+                    failureReason: paymentMessage || payload.error || 'Payment failed',
+                    updatedAt: new Date(),
+                    webhookData: {
+                        ...payload,
+                        callback_source: 'failure_url',
+                        callback_timestamp: new Date().toISOString()
+                    }
+                }
+            );
+            
+            console.log('✅ Transaction updated to "failed"');
+            return res.status(200).json({ 
+                success: false, 
+                message: paymentMessage || 'Payment failed',
+                transaction_id: transactionIdForLogging,
+                status: 'failed'
+            });
+        } else {
+            // URL doesn't clearly indicate success or failure, or transaction already has final status
+            if (transaction.status === 'paid') {
+                console.log('   ℹ️ Transaction already marked as paid');
+                return res.status(200).json({ 
+                    success: true, 
+                    message: 'Payment already confirmed',
+                    transaction_id: transactionIdForLogging,
+                    status: 'paid'
+                });
+            } else if (transaction.status === 'failed') {
+                console.log('   ℹ️ Transaction already marked as failed');
+                return res.status(200).json({ 
+                    success: false, 
+                    message: 'Payment already marked as failed',
+                    transaction_id: transactionIdForLogging,
+                    status: 'failed'
+                });
+            } else {
+                // Ambiguous callback - default to success (Cashfree redirects to success URL after payment)
+                console.log('   ⚠️ Callback URL is ambiguous, defaulting to success (optimistic update)');
+                
+                const paidAt = new Date();
+                const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+                const commissionData = calculatePayinCommission(transaction.amount);
+                
+                const update = {
+                    status: 'paid',
+                    paidAt: paidAt,
+                    paymentMethod: payload.payment_method || 'unknown',
+                    cashfreeOrderId: cfOrderId,
+                    updatedAt: new Date(),
+                    settlementStatus: 'unsettled',
+                    expectedSettlementDate: expectedSettlement,
+                    commission: commissionData.commission,
+                    netAmount: parseFloat((transaction.amount - commissionData.commission).toFixed(2)),
+                    webhookData: {
+                        ...payload,
+                        callback_source: 'ambiguous_url_default_success',
+                        callback_timestamp: new Date().toISOString()
+                    }
+                };
+                
+                await Transaction.findOneAndUpdate(
+                    { _id: transaction._id },
+                    update
+                );
+                
+                console.log('   ✅ Transaction marked as paid (optimistic update)');
+                return res.status(200).json({ 
+                    success: true, 
+                    message: 'Payment confirmed (optimistic update)',
+                    transaction_id: transactionIdForLogging,
+                    status: 'paid'
+                });
             }
         }
-
-        // If no API verification, respond with 200 for webhook
-        return res.status(200).json({ success: true, message: 'Callback received' });
 
     } catch (error) {
         console.error('❌ Cashfree Callback Handler Error:', error);
@@ -517,4 +485,3 @@ exports.handleCashfreeCallback = async (req, res) => {
         });
     }
 };
-
