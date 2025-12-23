@@ -33,6 +33,9 @@ function cleanSessionId(sessionId) {
     return sessionId.replace(/payment+$/i, '').trim();
 }
 
+// Note: Cashfree session creation is now handled by Next.js checkout page directly
+// No need for NEXTJS_API_URL anymore
+
 // ============ CREATE CASHFREE PAYMENT LINK ============
 exports.createCashfreePaymentLink = async (req, res) => {
     let transactionId = null;
@@ -57,21 +60,8 @@ exports.createCashfreePaymentLink = async (req, res) => {
         console.log('📤 Cashfree Payment Link Creation Request');
         console.log('='.repeat(80));
         console.log('   Merchant:', merchantName, `(${merchantId})`);
-        console.log('   Environment:', CASHFREE_ENVIRONMENT);
-        console.log('   Base URL (configured):', CASHFREE_BASE_URL);
-        console.log('   API Version:', CASHFREE_API_VERSION);
+        console.log('   Payment data will be passed to Next.js checkout page');
         
-        // Verify credentials are set
-        if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
-            console.error('   ❌ CRITICAL: Cashfree credentials are missing!');
-            console.error('      CASHFREE_APP_ID:', CASHFREE_APP_ID ? 'SET' : 'NOT SET');
-            console.error('      CASHFREE_SECRET_KEY:', CASHFREE_SECRET_KEY ? 'SET' : 'NOT SET');
-        } else {
-            console.log('   ✅ Credentials configured');
-            console.log('      App ID length:', CASHFREE_APP_ID.length);
-            console.log('      Secret Key length:', CASHFREE_SECRET_KEY.length);
-        }
-
         // Check if Cashfree is enabled in settings
         const settings = await Settings.getSettings();
         if (!settings.paymentGateways.cashfree.enabled) {
@@ -87,19 +77,6 @@ exports.createCashfreePaymentLink = async (req, res) => {
             });
         }
 
-        // Validate credentials
-        if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
-            console.error('❌ Cashfree credentials not configured');
-            return res.status(500).json({
-                success: false,
-                error: 'Cashfree credentials not configured. Please set CASHFREE_APP_ID and CASHFREE_SECRET_KEY in environment variables.',
-                details: {
-                    description: 'Cashfree credentials not configured',
-                    code: 'CONFIGURATION_ERROR'
-                }
-            });
-        }
-
         // Validate input
         if (!amount || !customer_name || !customer_email || !customer_phone) {
             return res.status(400).json({
@@ -108,8 +85,9 @@ exports.createCashfreePaymentLink = async (req, res) => {
             });
         }
 
-        // Validate phone
-        if (!/^[0-9]{10}$/.test(customer_phone)) {
+        // Validate phone (remove any non-digits first)
+        const cleanPhone = customer_phone.replace(/\D/g, '');
+        if (!/^[0-9]{10}$/.test(cleanPhone)) {
             return res.status(400).json({
                 success: false,
                 error: 'Invalid phone number. Must be 10 digits.'
@@ -133,7 +111,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
             });
         }
 
-        // Generate unique transaction ID
+        // Generate unique transaction ID and order ID
         transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(7)}`;
         const orderId = `ORDER_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
@@ -160,212 +138,36 @@ exports.createCashfreePaymentLink = async (req, res) => {
         console.log('   Success URL:', finalCallbackUrl);
         console.log('   Failure URL:', finalFailureUrl);
 
-        // Prepare Cashfree order payload
-        const orderPayload = {
-            order_id: orderId,
-            order_amount: amountValue,
-            order_currency: 'INR',
-            order_note: description || `Payment for ${merchantName}`,
-            customer_details: {
-                customer_id: `CUST_${customer_phone}_${Date.now()}`,
-                customer_name: customer_name,
-                customer_email: customer_email,
-                customer_phone: `+91${customer_phone}`
-            },
-            order_meta: {
-                return_url: finalCallbackUrl,
-                notify_url: cashfreeCallbackUrl,
-                // Cashfree payment method codes: cc,dc,ppc,ccc,emi,paypal,upi,nb,app,paylater,applepay
-                // nb = netbanking, app = wallet
-                payment_methods: 'cc,dc,upi,nb,app,paylater,emi', // All payment methods
-                return_params: {
-                    transaction_id: transactionId
-                }
-            }
-        };
-
-        console.log('\n📤 Creating Cashfree Order...');
-        console.log('   Order Payload:', JSON.stringify(orderPayload, null, 2));
-
-        // Construct the correct endpoint URL
-        // Cashfree API endpoint format: https://api.cashfree.com/pg/orders
-        // Ensure base URL doesn't have /pg, then add /pg/orders
-        const cleanBaseUrl = CASHFREE_BASE_URL.replace(/\/pg\/?$/, '').replace(/\/$/, '');
-        const endpointUrl = `${cleanBaseUrl}/pg/orders`;
+        // Don't call Cashfree API here - just prepare payment data for frontend
+        // The Next.js checkout page will handle Cashfree API calls directly
+        console.log('\n📋 Payment data prepared for Next.js checkout page');
+        console.log('   Order ID:', orderId);
+        console.log('   Amount: ₹', amountValue);
+        console.log('   Customer:', customer_name, `(${customer_email})`);
+        console.log('   Phone:', cleanPhone);
         
-        console.log('   Clean Base URL:', cleanBaseUrl);
-        console.log('   Full API Endpoint URL:', endpointUrl);
-        console.log('   Request Method: POST');
-        console.log('   API Version Header:', CASHFREE_API_VERSION);
-        console.log('   Client ID:', CASHFREE_APP_ID ? `${CASHFREE_APP_ID.substring(0, 8)}...${CASHFREE_APP_ID.substring(CASHFREE_APP_ID.length - 4)}` : 'NOT SET');
-        console.log('   Client Secret:', CASHFREE_SECRET_KEY ? '***SET***' : 'NOT SET');
-
-        // Create order with Cashfree
-        const cashfreeResponse = await axios.post(
-            endpointUrl,
-            orderPayload,
-            {
-                headers: {
-                    'x-api-version': CASHFREE_API_VERSION,
-                    'x-client-id': CASHFREE_APP_ID,
-                    'x-client-secret': CASHFREE_SECRET_KEY,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                timeout: 30000, // 30 second timeout
-                validateStatus: function (status) {
-                    return status < 500; // Don't throw for 4xx errors, handle them manually
-                }
-            }
-        );
-        
-        // Check for error status
-        if (cashfreeResponse.status !== 200 && cashfreeResponse.status !== 201) {
-            console.error('   ❌ Cashfree API returned error status:', cashfreeResponse.status);
-            console.error('   Response data:', JSON.stringify(cashfreeResponse.data, null, 2));
-            
-            const errorCode = cashfreeResponse.data?.code || '';
-            const errorMessage = cashfreeResponse.data?.message || JSON.stringify(cashfreeResponse.data);
-            
-            // Provide user-friendly error messages for common account configuration issues
-            let userFriendlyMessage = errorMessage;
-            let troubleshootingSteps = '';
-            
-            if (errorCode === 'request_failed' || errorMessage.includes('not enabled')) {
-                troubleshootingSteps = `
-TROUBLESHOOTING STEPS:
-1. Verify API access is enabled in Cashfree Dashboard:
-   - Login to https://merchant.cashfree.com
-   - Go to Developers > API Settings
-   - Ensure "Payment Gateway API" is enabled
-   
-2. Check if you're using correct environment credentials:
-   - Production: Use production App ID and Secret Key
-   - Test/Sandbox: Use sandbox credentials and set CASHFREE_ENVIRONMENT=sandbox
-   
-3. Verify IP Whitelisting:
-   - Check if your server IP needs to be whitelisted in Cashfree dashboard
-   - Settings > Security > IP Whitelisting
-   
-4. Contact Cashfree Support:
-   - Fill out support form: https://merchant.cashfree.com/merchants/landing?env=prod&raise_issue=1
-   - Request: "Enable Payment Gateway API access for order creation"
-   - Mention you can create payment links via web portal but API returns this error
-`;
-                userFriendlyMessage = `Cashfree account configuration issue: ${errorMessage}.${troubleshootingSteps}`;
-            }
-            
-            throw new Error(`Cashfree API error (${cashfreeResponse.status}): ${userFriendlyMessage}`);
-        }
-
-        console.log('✅ Cashfree Order Created');
-        console.log('   Full API Response:', JSON.stringify(cashfreeResponse.data, null, 2));
-
-        const paymentSessionId = cashfreeResponse.data?.payment_session_id;
-        const cfOrderId = cashfreeResponse.data?.cf_order_id || orderId;
-        
-        // Check all possible fields for payment URL in response
-        const directPaymentUrl = cashfreeResponse.data?.payment_link || 
-                                 cashfreeResponse.data?.link_url ||
-                                 cashfreeResponse.data?.payment_url ||
-                                 cashfreeResponse.data?.checkout_url ||
-                                 cashfreeResponse.data?.url;
-
-        if (!paymentSessionId) {
-            console.error('   ❌ Payment Session ID missing in response');
-            console.error('   Available fields:', Object.keys(cashfreeResponse.data || {}));
-            throw new Error('Payment session ID not received from Cashfree');
-        }
-
-        console.log('\n📋 Order Details from Cashfree:');
-        console.log('   Payment Session ID:', paymentSessionId);
-        console.log('   Payment Session ID length:', paymentSessionId.length);
-        console.log('   CF Order ID:', cfOrderId);
-        console.log('   Our Order ID:', orderId);
-        console.log('   Direct Payment URL from API:', directPaymentUrl || 'Not provided in response');
-
-        // Initialize paymentUrl - will be set from various sources
-        let paymentUrl;
-        
-        // Priority 1: Use direct payment URL from API response if available
-        if (directPaymentUrl) {
-            paymentUrl = directPaymentUrl;
-            console.log('   ✅ Using direct payment URL from Cashfree API response');
-        } else {
-            // Priority 2: Try to get checkout URL from sessions endpoint
-            try {
-                console.log('\n🔍 Attempting to fetch session details from Cashfree...');
-                // Extract session ID from payment_session_id (remove "session_" prefix if present)
-                const sessionId = paymentSessionId.startsWith('session_') 
-                    ? paymentSessionId.substring(8) // Remove "session_" prefix
-                    : paymentSessionId;
-                
-                const sessionsEndpointUrl = `${cleanBaseUrl}/pg/orders/sessions/${sessionId}`;
-                console.log('   Sessions Endpoint URL:', sessionsEndpointUrl);
-                const sessionResponse = await axios.get(sessionsEndpointUrl, {
-                    headers: {
-                        'x-api-version': CASHFREE_API_VERSION,
-                        'x-client-id': CASHFREE_APP_ID,
-                        'x-client-secret': CASHFREE_SECRET_KEY,
-                        'Accept': 'application/json'
-                    },
-                    timeout: 10000,
-                    validateStatus: (status) => status < 500 // Don't throw for 4xx
-                });
-                
-                if (sessionResponse.status === 200 && sessionResponse.data) {
-                    const sessionData = sessionResponse.data;
-                    console.log('   ✅ Session details retrieved successfully');
-                    
-                    // Check if session data contains a checkout URL
-                    const sessionCheckoutUrl = sessionData.checkout_url || sessionData.payment_url || sessionData.url;
-                    if (sessionCheckoutUrl) {
-                        paymentUrl = sessionCheckoutUrl;
-                        console.log('   ✅ Using checkout URL from session data');
-                    }
-                } else {
-                    console.log('   ℹ️ Sessions endpoint returned:', sessionResponse.status, sessionResponse.data?.message || 'No session data');
-                }
-            } catch (sessionError) {
-                console.log('   ℹ️ Could not fetch session details (non-critical):', sessionError.response?.status || sessionError.message);
-                // Don't fail the whole process if session fetch fails
-            }
-            
-            // Priority 3: Construct payment URL using standard format (fallback)
-            if (!paymentUrl) {
-                paymentUrl = `https://payments.cashfree.com/order/#/checkout?order_token=${paymentSessionId}`;
-                console.log('   ✅ Constructed payment URL using payment_session_id as order_token');
-            }
-        }
-        
-        console.log('\n🔗 Final Payment URL:');
-        console.log('   Full URL:', paymentUrl);
-        console.log('   URL Length:', paymentUrl.length);
-        console.log('   Contains order_token:', paymentUrl.includes('order_token'));
-        console.log('   Contains payment_session_id:', paymentUrl.includes(paymentSessionId));
+        // Payment URL will be generated by Next.js checkout page after creating session
+        const paymentUrl = `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-pending`;
 
         // Calculate commission
         const commissionData = calculatePayinCommission(amountValue);
         const expectedSettlement = calculateExpectedSettlementDate(new Date());
 
-        // Save transaction to database
+        // Save transaction to database (status: 'created' - will be updated when payment is initiated)
         const transaction = new Transaction({
             transactionId: transactionId,
             orderId: orderId,
             merchantId: merchantId,
             merchantName: merchantName,
-            customerId: orderPayload.customer_details.customer_id,
+            customerId: `CUST_${cleanPhone}_${Date.now()}`,
             customerName: customer_name,
             customerEmail: customer_email,
-            customerPhone: customer_phone,
+            customerPhone: cleanPhone,
             amount: amountValue,
             currency: 'INR',
             description: description || `Payment for ${merchantName}`,
             status: 'created',
             paymentGateway: 'cashfree',
-            cashfreeOrderToken: paymentSessionId, // Store original session ID
-            cashfreePaymentId: paymentSessionId,
-            cashfreeOrderId: cfOrderId,
             successUrl: finalCallbackUrl,
             failureUrl: finalFailureUrl,
             callbackUrl: cashfreeCallbackUrl,
@@ -376,26 +178,83 @@ TROUBLESHOOTING STEPS:
         });
 
         await transaction.save();
-        console.log('✅ Transaction saved to database');
+        console.log('✅ Transaction saved to database (status: created)');
 
-        // Return response with additional troubleshooting information
-        res.json({
+        // Determine environment from CASHFREE_ENVIRONMENT or default to production
+        const responseEnvironment = CASHFREE_ENVIRONMENT === 'sandbox' ? 'sandbox' : 'production';
+
+        // Construct checkout URL - use localhost:3001 for local development, otherwise use environment variable
+        const isLocalhost = process.env.NODE_ENV !== 'production' || !process.env.VITE_CHECKOUT_URL;
+        const checkoutBaseUrl = process.env.VITE_CHECKOUT_URL || (isLocalhost ? 'http://localhost:3001' : 'https://www.shaktisewafoudation.in');
+        const checkoutUrl = new URL(`${checkoutBaseUrl}/checkout`);
+        checkoutUrl.searchParams.set('amount', amountValue);
+        checkoutUrl.searchParams.set('customer_name', customer_name);
+        checkoutUrl.searchParams.set('customer_email', customer_email);
+        checkoutUrl.searchParams.set('customer_phone', cleanPhone);
+        checkoutUrl.searchParams.set('order_id', orderId);
+        checkoutUrl.searchParams.set('transaction_id', transactionId);
+        checkoutUrl.searchParams.set('merchant_id', merchantId.toString());
+        checkoutUrl.searchParams.set('merchant_name', merchantName);
+        if (description) checkoutUrl.searchParams.set('description', description);
+        checkoutUrl.searchParams.set('environment', responseEnvironment);
+
+        const responseData = {
             success: true,
             transaction_id: transactionId,
-            payment_link_id: cfOrderId,
-            payment_url: paymentUrl,
-            checkout_page: paymentUrl,
             order_id: orderId,
             order_amount: amountValue,
             order_currency: 'INR',
             merchant_id: merchantId.toString(),
             merchant_name: merchantName,
             callback_url: finalCallbackUrl,
-            payment_session_id: paymentSessionId,
-            cf_order_id: cfOrderId,
-            message: 'Payment link created successfully. Share this URL with customer.',
-            troubleshooting_note: 'If the payment URL shows "Bad URL" error, this may indicate a Cashfree account configuration issue. Please contact Cashfree support at https://merchant.cashfree.com/merchants/landing?env=prod&raise_issue=1 with your CF Order ID and mention that checkout page returns "Bad URL" error.'
-        });
+            failure_url: finalFailureUrl,
+            environment: responseEnvironment, // Include environment for frontend
+            gateway_used: 'cashfree',
+            gateway_name: 'Cashfree',
+            // Next.js checkout URL - this is the payment link for Cashfree
+            payment_url: checkoutUrl.toString(),
+            paymentLink: checkoutUrl.toString(),
+            // Payment details to pass to Next.js checkout page
+            payment_data: {
+                amount: amountValue,
+                currency: 'INR',
+                customer_name: customer_name,
+                customer_email: customer_email,
+                customer_phone: cleanPhone,
+                description: description || `Payment for ${merchantName}`,
+                order_id: orderId,
+                transaction_id: transactionId,
+                merchant_id: merchantId.toString(),
+                merchant_name: merchantName
+            },
+            message: 'Payment link created successfully. Share this URL with customer. Gateway: Cashfree.',
+            note: 'Round-robin rotation: Payment gateways alternate between enabled gateways. Next payment will use a different gateway.',
+            gateway_message: 'Payment link created using Cashfree gateway (round-robin)',
+            rotation_mode: 'round-robin',
+            rotation_enabled: true,
+            current_active_gateway: 'cashfree',
+            next_active_gateway: 'cashfree',
+            last_used_gateway_index: -1,
+            enabled_gateways_count: 1,
+            enabled_gateways: ['cashfree']
+        };
+
+        console.log('\n' + '='.repeat(80));
+        console.log('✅ CASHFREE PAYMENT LINK CREATED SUCCESSFULLY');
+        console.log('='.repeat(80));
+        console.log('   Transaction ID:', transactionId);
+        console.log('   Order ID:', orderId);
+        console.log('   Amount:', amountValue, 'INR');
+        console.log('   Merchant:', merchantName, '(' + merchantId + ')');
+        console.log('   Customer:', customer_name, '(' + customer_email + ')');
+        console.log('   Environment:', responseEnvironment);
+        console.log('   Gateway: Cashfree');
+        console.log('\n   Next.js Checkout URL:');
+        console.log('   ' + checkoutUrl.toString());
+        console.log('='.repeat(80) + '\n');
+
+        // Return payment data for Next.js checkout page to handle Cashfree integration
+        res.json(responseData);
 
     } catch (error) {
         console.error('\n❌ Cashfree Payment Link Creation Error:');
@@ -441,35 +300,49 @@ TROUBLESHOOTING STEPS:
  */
 exports.handleCashfreeCallback = async (req, res) => {
     try {
-        const { transaction_id } = req.query;
         const payload = req.body || req.query;
+        const { transaction_id } = req.query;
 
         console.log('\n' + '='.repeat(80));
         console.log('🔔 CASHFREE CALLBACK RECEIVED');
         console.log('='.repeat(80));
         console.log('   Method:', req.method);
         console.log('   Transaction ID (query):', transaction_id);
+        console.log('   Transaction ID (payload):', payload.transaction_id);
         console.log('   Payload:', JSON.stringify(payload, null, 2));
 
-        if (!transaction_id) {
-            console.warn('❌ Missing transaction_id in callback');
-            const frontendUrl = (process.env.FRONTEND_URL || 'https://payments.ninex-group.com').replace(/:\d+$/, '').replace(/\/$/, '');
-            return res.redirect(`${frontendUrl}/payment-failed?error=missing_transaction_id`);
+        // Extract transaction_id or order_id from query or payload
+        const transactionIdFromQuery = transaction_id || payload.transaction_id || req.query.transaction_id;
+        const orderIdFromQuery = payload.order_id || req.query.order_id;
+        
+        let transaction;
+        
+        // Try to find transaction by transaction_id first, then by order_id
+        if (transactionIdFromQuery) {
+            transaction = await Transaction.findOne({ transactionId: transactionIdFromQuery }).populate('merchantId');
         }
-
-        // Find transaction
-        const transaction = await Transaction.findOne({ transactionId: transaction_id }).populate('merchantId');
-
+        
+        if (!transaction && orderIdFromQuery) {
+            transaction = await Transaction.findOne({ orderId: orderIdFromQuery }).populate('merchantId');
+        }
+        
         if (!transaction) {
-            console.warn('⚠️ Transaction not found for transactionId:', transaction_id);
-            const frontendUrl = (process.env.FRONTEND_URL || 'https://payments.ninex-group.com').replace(/:\d+$/, '').replace(/\/$/, '');
-            return res.redirect(`${frontendUrl}/payment-failed?error=transaction_not_found`);
+            console.warn('⚠️ Transaction not found for transactionId:', transactionIdFromQuery, 'or orderId:', orderIdFromQuery);
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Transaction not found',
+                error: 'transaction_not_found',
+                transaction_id: transactionIdFromQuery,
+                order_id: orderIdFromQuery
+            });
         }
+        
+        const transactionIdForLogging = transactionIdFromQuery || transaction.transactionId;
 
         // Extract payment status from payload
         const orderStatus = payload.order_status || payload.status;
         const paymentStatus = payload.payment_status || payload.paymentStatus;
-        const cfOrderId = payload.cf_order_id || payload.order_id || transaction.cashfreeOrderId;
+        const cfOrderId = payload.cf_order_id || payload.order_id || orderIdFromQuery || transaction.cashfreeOrderId || transaction.orderId;
         const paymentMessage = payload.payment_message || payload.message || '';
 
         console.log('\n📊 Payment Status Analysis:');
@@ -534,7 +407,7 @@ exports.handleCashfreeCallback = async (req, res) => {
                         };
 
                         const updatedTransaction = await Transaction.findOneAndUpdate(
-                            { transactionId: transaction_id },
+                            { _id: transaction._id },
                             update,
                             { new: true }
                         ).populate('merchantId');
@@ -585,25 +458,29 @@ exports.handleCashfreeCallback = async (req, res) => {
                         console.log('ℹ️ Transaction already marked as paid');
                     }
 
-                    // Redirect to success URL
-                    const frontendUrl = (process.env.FRONTEND_URL || 'https://payments.ninex-group.com').replace(/:\d+$/, '').replace(/\/$/, '');
-                    const redirectUrl = transaction.successUrl || 
-                        transaction.callbackUrl ||
-                        `${frontendUrl}/payment-success?transaction_id=${transaction_id}`;
-                    
-                    console.log('   ✅ Redirecting to SUCCESS:', redirectUrl);
-                    return res.redirect(redirectUrl);
+                    // Return success response - no redirect (callback page will close tab)
+                    console.log('   ✅ Payment confirmed, returning success response');
+                    return res.status(200).json({ 
+                        success: true, 
+                        message: 'Payment confirmed and transaction updated',
+                        transaction_id: transactionIdForLogging,
+                        status: 'paid'
+                    });
                 } else if (orderData.order_status === 'ACTIVE' || orderData.payment_status === 'PENDING') {
                     console.log('ℹ️ Payment is still pending');
-                    // Redirect to pending page or show pending status
-                    const frontendUrl = (process.env.FRONTEND_URL || 'https://payments.ninex-group.com').replace(/:\d+$/, '').replace(/\/$/, '');
-                    return res.redirect(`${frontendUrl}/payment-pending?transaction_id=${transaction_id}`);
+                    // Return pending response - callback page will close tab
+                    return res.status(200).json({ 
+                        success: true, 
+                        message: 'Payment is still pending',
+                        transaction_id: transactionIdForLogging,
+                        status: 'pending'
+                    });
                 } else {
                     // Payment failed
                     console.log('\n❌ PAYMENT FAILED');
                     if (transaction.status !== 'failed') {
                         await Transaction.findOneAndUpdate(
-                            { transactionId: transaction_id },
+                            { _id: transaction._id },
                             {
                                 status: 'failed',
                                 failureReason: paymentMessage || orderData.payment_message || 'Payment failed',
@@ -614,12 +491,14 @@ exports.handleCashfreeCallback = async (req, res) => {
                         console.log('✅ Transaction status updated to "failed"');
                     }
 
-                    const frontendUrl = (process.env.FRONTEND_URL || 'https://payments.ninex-group.com').replace(/:\d+$/, '').replace(/\/$/, '');
-                    const redirectUrl = transaction.failureUrl ||
-                        `${frontendUrl}/payment-failed?transaction_id=${transaction_id}&error=${encodeURIComponent(paymentMessage || 'Payment failed')}`;
-                    
-                    console.log('   ❌ Redirecting to FAILURE:', redirectUrl);
-                    return res.redirect(redirectUrl);
+                    // Return failure response - callback page will close tab
+                    console.log('   ❌ Payment failed, returning failure response');
+                    return res.status(200).json({ 
+                        success: false, 
+                        message: paymentMessage || 'Payment failed',
+                        transaction_id: transactionIdForLogging,
+                        status: 'failed'
+                    });
                 }
             } catch (apiError) {
                 console.error('❌ Error verifying payment with Cashfree API:', apiError.message);
@@ -632,8 +511,11 @@ exports.handleCashfreeCallback = async (req, res) => {
 
     } catch (error) {
         console.error('❌ Cashfree Callback Handler Error:', error);
-        const frontendUrl = (process.env.FRONTEND_URL || 'https://payments.ninex-group.com').replace(/:\d+$/, '').replace(/\/$/, '');
-        return res.redirect(`${frontendUrl}/payment-failed?error=callback_error`);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Callback processing error',
+            error: error.message || 'callback_error'
+        });
     }
 };
 

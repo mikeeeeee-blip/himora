@@ -147,8 +147,8 @@ exports.createPaymentLink = async (req, res) => {
         // Mark as modified and save settings to persist rotation state (only if round-robin is enabled)
         if (isRoundRobinEnabled) {
             try {
-                settings.markModified('roundRobinRotation');
-                await settings.save();
+            settings.markModified('roundRobinRotation');
+            await settings.save();
                 console.log(`   ✅ Round-robin state saved successfully`);
             } catch (saveError) {
                 console.error(`   ⚠️  WARNING: Failed to save round-robin state:`, saveError.message);

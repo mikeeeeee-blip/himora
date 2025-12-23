@@ -1945,6 +1945,7 @@ const AdminDashboard = () => {
                   </div>
 
                   <div className="space-y-4">
+                    {/* Payment Link - Show for all gateways including Cashfree */}
                     <div>
                       <label className="block text-white/70 text-sm font-medium font-['Albert_Sans'] mb-2">
                         Payment Link:
@@ -1952,7 +1953,13 @@ const AdminDashboard = () => {
                       <div className="relative">
                         <input
                           type="text"
-                          value={createdPaymentLink.paymentLink || createdPaymentLink.payment_url || ""}
+                          value={
+                            createdPaymentLink.paymentLink || 
+                            createdPaymentLink.payment_url || 
+                            createdPaymentLink.raw?.payment_url ||
+                            createdPaymentLink.raw?.paymentLink ||
+                            ""
+                          }
                           readOnly
                           className="w-full px-4 py-3 border-2 border-white/10 rounded-lg text-sm font-mono bg-bg-secondary text-green-400 focus:outline-none break-all pr-24"
                         />
@@ -1960,7 +1967,10 @@ const AdminDashboard = () => {
                           <button
                             onClick={() =>
                               copyPaymentLinkToClipboard(
-                                createdPaymentLink.paymentLink || createdPaymentLink.payment_url
+                                createdPaymentLink.paymentLink || 
+                                createdPaymentLink.payment_url || 
+                                createdPaymentLink.raw?.payment_url ||
+                                createdPaymentLink.raw?.paymentLink
                               )
                             }
                             className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-3 py-1.5 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-1.5"
@@ -1970,11 +1980,25 @@ const AdminDashboard = () => {
                             <span className="hidden sm:inline">Copy</span>
                           </button>
                           <button
-                            onClick={() =>
-                              openPaymentLink(createdPaymentLink.paymentLink || createdPaymentLink.payment_url || createdPaymentLink.paytmPaymentUrl, createdPaymentLink.paytmParams, createdPaymentLink.easebuzzParams)
-                            }
+                            onClick={() => {
+                              const paymentUrl = createdPaymentLink.paymentLink || 
+                                createdPaymentLink.payment_url || 
+                                createdPaymentLink.raw?.payment_url ||
+                                createdPaymentLink.raw?.paymentLink;
+                              
+                              // For Cashfree, it's a direct URL - just open it
+                              const gatewayUsed = createdPaymentLink?.gateway_used || createdPaymentLink?.raw?.gateway_used;
+                              if (gatewayUsed === 'cashfree') {
+                                if (paymentUrl) {
+                                  window.open(paymentUrl, '_blank', 'noopener,noreferrer');
+                                }
+                              } else {
+                                // For other gateways, use existing openPaymentLink function
+                                openPaymentLink(paymentUrl || createdPaymentLink.paytmPaymentUrl, createdPaymentLink.paytmParams, createdPaymentLink.easebuzzParams);
+                              }
+                            }}
                             className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-1.5"
-                            title="Open link"
+                            title="Open payment link"
                           >
                             <FiExternalLink className="w-3.5 h-3.5" />
                             <span className="hidden sm:inline">Open</span>
