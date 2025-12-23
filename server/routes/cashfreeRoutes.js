@@ -4,7 +4,8 @@ const apiKeyAuth = require('../middleware/apiKeyAuth.js');
 
 const {
     createCashfreePaymentLink,
-    handleCashfreeCallback
+    handleCashfreeCallback,
+    handleCashfreeWebhook
 } = require('../controllers/cashfreeController.js');
 
 // ============ MERCHANT APIs (API Key Auth) ============
@@ -21,6 +22,9 @@ router.post('/create-payment-link', apiKeyAuth, (req, res, next) => {
 // ============ CALLBACK (No Auth - POST/GET from Cashfree) ============
 router.post('/callback', handleCashfreeCallback);
 router.get('/callback', handleCashfreeCallback);
+
+// ============ WEBHOOK (No Auth - POST from Cashfree) ============
+router.post('/webhook', handleCashfreeWebhook);
 
 module.exports = router;
 

@@ -1850,6 +1850,17 @@ exports.getPayoutStatusById = async (req, res) => {
     try {
         const payoutId = req.params.payoutId;
 
+        // Check database connection
+        const mongoose = require('mongoose');
+        if (mongoose.connection.readyState !== 1) {
+            console.error('❌ Database not connected when fetching payout status');
+            return res.status(503).json({
+                success: false,
+                error: 'Database connection unavailable. Please try again in a moment.',
+                connectionState: mongoose.connection.readyState
+            });
+        }
+
         const payout = await Payout.findOne({ payoutId }).lean();
 
         if (!payout) {
@@ -1873,10 +1884,23 @@ exports.getPayoutStatusById = async (req, res) => {
             adminNotes: payout.adminNotes
         });
     } catch (error) {
-        console.error('Get Payout Status Error:', error);
+        console.error('❌ Get Payout Status Error:', error);
+        console.error('   Error stack:', error.stack);
+        
+        // Check if it's a database connection error
+        const mongoose = require('mongoose');
+        if (mongoose.connection.readyState !== 1) {
+            return res.status(503).json({
+                success: false,
+                error: 'Database connection unavailable. Please try again in a moment.',
+                connectionState: mongoose.connection.readyState
+            });
+        }
+        
         res.status(500).json({
             success: false,
-            error: 'Failed to fetch payout status'
+            error: 'Failed to fetch payout status',
+            detail: error.message
         });
     }
 };
