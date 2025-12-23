@@ -384,12 +384,15 @@ async function startServer() {
         settlementJob.start();
         console.log('✅ Settlement cron job started - runs daily at 4:00 PM IST');
         
-        app.listen(PORT, () => {
-            const message = `🚀 Server running on port ${PORT} and env is ${process.env.PAYTM_MERCHANT_KEY ? 'set' : 'not set'}`;
-            console.log(message);
-            // Force flush
-            if (process.stdout) process.stdout.write('');
-        });
+        // Only listen if not in Vercel serverless environment
+        if (!process.env.VERCEL) {
+            app.listen(PORT, () => {
+                const message = `🚀 Server running on port ${PORT} and env is ${process.env.PAYTM_MERCHANT_KEY ? 'set' : 'not set'}`;
+                console.log(message);
+                // Force flush
+                if (process.stdout) process.stdout.write('');
+            });
+        }
     } catch (error) {
         console.error('❌ Failed to start server:', error.message);
         console.error('❌ MongoDB connection failed. Please check:');
@@ -397,9 +400,24 @@ async function startServer() {
         console.error('   2. MongoDB server is running and accessible');
         console.error('   3. Network connectivity to MongoDB host');
         console.error('   4. MongoDB credentials are correct');
-        process.exit(1);
+        if (!process.env.VERCEL) {
+            process.exit(1);
+        }
+        // In Vercel, don't exit - let the function handle errors
     }
 }
 
-// Start the server
-startServer();
+// Initialize server (connects to DB, starts jobs)
+// For Vercel, this runs on cold start
+if (process.env.VERCEL) {
+    // In Vercel, initialize DB connection and jobs, but don't call app.listen
+    startServer().catch((error) => {
+        console.error('Failed to initialize server:', error);
+    });
+} else {
+    // In traditional Node.js environment, start the server normally
+    startServer();
+}
+
+// Export app for Vercel serverless function
+module.exports = app;
