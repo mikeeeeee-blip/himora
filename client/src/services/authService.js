@@ -21,6 +21,8 @@ class AuthService {
       let normalizedRole = role;
       if (role === 'superAdmin' || role === 'superadmin' || role === 'SUPERADMIN') {
         normalizedRole = USER_ROLES.SUPERADMIN;
+      } else if (role === 'subSuperAdmin' || role === 'subsuperadmin' || role === 'SUBSUPERADMIN') {
+        normalizedRole = USER_ROLES.SUB_SUPERADMIN;
       } else if (role === 'admin' || role === 'ADMIN') {
         normalizedRole = USER_ROLES.ADMIN;
       } else {
@@ -69,6 +71,14 @@ class AuthService {
 
   isSuperAdmin() {
     return this.role === USER_ROLES.SUPERADMIN;
+  }
+
+  isSubSuperAdmin() {
+    return this.role === USER_ROLES.SUB_SUPERADMIN;
+  }
+
+  isSuperAdminOrSubSuperAdmin() {
+    return this.role === USER_ROLES.SUPERADMIN || this.role === USER_ROLES.SUB_SUPERADMIN;
   }
 }
 

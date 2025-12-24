@@ -24,6 +24,8 @@ const Login = () => {
       const role = authService.getRole();
       if (role === USER_ROLES.SUPERADMIN) {
         navigate("/superadmin", { replace: true });
+      } else if (role === USER_ROLES.SUB_SUPERADMIN) {
+        navigate("/sub-superadmin", { replace: true });
       } else if (role === USER_ROLES.ADMIN) {
         navigate("/admin", { replace: true });
       }
@@ -51,10 +53,12 @@ const Login = () => {
       // Redirect based on role
       if (role === USER_ROLES.SUPERADMIN) {
         navigate("/superadmin");
+      } else if (role === USER_ROLES.SUB_SUPERADMIN) {
+        navigate("/sub-superadmin");
       } else if (role === USER_ROLES.ADMIN) {
         navigate("/admin");
       } else {
-        setError(`Invalid role: ${role}. Expected 'admin' or 'superAdmin'`);
+        setError(`Invalid role: ${role}. Expected 'admin', 'superAdmin', or 'subSuperAdmin'`);
         setToast({ message: `Invalid role: ${role}`, type: "error" });
       }
     } catch (error) {

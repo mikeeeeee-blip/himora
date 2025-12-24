@@ -39,15 +39,22 @@ const AuthWrapper = ({ children, requiredRole }) => {
     return <Navigate to="/login" replace />;
   }
 
- // ✅ Allow SuperAdmin to access Admin routes
-if (requiredRole === USER_ROLES.ADMIN && userRole === USER_ROLES.SUPERADMIN) {
-  return children; // SuperAdmin can access admin routes
+ // ✅ Allow SuperAdmin and SubSuperAdmin to access Admin routes
+if (requiredRole === USER_ROLES.ADMIN && (userRole === USER_ROLES.SUPERADMIN || userRole === USER_ROLES.SUB_SUPERADMIN)) {
+  return children; // SuperAdmin and SubSuperAdmin can access admin routes
+}
+
+// ✅ Allow SubSuperAdmin to access SuperAdmin routes (with backend access control)
+if (requiredRole === USER_ROLES.SUPERADMIN && userRole === USER_ROLES.SUB_SUPERADMIN) {
+  return children; // SubSuperAdmin can access superadmin routes (backend will check permissions)
 }
 
 if (requiredRole && userRole !== requiredRole) {
   // Redirect to appropriate dashboard based on user's actual role
   if (userRole === USER_ROLES.SUPERADMIN) {
     return <Navigate to="/superadmin" replace />;
+  } else if (userRole === USER_ROLES.SUB_SUPERADMIN) {
+    return <Navigate to="/sub-superadmin" replace />;
   } else if (userRole === USER_ROLES.ADMIN) {
     return <Navigate to="/admin" replace />;
   } else {

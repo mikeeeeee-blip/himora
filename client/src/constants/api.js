@@ -75,6 +75,14 @@ export const API_ENDPOINTS = {
   SUPERADMIN_CHANGE_PASSWORD: (userId) => `${BASE_URL}/superadmin/users/${userId}/password`,
   SUPERADMIN_BLOCK_FUNDS: (merchantId) => `${BASE_URL}/superadmin/merchants/${merchantId}/block-funds`,
   
+  // ============ SUPERADMIN - SUB-SUPERADMIN MANAGEMENT ============
+  CREATE_SUB_SUPERADMIN: `${BASE_URL}/superadmin/sub-superadmins`,
+  GET_ALL_SUB_SUPERADMINS: `${BASE_URL}/superadmin/sub-superadmins`,
+  GET_SUB_SUPERADMIN: (subSuperAdminId) => `${BASE_URL}/superadmin/sub-superadmins/${subSuperAdminId}`,
+  UPDATE_SUB_SUPERADMIN: (subSuperAdminId) => `${BASE_URL}/superadmin/sub-superadmins/${subSuperAdminId}`,
+  DELETE_SUB_SUPERADMIN: (subSuperAdminId) => `${BASE_URL}/superadmin/sub-superadmins/${subSuperAdminId}`,
+  CHANGE_SUB_SUPERADMIN_PASSWORD: (subSuperAdminId) => `${BASE_URL}/superadmin/sub-superadmins/${subSuperAdminId}/password`,
+  
   // ============ SUPERADMIN - PAYOUTS ============
   ADMIN_PAYOUTS: `${BASE_URL}/payments/admin/payouts/all`,
   ADMIN_PAYOUT_APPROVE: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}/approve`,
@@ -99,4 +107,5 @@ export const API_ENDPOINTS = {
 export const USER_ROLES = {
   ADMIN: 'admin',
   SUPERADMIN: 'superAdmin',
+  SUB_SUPERADMIN: 'subSuperAdmin',
 };

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FiTrash2, FiKey, FiX, FiLock, FiUnlock } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
+import { FiTrash2, FiKey, FiX, FiLock, FiUnlock, FiEye } from 'react-icons/fi';
 import superadminPaymentService from '../../services/superadminPaymentService';
 import '../pages/PageLayout.css';
 import './SuperadminMerchantsPage.css';
@@ -128,6 +129,7 @@ function MerchantCard({ m }) {
 }
 
 export default function SuperadminMerchantsPage() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState({ merchants: [], summary: null });
@@ -291,6 +293,14 @@ export default function SuperadminMerchantsPage() {
     }
   };
 
+  const handleRowClick = (merchant, e) => {
+    // Don't navigate if clicking on action buttons
+    if (e.target.closest('button') || e.target.closest('td:last-child')) {
+      return;
+    }
+    navigate(`/superadmin/merchants/${merchant.merchant_id}`);
+  };
+
   return (
     <div className="min-h-screen bg-[#001D22]">
       {/* Fixed X Graphic - Background Layer */}
@@ -356,6 +366,7 @@ export default function SuperadminMerchantsPage() {
                       </div>
                     )}
                   </div>
+
                 </div>
               </div>
 
@@ -415,7 +426,11 @@ export default function SuperadminMerchantsPage() {
                       </thead>
                       <tbody>
             {filteredMerchants.map((m) => (
-                          <tr key={m.merchant_id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <tr 
+                            key={m.merchant_id} 
+                            className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
+                            onClick={(e) => handleRowClick(m, e)}
+                          >
                             <td className="px-4 py-3">
                               <div>
                                 <div className="text-white font-medium text-sm font-['Albert_Sans']">{m.merchant_info?.business_name || m.merchant_info?.name}</div>
@@ -452,8 +467,15 @@ export default function SuperadminMerchantsPage() {
                                 <div className="text-orange-400">Freezed: ₹ {currency(m.balance_information.blocked_balance)}</div>
                               )}
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                  onClick={() => navigate(`/superadmin/merchants/${m.merchant_id}`)}
+                                  className="p-2 bg-accent/20 hover:bg-accent/30 border border-accent/30 rounded-lg text-accent transition-all duration-200"
+                                  title="View Details"
+                                >
+                                  <FiEye className="w-4 h-4" />
+                                </button>
                                 <button
                                   onClick={() => handleBlockClick(m, 'block')}
                                   className="p-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 rounded-lg text-orange-400 transition-all duration-200"

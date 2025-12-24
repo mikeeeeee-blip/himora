@@ -19,8 +19,52 @@ const UserSchema = new mongoose.Schema({
     // Role
     role: {
         type: String,
-        enum: ['admin', 'superAdmin'],
+        enum: ['admin', 'superAdmin', 'subSuperAdmin'],
         default: 'admin',
+    },
+    
+    // Access Controls (for subSuperAdmin role)
+    accessControls: {
+        // Dashboard access
+        canViewDashboard: { type: Boolean, default: true },
+        
+        // Transaction management
+        canViewTransactions: { type: Boolean, default: true },
+        canManageTransactions: { type: Boolean, default: true },
+        canSettleTransactions: { type: Boolean, default: true },
+        
+        // Payout management
+        canViewPayouts: { type: Boolean, default: true },
+        canApprovePayouts: { type: Boolean, default: true },
+        canRejectPayouts: { type: Boolean, default: true },
+        canProcessPayouts: { type: Boolean, default: true },
+        
+        // Merchant management
+        canViewMerchants: { type: Boolean, default: true },
+        canManageMerchants: { type: Boolean, default: true },
+        canDeleteMerchants: { type: Boolean, default: false },
+        canBlockMerchantFunds: { type: Boolean, default: true },
+        canChangeMerchantPassword: { type: Boolean, default: true },
+        
+        // Admin management (sub-superadmin can manage admins)
+        canViewAdmins: { type: Boolean, default: true },
+        canCreateAdmins: { type: Boolean, default: true },
+        canEditAdmins: { type: Boolean, default: true },
+        canDeleteAdmins: { type: Boolean, default: true },
+        
+        // Settings
+        canViewSettings: { type: Boolean, default: true },
+        canManageSettings: { type: Boolean, default: false },
+        
+        // Sub-superadmin management (only superAdmin can manage sub-superadmins)
+        canManageSubSuperAdmins: { type: Boolean, default: false },
+    },
+    
+    // Created by (for subSuperAdmin - tracks which superAdmin created them)
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
     },
     
     // Business Details
@@ -118,10 +162,6 @@ const UserSchema = new mongoose.Schema({
     minimumPayoutAmount: {
         type: Number,
         default: 100 // Minimum ₹100
-    },
-    freePayoutsUnder500: {
-        type: Number,
-        default: 5
     },
     
     // ✅ STATUS & TIMESTAMPS

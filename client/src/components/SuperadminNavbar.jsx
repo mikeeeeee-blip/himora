@@ -28,6 +28,10 @@ const SuperadminNavbar = () => {
   const notificationsRef = useRef(null);
   const mobileMenuRef = useRef(null);
 
+  // Get user role to conditionally show items
+  const userRole = authService.getRole();
+  const isSuperAdmin = userRole === USER_ROLES.SUPERADMIN;
+
   // Navigation items for superadmin
   const navItems = [
     {
@@ -46,15 +50,16 @@ const SuperadminNavbar = () => {
       icon: <HiOutlineChartBar />,
     },
     {
-      path: "/superadmin/transactions/update",
-      label: "Update Transactions",
-      icon: <FiEdit3 />,
-    },
-    {
       path: "/superadmin/settings/payment-gateways",
       label: "Payment Gateways",
       icon: <FiSettings />,
     },
+    // Only show sub-superadmin management to superAdmin
+    ...(isSuperAdmin ? [{
+      path: "/superadmin/sub-superadmins",
+      label: "Sub-SuperAdmins",
+      icon: <FiUserPlus />,
+    }] : []),
   ];
 
   // Close dropdowns when clicking outside
@@ -193,20 +198,24 @@ const SuperadminNavbar = () => {
                 )}
               </React.Fragment>
             ))}
-            <div className="h-6 w-px bg-white/20 mx-2"></div>
-            <button
-              onClick={() => navigate("/superadmin/signup")}
-              className={`flex items-center gap-2 px-4 md:px-5 py-2 rounded-full font-medium text-xs sm:text-sm font-['Albert_Sans'] transition-all duration-200 ${
-                isActive("/superadmin/signup")
-                  ? "bg-white text-[#001D22] shadow-md"
-                  : "bg-gradient-to-r from-accent/90 to-bg-tertiary/90 hover:from-accent hover:to-bg-tertiary text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 border border-accent/30"
-              }`}
-            >
-              <span className="text-base">
-                <FiUserPlus />
-              </span>
-              <span>Create</span>
-            </button>
+            {isSuperAdmin && (
+              <>
+                <div className="h-6 w-px bg-white/20 mx-2"></div>
+                <button
+                  onClick={() => navigate("/superadmin/signup")}
+                  className={`flex items-center gap-2 px-4 md:px-5 py-2 rounded-full font-medium text-xs sm:text-sm font-['Albert_Sans'] transition-all duration-200 ${
+                    isActive("/superadmin/signup")
+                      ? "bg-white text-[#001D22] shadow-md"
+                      : "bg-gradient-to-r from-accent/90 to-bg-tertiary/90 hover:from-accent hover:to-bg-tertiary text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 border border-accent/30"
+                  }`}
+                >
+                  <span className="text-base">
+                    <FiUserPlus />
+                  </span>
+                  <span>Create</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -289,7 +298,7 @@ const SuperadminNavbar = () => {
                     {businessName}
                   </p>
                   <p className="text-white/60 text-xs font-['Albert_Sans']">
-                    Superadmin
+                    {isSuperAdmin ? 'Superadmin' : 'Sub-Superadmin'}
                   </p>
                 </div>
                 <button
@@ -377,22 +386,24 @@ const SuperadminNavbar = () => {
                   <span>{item.label}</span>
                 </button>
               ))}
-              <button
-                onClick={() => {
-                  navigate("/superadmin/signup");
-                  setShowMobileMenu(false);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-sm font-['Albert_Sans'] transition-all duration-200 ${
-                  isActive("/superadmin/signup")
-                    ? "bg-white text-[#001D22] shadow-md"
-                    : "bg-gradient-to-r from-accent/90 to-bg-tertiary/90 hover:from-accent hover:to-bg-tertiary text-white shadow-sm hover:shadow-md border border-accent/30"
-                }`}
-              >
-                <span className="text-xl">
-                  <FiUserPlus />
-                </span>
-                <span>Create Account</span>
-              </button>
+              {isSuperAdmin && (
+                <button
+                  onClick={() => {
+                    navigate("/superadmin/signup");
+                    setShowMobileMenu(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-sm font-['Albert_Sans'] transition-all duration-200 ${
+                    isActive("/superadmin/signup")
+                      ? "bg-white text-[#001D22] shadow-md"
+                      : "bg-gradient-to-r from-accent/90 to-bg-tertiary/90 hover:from-accent hover:to-bg-tertiary text-white shadow-sm hover:shadow-md border border-accent/30"
+                  }`}
+                >
+                  <span className="text-xl">
+                    <FiUserPlus />
+                  </span>
+                  <span>Create Account</span>
+                </button>
+              )}
             </div>
           </nav>
 
@@ -407,7 +418,7 @@ const SuperadminNavbar = () => {
                   {businessName}
                 </p>
                 <p className="text-white/60 text-xs font-['Albert_Sans']">
-                  Superadmin
+                  {isSuperAdmin ? 'Superadmin' : 'Sub-Superadmin'}
                 </p>
               </div>
             </div>

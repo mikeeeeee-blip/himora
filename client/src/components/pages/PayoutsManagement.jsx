@@ -37,6 +37,11 @@ const PayoutsManagement = () => {
     page: 1,
     limit: 20
   });
+  const [pagination, setPagination] = useState({
+    totalCount: 0,
+    totalPages: 1,
+    currentPage: 1
+  });
 
   // Form states for actions
   const [approveNotes, setApproveNotes] = useState('');
@@ -57,6 +62,13 @@ const PayoutsManagement = () => {
       console.log('All payouts data:', data);
       setPayouts(data.payouts || []);
       setPayoutsSummary(data.summary || null);
+      if (data.pagination) {
+        setPagination({
+          totalCount: data.pagination.totalCount || 0,
+          totalPages: data.pagination.totalPages || 1,
+          currentPage: data.pagination.currentPage || 1
+        });
+      }
     } catch (error) {
       setError(error.message);
       setToast({ message: error.message, type: 'error' });
@@ -418,7 +430,6 @@ const PayoutsManagement = () => {
                     <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
-
                 {/* Payouts Table */}
                 {loading ? (
                 <div className="flex flex-col items-center justify-center py-20 px-5">
@@ -434,6 +445,7 @@ const PayoutsManagement = () => {
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Payout ID</th>
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell">Merchant</th>
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Amount</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">Commission</th>
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">Net</th>
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell">Mode</th>
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Status</th>
@@ -473,6 +485,10 @@ const PayoutsManagement = () => {
 
                             <td className="px-4 py-3 text-white font-medium text-xs sm:text-sm font-['Albert_Sans']">
                           ₹{payout.amount.toLocaleString('en-IN')}
+                      </td>
+
+                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
+                          ₹{payout.commission ? payout.commission.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                       </td>
 
                             <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
@@ -559,8 +575,34 @@ const PayoutsManagement = () => {
                       </td>
                     </tr>
                   ))}
+                  
                         </tbody>
                       </table>
+                          {/* Pagination Controls */}
+                {pagination.totalPages > 1 && (
+                  <div className="mb-6 px-4 py-3 bg-[#263F43] border border-white/10 rounded-xl flex items-center justify-between">
+                    <div className="text-sm text-white/70 font-['Albert_Sans']">
+                      Showing page {pagination.currentPage} of {pagination.totalPages} 
+                      ({pagination.totalCount} total payouts)
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setFilters({ ...filters, page: filters.page - 1 })}
+                        disabled={filters.page === 1 || loading}
+                        className="px-4 py-2 bg-[#001D22] border border-white/10 rounded-lg hover:bg-white/10 text-white font-['Albert_Sans'] disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => setFilters({ ...filters, page: filters.page + 1 })}
+                        disabled={filters.page >= pagination.totalPages || loading}
+                        className="px-4 py-2 bg-[#001D22] border border-white/10 rounded-lg hover:bg-white/10 text-white font-['Albert_Sans'] disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
                   ) : (

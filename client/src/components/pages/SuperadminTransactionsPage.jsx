@@ -15,7 +15,9 @@ import {
   FiSearch,
   FiCalendar,
   FiShield,
-  FiCheck
+  FiCheck,
+  FiEdit3,
+  FiSave
 } from 'react-icons/fi';
 import { HiOutlineChartBar } from 'react-icons/hi2';
 import { RiShieldCheckLine } from 'react-icons/ri';
@@ -36,6 +38,14 @@ const SuperadminTransactionsPage = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [settlingTransactionId, setSettlingTransactionId] = useState(null);
   const [transactionIdSearch, setTransactionIdSearch] = useState('');
+  const [pagination, setPagination] = useState({
+    totalCount: 0,
+    totalPages: 1,
+    currentPage: 1
+  });
+  const [editingId, setEditingId] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
+  const [newStatus, setNewStatus] = useState('');
   
   const [filters, setFilters] = useState({
     page: 1,
@@ -71,6 +81,13 @@ const SuperadminTransactionsPage = () => {
       console.log('Transactions data:', data);
       setTransactions(data.transactions || []);
       setSummary(data.summary || null);
+      if (data.pagination) {
+        setPagination({
+          totalCount: data.pagination.totalCount || 0,
+          totalPages: data.pagination.totalPages || 1,
+          currentPage: data.pagination.currentPage || 1
+        });
+      }
     } catch (error) {
       console.error('Error fetching transactions:', error);
       setError(error.message);
@@ -141,6 +158,49 @@ const SuperadminTransactionsPage = () => {
       setSettlingTransactionId(null);
     }
   };
+
+  const handleEdit = (transaction, e) => {
+    e.stopPropagation(); // Prevent row click when clicking edit button
+    setEditingId(transaction.transactionId);
+    setNewStatus(transaction.status);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setNewStatus('');
+  };
+
+  const handleRowClick = (transaction) => {
+    navigate(`/admin/transactions/${transaction.transactionId}`);
+  };
+
+  const handleUpdate = async (transactionId) => {
+    if (!newStatus) {
+      setToast({ message: 'Please select a status', type: 'error' });
+      return;
+    }
+
+    setUpdatingId(transactionId);
+    setError('');
+    setToast({ message: '', type: 'success' });
+
+    try {
+      // Note: Currently only status can be updated via API
+      // GST and commission are calculated automatically by the backend
+      await superadminPaymentService.updateTransactionStatus(transactionId, newStatus);
+      setToast({ message: `Transaction ${transactionId} updated successfully!`, type: 'success' });
+      setEditingId(null);
+      setNewStatus('');
+      setEditGst('');
+      setEditCommission('');
+      await fetchTransactions();
+    } catch (e) {
+      setToast({ message: e.message || 'Failed to update transaction status', type: 'error' });
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
 
   const formatCurrency = (amount) => {
     return `₹${parseFloat(amount || 0).toLocaleString('en-IN', { 
@@ -594,35 +654,42 @@ const SuperadminTransactionsPage = () => {
           ) : transactions.length > 0 ? (
                 <div className="bg-[#263F43] border border-white/10 rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="w-full" style={{ tableLayout: 'fixed', minWidth: '100%' }}>
                       <thead className="bg-[#001D22] border-b border-white/10">
   <tr>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Transaction ID</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell">Order ID</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">Merchant</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell">Customer</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Amount</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Status</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden xl:table-cell">Settlement</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell">Created</th>
-                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider">Actions</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider w-[12%]">Transaction ID</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell w-[10%]">Order ID</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell w-[12%]">Merchant</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell w-[12%]">Customer</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider w-[6%] -ml-2">Amount</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell w-[8%]">Commission</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell w-[7%]">&nbsp;GST&nbsp;</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider w-[10%]">Status</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden xl:table-cell w-[10%]">Settlement</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell w-[10%]">Created</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider w-[11%]">Actions</th>
   </tr>
 </thead>
 
                 <tbody>
                   {transactions.map((txn) => (
-                          <tr key={txn._id || txn.transactionId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <tr 
+                            key={txn._id || txn.transactionId} 
+                            className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
+                            onClick={() => handleRowClick(txn)}
+                          >
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <span className="text-white text-xs sm:text-sm font-['Albert_Sans'] font-mono" title={txn.transactionId}>
+                                <span className="text-white text-xs sm:text-sm font-['Albert_Sans'] font-mono truncate" title={txn.transactionId}>
                             {txn.transactionId?.slice(-12) || 'N/A'}
                           </span>
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               navigator.clipboard.writeText(txn.transactionId);
                                     setToast({ message: '✓ Copied!', type: 'success' });
                             }}
-                                  className="p-1 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors"
+                                  className="p-1 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors flex-shrink-0"
                             title="Copy full ID"
                           >
                                   <FiCopy size={12} />
@@ -630,19 +697,19 @@ const SuperadminTransactionsPage = () => {
                         </div>
                       </td>
 
-                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden md:table-cell" title={txn.orderId}>
-                          {txn.orderId?.slice(0, 18) || 'N/A'}...
+                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden md:table-cell truncate" title={txn.orderId}>
+                          {txn.orderId || 'N/A'}
                       </td>
 
-                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell" title={txn.merchantName}>
+                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell truncate" title={txn.merchantName}>
                             {txn.merchantName || 'Unknown'}
                       </td>
 
                             <td className="px-4 py-3 hidden lg:table-cell">
-                              <div className="text-white/70 text-xs sm:text-sm font-['Albert_Sans']" title={txn.customerName}>
+                              <div className="text-white/70 text-xs sm:text-sm font-['Albert_Sans'] truncate" title={txn.customerName}>
                             {txn.customerName || 'Anonymous'}
                           </div>
-                              <div className="text-white/50 text-xs font-['Albert_Sans']" title={txn.customerEmail}>
+                              <div className="text-white/50 text-xs font-['Albert_Sans'] truncate" title={txn.customerEmail}>
                             {txn.customerEmail || 'No email'}
                         </div>
                       </td>
@@ -651,7 +718,47 @@ const SuperadminTransactionsPage = () => {
                           ₹{txn.amount?.toLocaleString('en-IN') || '0'}
                       </td>
 
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
+                              <span>
+                                ₹{txn.commission !== undefined && txn.commission !== null 
+                                  ? Number(txn.commission).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                  : '0.00'}
+                              </span>
+                      </td>
+
+                            <td className="px-4 py-3 text-white/70 text-xs sm:text-sm font-['Albert_Sans'] hidden lg:table-cell">
+                              <span>
+                                {(() => {
+                                  const baseRate = 3.8;
+                                  const gstRate = 18;
+                                  let gstAmount = 0;
+                                  if (txn.amount && txn.amount > 0) {
+                                    const baseCommission = (txn.amount * baseRate) / 100;
+                                    gstAmount = (baseCommission * gstRate) / 100;
+                                  }
+                                  return `₹${Number(gstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                                })()}
+                              </span>
+                      </td>
+
+                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                              {editingId === txn.transactionId ? (
+                                <select
+                                  value={newStatus}
+                                  onChange={(e) => setNewStatus(e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="px-2 py-1 bg-[#001D22] border border-white/10 rounded-lg text-white text-xs focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                                >
+                                  <option value="created">Created</option>
+                                  <option value="pending">Pending</option>
+                                  <option value="paid">Paid</option>
+                                  <option value="failed">Failed</option>
+                                  <option value="cancelled">Cancelled</option>
+                                  <option value="expired">Expired</option>
+                                  <option value="refunded">Refunded</option>
+                                  <option value="partial_refund">Partial Refund</option>
+                                </select>
+                              ) : (
                               <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium font-['Albert_Sans'] ${
                                 getStatusBadgeClass(txn.status) === 'status-paid' ? 'bg-green-500/20 text-green-400' :
                                 getStatusBadgeClass(txn.status) === 'status-failed' ? 'bg-red-500/20 text-red-400' :
@@ -660,12 +767,16 @@ const SuperadminTransactionsPage = () => {
                           {getStatusIcon(txn.status)}
                           <span>{txn.status?.toUpperCase() || 'N/A'}</span>
                         </span>
+                              )}
                       </td>
 
-                            <td className="px-4 py-3 hidden xl:table-cell">
+                            <td className="px-4 py-3 hidden xl:table-cell" onClick={(e) => e.stopPropagation()}>
                         {txn.settlementStatus?.toLowerCase() !== 'settled' ? (
                           <button
-                            onClick={() => handleSettleTransaction(txn.transactionId)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSettleTransaction(txn.transactionId);
+                            }}
                             disabled={settlingTransactionId === txn.transactionId || settlingTransactionId !== null}
                                   className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium font-['Albert_Sans'] transition-colors ${
                                     getSettlementBadgeClass(txn.settlementStatus) === 'settlement-unsettled' 
@@ -698,21 +809,69 @@ const SuperadminTransactionsPage = () => {
                               <div className="text-white/50 text-xs">{new Date(txn.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</div>
                       </td>
 
-                            <td className="px-4 py-3">
-                        <button
-                          onClick={() => navigate(`/admin/transactions/${txn.transactionId}`)}
-                                className="flex items-center gap-1 px-2 py-1 bg-accent/20 hover:bg-accent/30 text-accent rounded-lg text-xs font-medium font-['Albert_Sans'] transition-colors"
-                          title="View Details"
-                        >
-                                <FiEye size={14} />
-                                <span className="hidden sm:inline">View</span>
-                        </button>
+                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                              {editingId === txn.transactionId ? (
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleUpdate(txn.transactionId)}
+                                    disabled={updatingId === txn.transactionId}
+                                    className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Save"
+                                  >
+                                    <FiSave className={updatingId === txn.transactionId ? 'animate-spin' : ''} size={14} />
+                                  </button>
+                                  <button
+                                    onClick={handleCancelEdit}
+                                    disabled={updatingId === txn.transactionId}
+                                    className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Cancel"
+                                  >
+                                    <FiX size={14} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 sm:gap-2">
+                                  <button
+                                    onClick={(e) => handleEdit(txn, e)}
+                                    className="p-2 bg-accent/20 hover:bg-accent/30 text-accent rounded-lg transition-colors"
+                                    title="Edit Status"
+                                  >
+                                    <FiEdit3 size={14} />
+                                  </button>
+                                </div>
+                              )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
                   </div>
+                  
+                  {/* Pagination */}
+                  {pagination.totalPages > 1 && (
+                    <div className="px-4 py-4 border-t border-white/10 flex items-center justify-between">
+                      <div className="text-sm text-white/70 font-['Albert_Sans']">
+                        Showing page {pagination.currentPage} of {pagination.totalPages} 
+                        ({pagination.totalCount} total transactions)
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setFilters(prev => ({ ...prev, page: prev.page - 1 }))}
+                          disabled={filters.page === 1 || loading}
+                          className="px-4 py-2 bg-[#001D22] border border-white/10 rounded-lg hover:bg-white/10 text-white font-['Albert_Sans'] disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => setFilters(prev => ({ ...prev, page: prev.page + 1 }))}
+                          disabled={filters.page >= pagination.totalPages || loading}
+                          className="px-4 py-2 bg-[#001D22] border border-white/10 rounded-lg hover:bg-white/10 text-white font-['Albert_Sans'] disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
             </div>
           ) : (
                 <div className="flex flex-col items-center justify-center py-20 px-5">

@@ -1,6 +1,6 @@
 // components/SuperadminDashboard.jsx
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   FiUsers,
   FiTrendingUp,
@@ -14,6 +14,10 @@ import {
   FiArrowUp,
   FiArrowDown,
   FiPackage,
+  FiCalendar,
+  FiChevronLeft,
+  FiChevronRight,
+  FiX,
 } from "react-icons/fi";
 import { HiOutlineChartBar } from "react-icons/hi2";
 import { TbArrowsTransferDown } from "react-icons/tb";
@@ -28,10 +32,53 @@ const SuperadminDashboard = () => {
   const [error, setError] = useState("");
   const [loadingSettlement, setLoadingSettlement] = useState(false);
   const [settlementMessage, setSettlementMessage] = useState("");
+  const [merchantsData, setMerchantsData] = useState([]);
+  const [loadingMerchants, setLoadingMerchants] = useState(false);
+  
+  // Date filter states
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showDateRangePicker, setShowDateRangePicker] = useState(false);
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [useDateRange, setUseDateRange] = useState(false);
+  const [showAllTime, setShowAllTime] = useState(false);
 
   useEffect(() => {
     fetchStats();
-  }, []);
+    fetchMerchantsData();
+  }, [selectedDate, useDateRange, dateRange, showAllTime]);
+
+  const fetchMerchantsData = async () => {
+    setLoadingMerchants(true);
+    try {
+      // Prepare date filters
+      let startDate = undefined;
+      let endDate = undefined;
+      
+      if (showAllTime) {
+        startDate = undefined;
+        endDate = undefined;
+      } else if (useDateRange && dateRange.start && dateRange.end) {
+        startDate = dateRange.start;
+        endDate = dateRange.end;
+      } else if (!useDateRange && selectedDate) {
+        startDate = selectedDate;
+        endDate = selectedDate;
+      }
+
+      const data = await superadminPaymentService.getAllMerchantsData({
+        startDate,
+        endDate
+      });
+      
+      if (data && data.merchants) {
+        setMerchantsData(data.merchants);
+      }
+    } catch (err) {
+      console.error('Error fetching merchants data:', err);
+    } finally {
+      setLoadingMerchants(false);
+    }
+  };
   const handleManualSettlement = async () => {
     if (
       !window.confirm(
@@ -68,11 +115,117 @@ const SuperadminDashboard = () => {
     }
   };
 
+  const formatDateDisplay = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dateOnly = new Date(date);
+    dateOnly.setHours(0, 0, 0, 0);
+    
+    if (dateOnly.getTime() === today.getTime()) {
+      return 'Today';
+    }
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (dateOnly.getTime() === yesterday.getTime()) {
+      return 'Yesterday';
+    }
+    
+    return date.toLocaleDateString('en-IN', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  const navigateDate = (direction) => {
+    const currentDate = new Date(selectedDate);
+    if (direction === 'left') {
+      currentDate.setDate(currentDate.getDate() - 1);
+    } else {
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    setSelectedDate(currentDate.toISOString().split('T')[0]);
+    setUseDateRange(false);
+    setShowAllTime(false);
+    setDateRange({ start: '', end: '' });
+  };
+
+  const handleDateRangeApply = () => {
+    if (dateRange.start && dateRange.end) {
+      if (new Date(dateRange.start) > new Date(dateRange.end)) {
+        setError('Start date cannot be after end date');
+        return;
+      }
+      setUseDateRange(true);
+      setShowAllTime(false);
+      setShowDateRangePicker(false);
+    } else {
+      setError('Please select both start and end dates');
+    }
+  };
+
+  const handleClearDateRange = () => {
+    setUseDateRange(false);
+    setShowAllTime(false);
+    setDateRange({ start: '', end: '' });
+    setSelectedDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const handleAllTime = () => {
+    if (showAllTime) {
+      // Switch to today
+      setShowAllTime(false);
+      setUseDateRange(false);
+      setDateRange({ start: '', end: '' });
+      setSelectedDate(new Date().toISOString().split('T')[0]);
+    } else {
+      // Switch to all time
+      setShowAllTime(true);
+      setUseDateRange(false);
+      setDateRange({ start: '', end: '' });
+      setSelectedDate(new Date().toISOString().split('T')[0]);
+    }
+  };
+
+  // Close date range picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showDateRangePicker && !event.target.closest('[data-date-range-picker]')) {
+        setShowDateRangePicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDateRangePicker]);
+
   const fetchStats = async () => {
     setLoading(true);
     setError("");
     try {
-      const data = await superadminPaymentService.getDashboardStats();
+      // Prepare date filters
+      let startDate = undefined;
+      let endDate = undefined;
+      
+      if (showAllTime) {
+        // Don't apply date filter
+        startDate = undefined;
+        endDate = undefined;
+      } else if (useDateRange && dateRange.start && dateRange.end) {
+        startDate = dateRange.start;
+        endDate = dateRange.end;
+      } else if (!useDateRange && selectedDate) {
+        startDate = selectedDate;
+        endDate = selectedDate;
+      }
+
+      const data = await superadminPaymentService.getDashboardStats({
+        startDate,
+        endDate
+      });
       console.log("Dashboard stats:", data);
 
       // Validate that we have the required data structure
@@ -254,7 +407,7 @@ const SuperadminDashboard = () => {
             {/* Rounded Container with #122D32 background */}
             <div className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6">
               {/* Header */}
-              <div className="mb-4">
+              <div className="mb-4 relative">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
                   {/* Left Section - Title */}
                   <div>
@@ -266,15 +419,146 @@ const SuperadminDashboard = () => {
                     </p>
                   </div>
 
-                  {/* Right Section - Refresh Button */}
-                  <button
-                    onClick={fetchStats}
-                    disabled={loading}
-                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 sm:px-5 py-2 rounded-full text-sm sm:text-base font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none w-full sm:w-auto whitespace-nowrap"
-                  >
-                    <FiRefreshCw className={loading ? "animate-spin" : ""} />
-                    <span>{loading ? "Loading..." : "Refresh"}</span>
-                  </button>
+                  {/* Right Section - Date Filter & Refresh */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Date Navigation */}
+                    <div className="flex items-center gap-1 bg-[#263F43] border border-white/10 rounded-lg p-1">
+                      <button
+                        onClick={() => navigateDate('left')}
+                        className="p-1.5 hover:bg-white/10 rounded transition-colors text-white/70 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Previous day"
+                        disabled={useDateRange || showAllTime}
+                      >
+                        <FiChevronLeft size={16} />
+                      </button>
+                      <button
+                        onClick={() => setShowDateRangePicker(!showDateRangePicker)}
+                        className="px-3 py-1.5 text-white text-sm font-medium font-['Albert_Sans'] min-w-[160px] text-center hover:bg-white/10 rounded transition-colors flex items-center justify-center gap-2"
+                        title="Click to select date or range"
+                      >
+                        <FiCalendar size={14} />
+                        {showAllTime ? (
+                          <span className="text-xs">All Time</span>
+                        ) : useDateRange && dateRange.start && dateRange.end ? (
+                          <span className="text-xs">
+                            {new Date(dateRange.start).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - {new Date(dateRange.end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                          </span>
+                        ) : (
+                          formatDateDisplay(selectedDate)
+                        )}
+                      </button>
+                      <button
+                        onClick={() => navigateDate('right')}
+                        className="p-1.5 hover:bg-white/10 rounded transition-colors text-white/70 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Next day"
+                        disabled={useDateRange || showAllTime}
+                      >
+                        <FiChevronRight size={16} />
+                      </button>
+                    </div>
+
+                    {/* All Time / Today Toggle Button */}
+                    <button
+                      onClick={handleAllTime}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 ${
+                        showAllTime
+                          ? 'bg-gradient-to-r from-accent to-bg-tertiary text-white'
+                          : 'bg-[#263F43] border border-white/10 hover:border-accent text-white'
+                      }`}
+                      title={showAllTime ? "Switch to Today" : "Show all transactions"}
+                    >
+                      {showAllTime ? 'Today' : 'All Time'}
+                    </button>
+
+                    {/* Date Range Picker Dropdown */}
+                    {showDateRangePicker && (
+                      <div className="absolute top-full right-0 mt-2 bg-[#122D32] border border-white/10 rounded-xl shadow-2xl p-4 z-50 min-w-[340px]" data-date-range-picker>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-white font-medium font-['Albert_Sans'] flex items-center gap-2">
+                            <FiCalendar />
+                            Select Date Range
+                          </h3>
+                          <button
+                            onClick={() => setShowDateRangePicker(false)}
+                            className="text-white/60 hover:text-white transition-colors"
+                          >
+                            <FiX size={20} />
+                          </button>
+                        </div>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-white/70 text-sm font-['Albert_Sans'] mb-2 flex items-center gap-2">
+                              <FiCalendar size={14} />
+                              Start Date
+                            </label>
+                            <input
+                              type="date"
+                              value={dateRange.start}
+                              onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                              max={dateRange.end || new Date().toISOString().split('T')[0]}
+                              className="w-full bg-[#001D22] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-white/70 text-sm font-['Albert_Sans'] mb-2 flex items-center gap-2">
+                              <FiCalendar size={14} />
+                              End Date
+                            </label>
+                            <input
+                              type="date"
+                              value={dateRange.end}
+                              onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                              min={dateRange.start}
+                              max={new Date().toISOString().split('T')[0]}
+                              className="w-full bg-[#001D22] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                            />
+                          </div>
+                          <div className="flex gap-2 pt-2">
+                            <button
+                              onClick={handleDateRangeApply}
+                              disabled={!dateRange.start || !dateRange.end}
+                              className="flex-1 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Apply Range
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleClearDateRange();
+                                setShowDateRangePicker(false);
+                              }}
+                              className="px-4 py-2 bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-colors"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                          <div className="pt-2 border-t border-white/10">
+                            <button
+                              onClick={() => {
+                                handleAllTime();
+                                setShowDateRangePicker(false);
+                              }}
+                              className={`w-full px-4 py-2 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-colors ${
+                                showAllTime
+                                  ? 'bg-gradient-to-r from-accent to-bg-tertiary text-white'
+                                  : 'bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white'
+                              }`}
+                            >
+                              {showAllTime ? 'Today' : 'All Time'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={fetchStats}
+                      disabled={loading}
+                      className="flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 sm:px-5 py-2 rounded-full text-sm sm:text-base font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none w-full sm:w-auto whitespace-nowrap"
+                    >
+                      <FiRefreshCw className={loading ? "animate-spin" : ""} />
+                      <span>{loading ? "Loading..." : "Refresh"}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -287,89 +571,189 @@ const SuperadminDashboard = () => {
 
               {stats && (
                 <div className="space-y-6">
-                  {/* Merchants Section */}
+                  {/* Main Stats - Total Payin and Total Payout */}
                   <div>
                     <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
                       <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
-                        <FiUsers /> Merchants
+                        <FiTrendingUp /> Platform Overview
                       </h2>
-                      <span className="text-sm font-medium text-white/80 bg-bg-tertiary px-4 py-1.5 rounded-full font-['Albert_Sans']">
-                        {stats.merchants.total} Total
-                      </span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
-                              <FiUsers />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                      <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border-l-4 border-green-400 border border-white/10 rounded-xl p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 relative">
+                        {loading && (
+                          <div className="absolute top-3 right-3">
+                            <FiRefreshCw className="w-5 h-5 text-accent animate-spin" />
+                          </div>
+                        )}
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-lg bg-green-500/30 flex items-center justify-center text-green-400 flex-shrink-0">
+                            <FiArrowUp size={24} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-sm text-white/70 font-medium font-['Albert_Sans'] mb-1">
+                              Total Payin
+                            </h3>
+                            <div className={`text-3xl font-bold text-white font-['Albert_Sans'] transition-opacity ${loading ? 'opacity-50' : ''}`}>
+                              {formatCurrency(stats.revenue.total)}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                Total Merchants
-                              </h3>
-                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                {formatNumber(stats.merchants.total)}
-                              </div>
+                            <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                              {formatNumber(stats.transactions.paid)} paid transactions
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
-                              <FiCheckCircle />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                Active
-                              </h3>
-                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                {formatNumber(stats.merchants.active)}
-                              </div>
-                            </div>
+                      <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border-l-4 border-blue-400 border border-white/10 rounded-xl p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 relative">
+                        {loading && (
+                          <div className="absolute top-3 right-3">
+                            <FiRefreshCw className="w-5 h-5 text-accent animate-spin" />
                           </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 flex-shrink-0">
-                              <FiClock />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                Inactive
-                              </h3>
-                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                {formatNumber(stats.merchants.inactive)}
-                              </div>
-                            </div>
+                        )}
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-lg bg-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
+                            <FiArrowDown size={24} />
                           </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
-                              <FiTrendingUp />
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-sm text-white/70 font-medium font-['Albert_Sans'] mb-1">
+                              Total Payout
+                            </h3>
+                            <div className={`text-3xl font-bold text-white font-['Albert_Sans'] transition-opacity ${loading ? 'opacity-50' : ''}`}>
+                              {formatCurrency(stats.payouts.total_completed)}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                New This Week
-                              </h3>
-                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                {formatNumber(stats.merchants.new_this_week)}
-                              </div>
+                            <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                              {formatNumber(stats.payouts.completed)} completed payouts
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
+                                        {/* Merchants Leaderboard - Payin & Payout */}
+                                        {merchantsData.length > 0 && (
+                      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/* Top Payin Merchants */}
+                        <div className="bg-[#263F43] border border-white/10 rounded-xl overflow-hidden">
+                          <div className="bg-[#001D22] border-b border-white/10 px-4 py-3">
+                            <h3 className="text-white font-medium font-['Albert_Sans'] flex items-center gap-2">
+                              <FiArrowUp className="text-green-400" />
+                              Top Payin Merchants
+                            </h3>
+                            <p className="text-white/60 text-xs font-['Albert_Sans'] mt-1">
+                              Ranked by total revenue
+                            </p>
+                          </div>
+                          <div className="divide-y divide-white/5">
+                            {merchantsData
+                              .sort((a, b) => {
+                                const revA = parseFloat(a.revenue_summary?.total_revenue || 0);
+                                const revB = parseFloat(b.revenue_summary?.total_revenue || 0);
+                                return revB - revA;
+                              })
+                              .slice(0, 5)
+                              .map((m, index) => {
+                                const info = m.merchant_info || {};
+                                const rev = m.revenue_summary || {};
+                                const txn = m.transaction_summary || {};
+                                
+                                return (
+                                  <div
+                                    key={m.merchant_id}
+                                    className="px-4 py-3 hover:bg-white/5 transition-colors cursor-pointer"
+                                    onClick={() => navigate(`/superadmin/merchants/${m.merchant_id}`)}
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-green-500/30 to-green-600/30 flex items-center justify-center text-green-400 font-bold text-sm font-['Albert_Sans']">
+                                          {index + 1}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="text-white font-medium text-sm font-['Albert_Sans'] truncate">
+                                            {info.business_name || info.name}
+                                          </div>
+                                          <div className="text-white/60 text-xs font-['Albert_Sans'] truncate">
+                                            {txn.total_transactions || 0} transactions
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="flex-shrink-0 text-right">
+                                        <div className="text-green-400 font-semibold text-sm font-['Albert_Sans']">
+                                          {formatCurrency(rev.total_revenue)}
+                                        </div>
+                                        <div className="text-white/50 text-xs font-['Albert_Sans']">
+                                          {txn.by_status?.paid || 0} paid
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+
+                        {/* Top Payout Merchants */}
+                        <div className="bg-[#263F43] border border-white/10 rounded-xl overflow-hidden">
+                          <div className="bg-[#001D22] border-b border-white/10 px-4 py-3">
+                            <h3 className="text-white font-medium font-['Albert_Sans'] flex items-center gap-2">
+                              <FiArrowDown className="text-blue-400" />
+                              Top Payout Merchants
+                            </h3>
+                            <p className="text-white/60 text-xs font-['Albert_Sans'] mt-1">
+                              Ranked by total payouts
+                            </p>
+                          </div>
+                          <div className="divide-y divide-white/5">
+                            {merchantsData
+                              .sort((a, b) => {
+                                const payoutA = parseFloat(a.payout_summary?.total_completed || 0);
+                                const payoutB = parseFloat(b.payout_summary?.total_completed || 0);
+                                return payoutB - payoutA;
+                              })
+                              .slice(0, 5)
+                              .map((m, index) => {
+                                const info = m.merchant_info || {};
+                                const payout = m.payout_summary || {};
+                                
+                                return (
+                                  <div
+                                    key={m.merchant_id}
+                                    className="px-4 py-3 hover:bg-white/5 transition-colors cursor-pointer"
+                                    onClick={() => navigate(`/superadmin/merchants/${m.merchant_id}`)}
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/30 to-blue-600/30 flex items-center justify-center text-blue-400 font-bold text-sm font-['Albert_Sans']">
+                                          {index + 1}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="text-white font-medium text-sm font-['Albert_Sans'] truncate">
+                                            {info.business_name || info.name}
+                                          </div>
+                                          <div className="text-white/60 text-xs font-['Albert_Sans'] truncate">
+                                            {payout.total_payouts || 0} payout requests
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="flex-shrink-0 text-right">
+                                        <div className="text-blue-400 font-semibold text-sm font-['Albert_Sans']">
+                                          {formatCurrency(payout.total_completed)}
+                                        </div>
+                                        <div className="text-white/50 text-xs font-['Albert_Sans']">
+                                          {payout.completed_count || 0} completed
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {loadingMerchants && (
+                      <div className="mt-4 text-center py-4">
+                        <FiRefreshCw className="w-5 h-5 text-accent animate-spin mx-auto" />
+                        <p className="text-white/60 text-sm font-['Albert_Sans'] mt-2">Loading merchants data...</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Revenue Section */}
@@ -445,28 +829,10 @@ const SuperadminDashboard = () => {
                           </div>
                         </div>
                       </div>
-
-                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 flex-shrink-0">
-                              <FiArrowDown />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                Refunded
-                              </h3>
-                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                {formatCurrency(stats.revenue.refunded)}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
                     </div>
 
                     {/* Today & Week Revenue Stats */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    {/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                       <div className="bg-[#263F43] border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5">
                         <div className="text-xs text-white/80 font-medium mb-2 font-['Albert_Sans']">
                           Today's Revenue
@@ -481,6 +847,249 @@ const SuperadminDashboard = () => {
                         </div>
                         <div className="text-2xl font-medium text-white font-['Albert_Sans']">
                           {formatCurrency(stats.revenue.this_week)}
+                        </div>
+                      </div>
+                    </div> */}
+                  </div>
+
+                  {/* Merchants Section - Moved Down */}
+                  {/* <div>
+                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
+                      <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
+                        <FiUsers /> Merchants
+                      </h2>
+                      <span className="text-sm font-medium text-white/80 bg-bg-tertiary px-4 py-1.5 rounded-full font-['Albert_Sans']">
+                        {stats.merchants.total} Total
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-4">
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 relative">
+                        {loading && (
+                          <div className="absolute top-2 right-2">
+                            <FiRefreshCw className="w-4 h-4 text-accent animate-spin" />
+                          </div>
+                        )}
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiUsers />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Total Merchants
+                              </h3>
+                              <div className={`text-xl font-semibold text-white font-['Albert_Sans'] transition-opacity ${loading ? 'opacity-50' : ''}`}>
+                                {formatNumber(stats.merchants.total)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 relative">
+                        {loading && (
+                          <div className="absolute top-2 right-2">
+                            <FiRefreshCw className="w-4 h-4 text-accent animate-spin" />
+                          </div>
+                        )}
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
+                              <FiCheckCircle />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Active
+                              </h3>
+                              <div className={`text-xl font-semibold text-white font-['Albert_Sans'] transition-opacity ${loading ? 'opacity-50' : ''}`}>
+                                {formatNumber(stats.merchants.active)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 relative">
+                        {loading && (
+                          <div className="absolute top-2 right-2">
+                            <FiRefreshCw className="w-4 h-4 text-accent animate-spin" />
+                          </div>
+                        )}
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 flex-shrink-0">
+                              <FiClock />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Inactive
+                              </h3>
+                              <div className={`text-xl font-semibold text-white font-['Albert_Sans'] transition-opacity ${loading ? 'opacity-50' : ''}`}>
+                                {formatNumber(stats.merchants.inactive)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 relative">
+                        {loading && (
+                          <div className="absolute top-2 right-2">
+                            <FiRefreshCw className="w-4 h-4 text-accent animate-spin" />
+                          </div>
+                        )}
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
+                              <FiTrendingUp />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                New This Week
+                              </h3>
+                              <div className={`text-xl font-semibold text-white font-['Albert_Sans'] transition-opacity ${loading ? 'opacity-50' : ''}`}>
+                                {formatNumber(stats.merchants.new_this_week)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                   */}
+
+                                     {/* Commission Breakdown with Filters */}
+                  <div>
+                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
+                      <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
+                        <FiTrendingUp /> Commission Breakdown
+                      </h2>
+                      <span className="text-lg font-medium text-green-400 font-['Albert_Sans']">
+                        Today: {formatCurrency(stats.commission.today_total)}
+                      </span>
+                    </div>
+
+                    {/* Today's Commission Cards */}
+                    <div className="mb-6">
+                      <h3 className="text-sm text-white/80 font-medium mb-3 font-['Albert_Sans']">
+                        Today's Commission (IST)
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 mb-4">
+                        <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-10 h-10 rounded-lg bg-green-500/30 flex items-center justify-center text-green-400 flex-shrink-0">
+                              <FiArrowUp />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Today's Payin Commission
+                              </h3>
+                              <div className="text-2xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.commission.today_payin)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                From paid transactions
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border-l-4 border-blue-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-10 h-10 rounded-lg bg-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
+                              <FiArrowDown />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Today's Payout Commission
+                              </h3>
+                              <div className="text-2xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.commission.today_payout)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                From payout requests
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border-l-4 border-purple-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-10 h-10 rounded-lg bg-purple-500/30 flex items-center justify-center text-purple-400 flex-shrink-0">
+                              <FiDollarSign />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
+                                Today's Total Commission
+                              </h3>
+                              <div className="text-2xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.commission.today_total)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                Payin + Payout
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* All-Time Commission Summary - Not affected by date filters */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                        <div className="bg-[#263F43] border-l-4 border-purple-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 sm:col-span-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 flex-shrink-0">
+                              <FiDollarSign />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-1">
+                                Total Commission (All Time)
+                              </h3>
+                              <div className="text-2xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.commission.total_all)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                Payin + Payout fees (unfiltered)
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-[#263F43] border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
+                              <FiArrowUp />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-1">
+                                Total Payin Commission (All Time)
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.commission.total_payin)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                3.8% of all paid transactions
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-[#263F43] border-l-4 border-blue-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0">
+                              <FiArrowDown />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-1">
+                                Total Payout Commission (All Time)
+                              </h3>
+                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
+                                {formatCurrency(stats.commission.total_payout)}
+                              </div>
+                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
+                                From all payout requests
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -613,7 +1222,7 @@ const SuperadminDashboard = () => {
                     </div>
 
                     {/* Today & Week Stats */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    {/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                       <div className="bg-[#263F43] border-l-4 border-accent border border-white/10 rounded-xl p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5">
                         <div className="text-xs text-white/80 font-medium mb-2 font-['Albert_Sans']">
                           Today
@@ -630,7 +1239,7 @@ const SuperadminDashboard = () => {
                           {formatNumber(stats.transactions.this_week)}
                         </div>
                       </div>
-                    </div>
+                    </div> */}
                   </div>
 
                   {/* Payouts Section */}
@@ -688,7 +1297,7 @@ const SuperadminDashboard = () => {
                         </div>
                       </div>
 
-                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+                      {/* <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2 flex-1">
                             <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
@@ -696,7 +1305,7 @@ const SuperadminDashboard = () => {
                             </div>
                             <div className="flex-1 min-w-0">
                               <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                Processing
+                                Processings
                               </h3>
                               <div className="text-xl font-semibold text-white font-['Albert_Sans']">
                                 {formatNumber(stats.payouts.pending)}
@@ -707,7 +1316,7 @@ const SuperadminDashboard = () => {
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </div> */}
 
                       <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
                         <div className="flex items-start justify-between mb-2">
@@ -783,7 +1392,7 @@ const SuperadminDashboard = () => {
                   </div>
 
                   {/* Settlement Section */}
-                  <div>
+                  {/* <div>
                     <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
                       <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
                         <FiPackage /> Settlement Status
@@ -896,196 +1505,7 @@ const SuperadminDashboard = () => {
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Commission Breakdown with Filters */}
-                  <div>
-                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
-                      <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
-                        <FiTrendingUp /> Commission Breakdown
-                      </h2>
-                      <span className="text-lg font-medium text-green-400 font-['Albert_Sans']">
-                        Today: {formatCurrency(stats.commission.today_total)}
-                      </span>
-                    </div>
-
-                    {/* Today's Commission Cards */}
-                    <div className="mb-6">
-                      <h3 className="text-sm text-white/80 font-medium mb-3 font-['Albert_Sans']">
-                        Today's Commission (IST)
-                      </h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 mb-4">
-                        <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-10 h-10 rounded-lg bg-green-500/30 flex items-center justify-center text-green-400 flex-shrink-0">
-                              <FiArrowUp />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                Today's Payin Commission
-                              </h3>
-                              <div className="text-2xl font-semibold text-white font-['Albert_Sans']">
-                                {formatCurrency(stats.commission.today_payin)}
-                              </div>
-                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
-                                From paid transactions
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border-l-4 border-blue-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-10 h-10 rounded-lg bg-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
-                              <FiArrowDown />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                Today's Payout Commission
-                              </h3>
-                              <div className="text-2xl font-semibold text-white font-['Albert_Sans']">
-                                {formatCurrency(stats.commission.today_payout)}
-                              </div>
-                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
-                                From payout requests
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border-l-4 border-purple-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-10 h-10 rounded-lg bg-purple-500/30 flex items-center justify-center text-purple-400 flex-shrink-0">
-                              <FiDollarSign />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                Today's Total Commission
-                              </h3>
-                              <div className="text-2xl font-semibold text-white font-['Albert_Sans']">
-                                {formatCurrency(stats.commission.today_total)}
-                              </div>
-                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
-                                Payin + Payout
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Total Commission Summary */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-                        <div className="bg-[#263F43] border-l-4 border-green-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
-                              <FiArrowUp />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-1">
-                                Total Payin Commission (All Time)
-                              </h3>
-                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                {formatCurrency(stats.commission.total_payin)}
-                              </div>
-                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
-                                3.8% of all paid transactions
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-[#263F43] border-l-4 border-blue-400 border border-white/10 rounded-xl p-4 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0">
-                              <FiArrowDown />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-1">
-                                Total Payout Commission (All Time)
-                              </h3>
-                              <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                {formatCurrency(stats.commission.total_payout)}
-                              </div>
-                              <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
-                                From all payout requests
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Total Commission Cards */}
-                    <div>
-                      <h3 className="text-sm text-white/80 font-medium mb-3 font-['Albert_Sans']">
-                        All-Time Commission
-                      </h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                        <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 sm:col-span-2">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2 flex-1">
-                              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
-                                <FiDollarSign />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                  Total Commission (All Time)
-                                </h3>
-                                <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                  {formatCurrency(stats.commission.total_all)}
-                                </div>
-                                <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
-                                  Payin + Payout fees
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2 flex-1">
-                              <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0">
-                                <FiArrowUp />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                  Total Payin Commission
-                                </h3>
-                                <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                  {formatCurrency(stats.commission.total_payin)}
-                                </div>
-                                <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
-                                  (3.8% of transactions)
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2 flex-1">
-                              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/80 flex-shrink-0">
-                                <FiArrowDown />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h3 className="text-xs text-white/70 font-medium font-['Albert_Sans'] mb-0.5">
-                                  Total Payout Commission
-                                </h3>
-                                <div className="text-xl font-semibold text-white font-['Albert_Sans']">
-                                  {formatCurrency(stats.commission.total_payout)}
-                                </div>
-                                <div className="text-xs text-white/60 mt-1 font-['Albert_Sans']">
-                                  (₹30 per payout)
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  </div> */}
                 </div>
               )}
             </div>

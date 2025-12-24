@@ -44,8 +44,18 @@ exports.getAllPayouts = async (req, res) => {
         // Date range filter
         if (startDate || endDate) {
             query.createdAt = {};
-            if (startDate) query.createdAt.$gte = new Date(startDate);
-            if (endDate) query.createdAt.$lte = new Date(endDate);
+            if (startDate) {
+                const sd = new Date(startDate);
+                // Set to beginning of day (00:00:00.000)
+                sd.setHours(0, 0, 0, 0);
+                query.createdAt.$gte = sd;
+            }
+            if (endDate) {
+                const ed = new Date(endDate);
+                // Set to end of day (23:59:59.999) to include the entire day
+                ed.setHours(23, 59, 59, 999);
+                query.createdAt.$lte = ed;
+            }
         }
 
         // Get total count
@@ -458,8 +468,18 @@ exports.getAllTransactions = async (req, res) => {
         // Date range filter
         if (startDate || endDate) {
             query.createdAt = {};
-            if (startDate) query.createdAt.$gte = new Date(startDate);
-            if (endDate) query.createdAt.$lte = new Date(endDate);
+            if (startDate) {
+                const sd = new Date(startDate);
+                // Set to beginning of day (00:00:00.000)
+                sd.setHours(0, 0, 0, 0);
+                query.createdAt.$gte = sd;
+            }
+            if (endDate) {
+                const ed = new Date(endDate);
+                // Set to end of day (23:59:59.999) to include the entire day
+                ed.setHours(23, 59, 59, 999);
+                query.createdAt.$lte = ed;
+            }
         }
 
         // Amount range filter
@@ -786,13 +806,37 @@ exports.getDashboardStats = async (req, res) => {
     try {
         console.log(`📊 SuperAdmin ${req.user.name} fetching dashboard statistics`);
 
+        const { startDate, endDate } = req.query;
+
+        // Build date filter for transactions and payouts
+        let transactionDateFilter = {};
+        let payoutDateFilter = {};
+
+        if (startDate || endDate) {
+            transactionDateFilter.createdAt = {};
+            payoutDateFilter.createdAt = {};
+            
+            if (startDate) {
+                const sd = new Date(startDate);
+                sd.setHours(0, 0, 0, 0);
+                transactionDateFilter.createdAt.$gte = sd;
+                payoutDateFilter.createdAt.$gte = sd;
+            }
+            if (endDate) {
+                const ed = new Date(endDate);
+                ed.setHours(23, 59, 59, 999);
+                transactionDateFilter.createdAt.$lte = ed;
+                payoutDateFilter.createdAt.$lte = ed;
+            }
+        }
+
         // Get all merchants
         const merchants = await User.find({ role: 'admin' });
         const activeMerchants = merchants.filter(m => m.status === 'active');
         const inactiveMerchants = merchants.filter(m => m.status === 'inactive');
 
-        // Get all transactions
-        const allTransactions = await Transaction.find({});
+        // Get transactions with date filter
+        const allTransactions = await Transaction.find(transactionDateFilter);
         const paidTransactions = allTransactions.filter(t => t.status === 'paid');
         const settledTransactions = allTransactions.filter(t => t.settlementStatus === 'settled');
         const unsettledTransactions = allTransactions.filter(t => t.settlementStatus === 'unsettled');
@@ -803,26 +847,37 @@ exports.getDashboardStats = async (req, res) => {
         const totalRevenue = paidTransactions.reduce((sum, t) => sum + t.amount, 0);
         const totalRefunded = allTransactions.reduce((sum, t) => sum + (t.refundAmount || 0), 0);
         
-        // Calculate commission
+        // Calculate commission for filtered period
         let totalPayinCommission = 0;
         paidTransactions.forEach(t => {
             const commissionInfo = calculatePayinCommission(t.amount);
             totalPayinCommission += commissionInfo.commission;
         });
 
-        // Get all payouts
-        const allPayouts = await Payout.find({});
+        // Get payouts with date filter
+        const allPayouts = await Payout.find(payoutDateFilter);
         const requestedPayouts = allPayouts.filter(p => p.status === 'requested');
         const pendingPayouts = allPayouts.filter(p => p.status === 'pending' || p.status === 'processing');
         const completedPayouts = allPayouts.filter(p => p.status === 'completed');
         const rejectedPayouts = allPayouts.filter(p => p.status === 'rejected');
         const failedPayouts = allPayouts.filter(p => p.status === 'failed');
 
-        // Calculate payout amounts
+        // Calculate payout amounts for filtered period
         const totalPayoutRequested = allPayouts.reduce((sum, p) => sum + p.amount, 0);
         const totalPayoutCompleted = completedPayouts.reduce((sum, p) => sum + p.netAmount, 0);
         const totalPayoutPending = pendingPayouts.reduce((sum, p) => sum + p.netAmount, 0);
         const totalPayoutCommission = allPayouts.reduce((sum, p) => sum + p.commission, 0);
+
+        // Calculate ALL-TIME commission totals (without date filters) - always fetch these
+        const allTimePaidTransactions = await Transaction.find({ status: 'paid' });
+        let allTimePayinCommission = 0;
+        allTimePaidTransactions.forEach(t => {
+            const commissionInfo = calculatePayinCommission(t.amount);
+            allTimePayinCommission += commissionInfo.commission;
+        });
+
+        const allTimePayouts = await Payout.find({});
+        const allTimePayoutCommission = allTimePayouts.reduce((sum, p) => sum + (p.commission || 0), 0);
 
         // Settlement info
         const availableForPayout = settledTransactions.filter(t => t.availableForPayout && !t.settledInPayout);
@@ -834,14 +889,21 @@ exports.getDashboardStats = async (req, res) => {
             totalAvailableBalance += (t.amount - commissionInfo.commission);
         });
 
-        // Today's stats (using IST)
+        // Today's stats (using IST) - only calculate if no date filter is applied
         const { getIstDayRange } = require('../utils/getIstDayRange');
         const { start: todayStart, end: todayEnd } = getIstDayRange();
         
-        const todayTransactions = allTransactions.filter(t => {
-            const tDate = new Date(t.createdAt);
-            return tDate >= todayStart && tDate <= todayEnd;
-        });
+        // If date filter is applied, use filtered data for "today" calculations
+        // Otherwise, use actual today's data
+        const todayTransactions = (startDate || endDate) 
+            ? allTransactions.filter(t => {
+                const tDate = new Date(t.createdAt);
+                return tDate >= todayStart && tDate <= todayEnd;
+            })
+            : allTransactions.filter(t => {
+                const tDate = new Date(t.createdAt);
+                return tDate >= todayStart && tDate <= todayEnd;
+            });
         const todayPaidTransactions = todayTransactions.filter(t => t.status === 'paid');
         const todayRevenue = todayPaidTransactions.reduce((sum, t) => sum + t.amount, 0);
         
@@ -852,10 +914,15 @@ exports.getDashboardStats = async (req, res) => {
             todayPayinCommission += commissionInfo.commission;
         });
         
-        const todayPayouts = allPayouts.filter(p => {
-            const pDate = new Date(p.createdAt);
-            return pDate >= todayStart && pDate <= todayEnd;
-        });
+        const todayPayouts = (startDate || endDate)
+            ? allPayouts.filter(p => {
+                const pDate = new Date(p.createdAt);
+                return pDate >= todayStart && pDate <= todayEnd;
+            })
+            : allPayouts.filter(p => {
+                const pDate = new Date(p.createdAt);
+                return pDate >= todayStart && pDate <= todayEnd;
+            });
         
         // Calculate today's payout commission
         const todayPayoutCommission = todayPayouts.reduce((sum, p) => sum + (p.commission || 0), 0);
@@ -941,9 +1008,14 @@ exports.getDashboardStats = async (req, res) => {
                     today_payin: todayPayinCommission.toFixed(2),
                     today_payout: todayPayoutCommission.toFixed(2),
                     today_total: (todayPayinCommission + todayPayoutCommission).toFixed(2),
-                    total_payin: totalPayinCommission.toFixed(2),
-                    total_payout: totalPayoutCommission.toFixed(2),
-                    total_all: (totalPayinCommission + totalPayoutCommission).toFixed(2)
+                    // Filtered period commission
+                    filtered_payin: totalPayinCommission.toFixed(2),
+                    filtered_payout: totalPayoutCommission.toFixed(2),
+                    filtered_total: (totalPayinCommission + totalPayoutCommission).toFixed(2),
+                    // All-time commission (always calculated without date filters)
+                    total_payin: allTimePayinCommission.toFixed(2),
+                    total_payout: allTimePayoutCommission.toFixed(2),
+                    total_all: (allTimePayinCommission + allTimePayoutCommission).toFixed(2)
                 }
             },
             timestamp: new Date()
@@ -968,8 +1040,32 @@ exports.getAllMerchantsData = async (req, res) => {
         const { 
             merchantId, 
             status: merchantStatus,
-            includeInactive = 'false'
+            includeInactive = 'false',
+            startDate,
+            endDate
         } = req.query;
+
+        // Build date filter for transactions and payouts
+        let transactionDateFilter = {};
+        let payoutDateFilter = {};
+
+        if (startDate || endDate) {
+            transactionDateFilter.createdAt = {};
+            payoutDateFilter.createdAt = {};
+            
+            if (startDate) {
+                const sd = new Date(startDate);
+                sd.setHours(0, 0, 0, 0);
+                transactionDateFilter.createdAt.$gte = sd;
+                payoutDateFilter.createdAt.$gte = sd;
+            }
+            if (endDate) {
+                const ed = new Date(endDate);
+                ed.setHours(23, 59, 59, 999);
+                transactionDateFilter.createdAt.$lte = ed;
+                payoutDateFilter.createdAt.$lte = ed;
+            }
+        }
 
         // Build merchant query
         let merchantQuery = { role: 'admin' };
@@ -1002,9 +1098,14 @@ exports.getAllMerchantsData = async (req, res) => {
         const merchantIds = merchants.map(m => m._id);
 
         // ========== TRANSACTION AGGREGATIONS ==========
-        // Overall transaction stats
+        // Overall transaction stats with date filter
+        const transactionMatch = { merchantId: { $in: merchantIds } };
+        if (Object.keys(transactionDateFilter).length > 0) {
+            Object.assign(transactionMatch, transactionDateFilter);
+        }
+        
         const transactionStats = await Transaction.aggregate([
-            { $match: { merchantId: { $in: merchantIds } } },
+            { $match: transactionMatch },
             {
                 $group: {
                     _id: '$merchantId',
@@ -1206,8 +1307,13 @@ exports.getAllMerchantsData = async (req, res) => {
         ]);
 
         // ========== PAYOUT AGGREGATIONS ==========
+        const payoutMatch = { merchantId: { $in: merchantIds } };
+        if (Object.keys(payoutDateFilter).length > 0) {
+            Object.assign(payoutMatch, payoutDateFilter);
+        }
+        
         const payoutStats = await Payout.aggregate([
-            { $match: { merchantId: { $in: merchantIds } } },
+            { $match: payoutMatch },
             {
                 $group: {
                     _id: '$merchantId',
