@@ -550,40 +550,93 @@ exports.handleCashfreeCallback = async (req, res) => {
         const cfOrderId = payload.cf_order_id || payload.order_id || orderIdFromQuery || transaction.cashfreeOrderId || transaction.orderId;
         const paymentMessage = payload.payment_message || payload.message || '';
         
-        // Get the request URL to determine if this is from success or failure URL
-        const requestUrl = req.url || '';
-        const referer = req.headers.referer || '';
-        const fullUrl = referer || requestUrl;
-        
         console.log('\n📊 Payment Status Analysis:');
         console.log('   CF Order ID:', cfOrderId);
         console.log('   Transaction Status (current):', transaction.status);
-        console.log('   Request URL:', requestUrl);
-        console.log('   Referer:', referer);
-        console.log('   Transaction Success URL:', transaction.successUrl || 'not set');
-        console.log('   Transaction Failure URL:', transaction.failureUrl || 'not set');
+        console.log('   Transaction ID:', transaction.transactionId);
+        console.log('   Order ID:', transaction.orderId);
         
-        // Determine payment status based on URL
-        // Check if URL contains success/failure indicators or matches stored URLs
-        const successUrlPattern = transaction.successUrl ? new URL(transaction.successUrl).pathname : '';
-        const failureUrlPattern = transaction.failureUrl ? new URL(transaction.failureUrl).pathname : '';
+        // IMPORTANT: Verify payment status with Cashfree API instead of relying on URL patterns
+        // This ensures accurate payment status regardless of callback URL
+        let paymentStatus = null;
+        let cashfreeOrderData = null;
         
-        const isFromSuccessUrl = 
-            fullUrl.includes('/payment-success') || 
-            fullUrl.includes('success') ||
-            (successUrlPattern && (requestUrl.includes(successUrlPattern) || referer.includes(successUrlPattern)));
-            
-        const isFromFailureUrl = 
-            fullUrl.includes('/payment-failed') || 
-            fullUrl.includes('failed') || 
-            fullUrl.includes('failure') ||
-            (failureUrlPattern && (requestUrl.includes(failureUrlPattern) || referer.includes(failureUrlPattern)));
+        if (cfOrderId) {
+            try {
+                console.log('   🔍 Verifying payment status with Cashfree API...');
+                
+                // Use the environment stored in transaction, or default to production
+                const orderEnvironment = transaction.cashfreeEnvironment || CASHFREE_ENVIRONMENT;
+                const orderBaseUrl = orderEnvironment === 'sandbox' 
+                    ? 'https://sandbox.cashfree.com'
+                    : 'https://api.cashfree.com';
+                
+                // Use appropriate credentials based on environment
+                const orderAppId = orderEnvironment === 'sandbox'
+                    ? (process.env.TEST_CASHFREE_APP_ID || process.env.CASHFREE_APP_ID)
+                    : process.env.CASHFREE_APP_ID;
+                const orderSecretKey = orderEnvironment === 'sandbox'
+                    ? (process.env.TEST_CASHFREE_SECRET_KEY || process.env.CASHFREE_SECRET_KEY)
+                    : process.env.CASHFREE_SECRET_KEY;
+                
+                const orderResponse = await axios.get(
+                    `${orderBaseUrl}/pg/orders/${cfOrderId}`,
+                    {
+                        headers: {
+                            'x-client-id': orderAppId,
+                            'x-client-secret': orderSecretKey,
+                            'x-api-version': '2023-08-01',
+                            'Accept': 'application/json',
+                        },
+                        timeout: 10000,
+                    }
+                );
+                
+                cashfreeOrderData = orderResponse.data;
+                paymentStatus = cashfreeOrderData?.order_status || cashfreeOrderData?.payment_status;
+                
+                console.log('   ✅ Cashfree API Response:');
+                console.log('      Order Status:', paymentStatus);
+                console.log('      Payment Status:', cashfreeOrderData?.payment_status);
+                console.log('      Order Amount:', cashfreeOrderData?.order_amount);
+                
+            } catch (apiError) {
+                console.error('   ⚠️ Error verifying with Cashfree API:', apiError.message);
+                console.log('   ℹ️ Falling back to URL-based detection...');
+                
+                // Fallback to URL-based detection if API verification fails
+                const requestUrl = req.url || '';
+                const referer = req.headers.referer || '';
+                const fullUrl = referer || requestUrl;
+                
+                const isFromSuccessUrl = 
+                    fullUrl.includes('/payment-success') || 
+                    fullUrl.includes('success') ||
+                    fullUrl.includes('/payment-callback');
+                    
+                const isFromFailureUrl = 
+                    fullUrl.includes('/payment-failed') || 
+                    fullUrl.includes('failed') || 
+                    fullUrl.includes('failure');
+                
+                // Default to success if callback is from payment-callback (Cashfree redirects there after payment)
+                if (fullUrl.includes('/payment-callback') && !isFromFailureUrl) {
+                    paymentStatus = 'PAID';
+                    console.log('   ℹ️ Using optimistic update (callback from payment-callback)');
+                } else if (isFromSuccessUrl) {
+                    paymentStatus = 'PAID';
+                } else if (isFromFailureUrl) {
+                    paymentStatus = 'FAILED';
+                }
+            }
+        }
         
-        console.log('   Is from Success URL:', isFromSuccessUrl);
-        console.log('   Is from Failure URL:', isFromFailureUrl);
+        // Normalize payment status
+        const normalizedStatus = paymentStatus ? String(paymentStatus).toUpperCase().trim() : null;
+        console.log('   📊 Final Payment Status:', normalizedStatus || 'UNKNOWN');
         
-        // Process payment based on URL
-        if (isFromSuccessUrl && transaction.status !== 'paid') {
+        // Process payment based on verified status
+        if ((normalizedStatus === 'PAID' || normalizedStatus === 'PAYMENT_SUCCESS' || normalizedStatus === 'SUCCESS') && transaction.status !== 'paid') {
             // Payment successful - mark as paid
             console.log('   ✅ PAYMENT SUCCESSFUL - Updating transaction...');
             
@@ -591,16 +644,22 @@ exports.handleCashfreeCallback = async (req, res) => {
             const expectedSettlement = calculateExpectedSettlementDate(paidAt);
             const commissionData = calculatePayinCommission(transaction.amount);
             
+            // Get payment details from Cashfree API response if available
+            const paymentId = cashfreeOrderData?.payment_id || cashfreeOrderData?.cf_payment_id || payload.payment_id;
+            const paymentMethod = cashfreeOrderData?.payment_method || payload.payment_method || 'unknown';
+            const paymentUtr = cashfreeOrderData?.payment_utr || payload.payment_utr || null;
+            
             const update = {
                 status: 'paid',
                 paidAt: paidAt,
-                paymentMethod: payload.payment_method || 'unknown',
+                paymentMethod: paymentMethod,
                 cashfreeOrderId: cfOrderId,
+                cashfreePaymentId: paymentId || transaction.cashfreePaymentId,
                 updatedAt: new Date(),
                 acquirerData: {
-                    utr: payload.payment_utr || null,
-                    bank_transaction_id: payload.payment_utr || null,
-                    payment_method: payload.payment_method || null
+                    utr: paymentUtr || null,
+                    bank_transaction_id: paymentUtr || null,
+                    payment_method: paymentMethod || null
                 },
                 settlementStatus: 'unsettled',
                 expectedSettlementDate: expectedSettlement,
@@ -608,7 +667,8 @@ exports.handleCashfreeCallback = async (req, res) => {
                 netAmount: parseFloat((transaction.amount - commissionData.commission).toFixed(2)),
                 webhookData: {
                     ...payload,
-                    callback_source: 'success_url',
+                    cashfree_order_data: cashfreeOrderData,
+                    callback_source: 'callback_with_api_verification',
                     callback_timestamp: new Date().toISOString()
                 }
             };
@@ -671,7 +731,7 @@ exports.handleCashfreeCallback = async (req, res) => {
                 transaction_id: transactionIdForLogging,
                 status: 'paid'
             });
-        } else if (isFromFailureUrl && transaction.status !== 'failed') {
+        } else if ((normalizedStatus === 'FAILED' || normalizedStatus === 'PAYMENT_FAILED') && transaction.status !== 'failed') {
             // Payment failed - mark as failed
             console.log('   ❌ PAYMENT FAILED - Updating transaction...');
             
@@ -715,42 +775,103 @@ exports.handleCashfreeCallback = async (req, res) => {
                     status: 'failed'
                 });
             } else {
-                // Ambiguous callback - default to success (Cashfree typically redirects to success URL after payment)
-                console.log('   ⚠️ Callback URL is ambiguous, defaulting to success (optimistic update)');
-                
-                const paidAt = new Date();
-                const expectedSettlement = calculateExpectedSettlementDate(paidAt);
-                const commissionData = calculatePayinCommission(transaction.amount);
-                
-                const update = {
-                    status: 'paid',
-                    paidAt: paidAt,
-                    paymentMethod: payload.payment_method || 'unknown',
-                    cashfreeOrderId: cfOrderId,
-                    updatedAt: new Date(),
-                    settlementStatus: 'unsettled',
-                    expectedSettlementDate: expectedSettlement,
-                    commission: commissionData.commission,
-                    netAmount: parseFloat((transaction.amount - commissionData.commission).toFixed(2)),
-                    webhookData: {
-                        ...payload,
-                        callback_source: 'ambiguous_url_default_success',
-                        callback_timestamp: new Date().toISOString()
-                    }
-                };
-                
-                await Transaction.findOneAndUpdate(
-                    { _id: transaction._id },
-                    update
-                );
-                
-                console.log('   ✅ Transaction marked as paid (optimistic update)');
-                return res.status(200).json({ 
-                    success: true, 
-                    message: 'Payment confirmed (optimistic update)',
-                    transaction_id: transactionIdForLogging,
-                    status: 'paid'
-                });
+                // Ambiguous callback - use API verification result or default based on callback URL
+                if (normalizedStatus === 'PAID' || normalizedStatus === 'PAYMENT_SUCCESS' || normalizedStatus === 'SUCCESS') {
+                    // API verified as paid
+                    console.log('   ✅ API verified payment as PAID - Updating transaction...');
+                    
+                    const paidAt = new Date();
+                    const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+                    const commissionData = calculatePayinCommission(transaction.amount);
+                    
+                    const paymentId = cashfreeOrderData?.payment_id || cashfreeOrderData?.cf_payment_id || payload.payment_id;
+                    const paymentMethod = cashfreeOrderData?.payment_method || payload.payment_method || 'unknown';
+                    const paymentUtr = cashfreeOrderData?.payment_utr || payload.payment_utr || null;
+                    
+                    const update = {
+                        status: 'paid',
+                        paidAt: paidAt,
+                        paymentMethod: paymentMethod,
+                        cashfreeOrderId: cfOrderId,
+                        cashfreePaymentId: paymentId || transaction.cashfreePaymentId,
+                        updatedAt: new Date(),
+                        acquirerData: {
+                            utr: paymentUtr || null,
+                            bank_transaction_id: paymentUtr || null,
+                            payment_method: paymentMethod || null
+                        },
+                        settlementStatus: 'unsettled',
+                        expectedSettlementDate: expectedSettlement,
+                        commission: commissionData.commission,
+                        netAmount: parseFloat((transaction.amount - commissionData.commission).toFixed(2)),
+                        webhookData: {
+                            ...payload,
+                            cashfree_order_data: cashfreeOrderData,
+                            callback_source: 'callback_api_verified',
+                            callback_timestamp: new Date().toISOString()
+                        }
+                    };
+                    
+                    await Transaction.findOneAndUpdate(
+                        { _id: transaction._id },
+                        update
+                    );
+                    
+                    console.log('   ✅ Transaction marked as paid (API verified)');
+                    return res.status(200).json({ 
+                        success: true, 
+                        message: 'Payment confirmed (API verified)',
+                        transaction_id: transactionIdForLogging,
+                        status: 'paid'
+                    });
+                } else if (!normalizedStatus) {
+                    // No status from API and URL is ambiguous - default to success for payment-callback
+                    // Cashfree redirects to callback URL after payment, so this is likely a success
+                    console.log('   ⚠️ Callback URL is ambiguous, no API status - defaulting to success (optimistic update)');
+                    
+                    const paidAt = new Date();
+                    const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+                    const commissionData = calculatePayinCommission(transaction.amount);
+                    
+                    const update = {
+                        status: 'paid',
+                        paidAt: paidAt,
+                        paymentMethod: payload.payment_method || 'unknown',
+                        cashfreeOrderId: cfOrderId,
+                        updatedAt: new Date(),
+                        settlementStatus: 'unsettled',
+                        expectedSettlementDate: expectedSettlement,
+                        commission: commissionData.commission,
+                        netAmount: parseFloat((transaction.amount - commissionData.commission).toFixed(2)),
+                        webhookData: {
+                            ...payload,
+                            callback_source: 'ambiguous_url_default_success',
+                            callback_timestamp: new Date().toISOString()
+                        }
+                    };
+                    
+                    await Transaction.findOneAndUpdate(
+                        { _id: transaction._id },
+                        update
+                    );
+                    
+                    console.log('   ✅ Transaction marked as paid (optimistic update)');
+                    return res.status(200).json({ 
+                        success: true, 
+                        message: 'Payment confirmed (optimistic update)',
+                        transaction_id: transactionIdForLogging,
+                        status: 'paid'
+                    });
+                } else {
+                    // Status is not PAID - return current status
+                    console.log('   ℹ️ Payment status:', normalizedStatus);
+                    return res.status(200).json({ 
+                        success: true, 
+                        message: `Payment status: ${normalizedStatus}`,
+                        transaction_id: transactionIdForLogging,
+                        status: transaction.status
+                    });
+                }
             }
         }
 
