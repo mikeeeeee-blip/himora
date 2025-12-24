@@ -29,6 +29,8 @@ import TransactionDetailPage from "./components/pages/TransactionDetailPage";
 import PaymentSuccess from "./components/pages/PaymentSuccess";
 import PaymentFailed from "./components/pages/PaymentFailed";
 import SubPaisaPaymentPage from "./components/pages/SubPaisaPaymentPage";
+import SubSuperadminManagementPage from "./components/pages/SubSuperadminManagementPage";
+import SubSuperadminDashboard from "./components/SubSuperadminDashboard";
 
 function App() {
   return (
@@ -101,6 +103,67 @@ function App() {
             <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
               <SuperadminLayout>
                 <SuperadminPaymentGatewaySettings />
+              </SuperadminLayout>
+            </AuthWrapper>
+          }
+        />
+        <Route
+          path="/superadmin/sub-superadmins"
+          element={
+            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+              <SuperadminLayout>
+                <SubSuperadminManagementPage />
+              </SuperadminLayout>
+            </AuthWrapper>
+          }
+        />
+        {/* Sub-SuperAdmin Routes */}
+        <Route
+          path="/sub-superadmin"
+          element={
+            <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
+              <SuperadminLayout>
+                <SubSuperadminDashboard />
+              </SuperadminLayout>
+            </AuthWrapper>
+          }
+        />
+        <Route
+          path="/sub-superadmin/transactions"
+          element={
+            <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
+              <SuperadminLayout>
+                <SuperadminTransactionsPage />
+              </SuperadminLayout>
+            </AuthWrapper>
+          }
+        />
+        <Route
+          path="/sub-superadmin/payouts"
+          element={
+            <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
+              <SuperadminLayout>
+                <SuperadminPayoutsPage />
+              </SuperadminLayout>
+            </AuthWrapper>
+          }
+        />
+        <Route
+          path="/sub-superadmin/merchants"
+          element={
+            <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
+              <SuperadminLayout>
+                <SuperadminMerchantsPage />
+              </SuperadminLayout>
+            </AuthWrapper>
+          }
+        />
+        <Route
+          path="/sub-superadmin/merchants/:merchantId"
+          element={
+            <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
+              <SuperadminLayout>
+                <MerchantDetailPage />
               </SuperadminLayout>
             </AuthWrapper>
           }

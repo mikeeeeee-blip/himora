@@ -210,18 +210,29 @@ exports.createCashfreePaymentLink = async (req, res) => {
                 );
             }
 
-            // Construct Next.js payment redirect page URL (uses Cashfree SDK like old checkout page)
-            // This page uses the Cashfree SDK to properly handle the session, avoiding "client session is invalid" errors
-            const redirectUrl = new URL(`${nextjsBaseUrl}/payment-redirect`);
-            redirectUrl.searchParams.set('payment_session_id', paymentSessionId);
-            if (cfOrderId) {
-                redirectUrl.searchParams.set('order_id', cfOrderId);
+            // Construct Next.js checkout page URL
+            // The checkout page will create the Cashfree session and handle payment using SDK
+            const checkoutUrl = new URL(`${nextjsBaseUrl}/checkout`);
+            checkoutUrl.searchParams.set('amount', amountValue.toString());
+            checkoutUrl.searchParams.set('customer_name', customer_name);
+            checkoutUrl.searchParams.set('customer_email', customer_email);
+            checkoutUrl.searchParams.set('customer_phone', cleanPhone);
+            if (description) {
+                checkoutUrl.searchParams.set('description', description);
             }
-            redirectUrl.searchParams.set('environment', responseEnvironment);
+            checkoutUrl.searchParams.set('order_id', orderId);
+            checkoutUrl.searchParams.set('transaction_id', transactionId);
+            if (merchantId) {
+                checkoutUrl.searchParams.set('merchant_id', merchantId.toString());
+            }
+            if (merchantName) {
+                checkoutUrl.searchParams.set('merchant_name', merchantName);
+            }
+            checkoutUrl.searchParams.set('environment', responseEnvironment);
 
-            const paymentUrl = redirectUrl.toString();
+            const paymentUrl = checkoutUrl.toString();
 
-            console.log('   Next.js Redirect URL:', paymentUrl);
+            console.log('   Next.js Checkout URL:', paymentUrl);
 
         const responseData = {
             success: true,
