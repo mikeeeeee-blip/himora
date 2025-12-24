@@ -7,7 +7,7 @@ import authService from './authService';
 class SuperadminPaymentService {
   
   // ============ DASHBOARD STATS ============
-  async getDashboardStats() {
+  async getDashboardStats(filters = {}) {
     try {
       const token = authService.getToken();
       if (!token) {
@@ -20,6 +20,10 @@ class SuperadminPaymentService {
         headers: {
           'x-auth-token': token,
           'Content-Type': 'application/json',
+        },
+        params: {
+          startDate: filters.startDate || undefined,
+          endDate: filters.endDate || undefined,
         },
       });
 
@@ -48,6 +52,8 @@ class SuperadminPaymentService {
           merchantId: params.merchantId || undefined,
           status: params.status || undefined,
           includeInactive: params.includeInactive === true ? 'true' : undefined,
+          startDate: params.startDate || undefined,
+          endDate: params.endDate || undefined,
         },
       });
 
@@ -317,9 +323,7 @@ async triggerManualSettlement() {
         },
         params: {
           page: filters.page || 1,
-          // limit: filters.limit || 20,
-          // TODO : fix the pagination issue in ui 
-          limit:  20000000000,
+          limit: filters.limit || 20,
           status: filters.status || undefined,
           merchantId: filters.merchantId || undefined,
           isAutoPayout: filters.isAutoPayout || undefined,
