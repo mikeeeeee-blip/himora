@@ -10,11 +10,10 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import apiClient from '@/services/apiService';
-import { API_ENDPOINTS } from '@/constants/api';
+import paymentService from '@/services/paymentService';
+import { Colors } from '@/constants/theme';
 
 export default function PaymentsScreen() {
   const [formData, setFormData] = useState({
@@ -43,24 +42,24 @@ export default function PaymentsScreen() {
     setLoading(true);
 
     try {
-      const response = await apiClient.post(API_ENDPOINTS.CREATE_LINK, {
+      const result = await paymentService.createPaymentLink({
         amount: parseFloat(formData.amount),
-        customer_name: formData.customer_name,
-        customer_email: formData.customer_email,
-        customer_phone: formData.customer_phone,
+        customerName: formData.customer_name,
+        customerEmail: formData.customer_email,
+        customerPhone: formData.customer_phone,
         description: formData.description || 'Payment',
       });
 
-      if (response.data?.success && response.data?.payment_url) {
+      if (result.paymentLink || result.success) {
+        const paymentUrl = result.paymentLink || result.paytmPaymentUrl || '';
         Alert.alert(
           'Success',
           'Payment link created successfully',
           [
             {
-              text: 'Open Link',
+              text: 'View Link',
               onPress: () => {
-                // You can use Linking.openURL here or navigate to a webview
-                Alert.alert('Payment URL', response.data.payment_url);
+                Alert.alert('Payment Link', paymentUrl || 'Link created successfully');
               },
             },
             { text: 'OK' },
@@ -78,17 +77,17 @@ export default function PaymentsScreen() {
       }
     } catch (error: any) {
       console.error('Error creating payment link:', error);
-      Alert.alert('Error', error.response?.data?.error || 'Failed to create payment link');
+      Alert.alert('Error', error.message || 'Failed to create payment link');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          <Ionicons name="arrow-back" size={24} color={Colors.textLight} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Payment</Text>
         <View style={{ width: 24 }} />
@@ -178,28 +177,29 @@ export default function PaymentsScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: Colors.bgPrimary,
+    paddingTop: 64, // Account for Navbar height
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.bgSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
+    borderBottomColor: Colors.border,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: Colors.textLight,
   },
   keyboardView: {
     flex: 1,
@@ -219,23 +219,23 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: Colors.textLight,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: Colors.border,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: '#fff',
-    color: '#333',
+    backgroundColor: Colors.bgTertiary,
+    color: Colors.textLight,
   },
   textArea: {
     height: 100,
     textAlignVertical: 'top',
   },
   button: {
-    backgroundColor: '#10b981',
+    backgroundColor: Colors.success,
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',

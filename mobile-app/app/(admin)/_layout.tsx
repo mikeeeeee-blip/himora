@@ -18,7 +18,9 @@ export default function AdminLayout() {
           <Stack.Screen name="dashboard" />
           <Stack.Screen name="transactions" />
           <Stack.Screen name="payouts" />
+          <Stack.Screen name="payout-request" />
           <Stack.Screen name="payments" />
+          <Stack.Screen name="api" />
           <Stack.Screen name="webhooks" />
         </Stack>
       </SafeAreaView>

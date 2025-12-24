@@ -329,6 +329,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/superadmin', require('./routes/superAdminRoutes')); // Must be before /api to avoid conflicts
 app.use('/api', require('./routes/apiRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
+app.use('/api/device', require('./routes/deviceRoutes')); // ✅ Device registration for push notifications
 app.use('/api/razorpay', require('./routes/razorpayRoutes'));
 app.use('/api/paytm', require('./routes/paytmRoutes'));
 app.use('/api/easebuzz', require('./routes/easebuzzRoutes')); // ✅ NEW

@@ -9,11 +9,10 @@ import {
   Alert,
   Switch,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import apiClient from '@/services/apiService';
-import { API_ENDPOINTS } from '@/constants/api';
+import webhookService from '@/services/webhookService';
+import { Colors } from '@/constants/theme';
 
 export default function WebhooksScreen() {
   const [webhookConfig, setWebhookConfig] = useState<any>(null);
@@ -28,13 +27,11 @@ export default function WebhooksScreen() {
   const loadWebhookConfig = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get(API_ENDPOINTS.WEBHOOK_CONFIG);
-      setWebhookConfig(response.data);
+      const configs = await webhookService.getAllWebhookConfigs();
+      setWebhookConfig(configs);
     } catch (error: any) {
       console.error('Error loading webhook config:', error);
-      if (error.response?.status !== 404) {
-        Alert.alert('Error', 'Failed to load webhook configuration');
-      }
+      Alert.alert('Error', error.message || 'Failed to load webhook configuration');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -47,14 +44,14 @@ export default function WebhooksScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          <Ionicons name="arrow-back" size={24} color={Colors.textLight} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Webhooks</Text>
         <TouchableOpacity onPress={() => router.push('/(admin)/webhook-configure')}>
-          <Ionicons name="settings-outline" size={24} color="#10b981" />
+          <Ionicons name="settings-outline" size={24} color={Colors.success} />
         </TouchableOpacity>
       </View>
 
@@ -70,45 +67,75 @@ export default function WebhooksScreen() {
           </View>
         ) : webhookConfig ? (
           <View style={styles.configContainer}>
-            <View style={styles.configCard}>
-              <Text style={styles.configLabel}>Webhook URL</Text>
-              <Text style={styles.configValue}>{webhookConfig.webhookUrl || 'Not configured'}</Text>
-            </View>
-
-            <View style={styles.configCard}>
-              <View style={styles.switchRow}>
-                <Text style={styles.configLabel}>Webhook Enabled</Text>
-                <Switch
-                  value={webhookConfig.enabled || false}
-                  disabled
-                  trackColor={{ false: '#ccc', true: '#10b981' }}
-                />
+            {webhookConfig.paymentWebhook && (
+              <View style={styles.configCard}>
+                <Text style={styles.configSectionTitle}>Payment Webhook</Text>
+                <Text style={styles.configLabel}>Webhook URL</Text>
+                <Text style={styles.configValue}>{webhookConfig.paymentWebhook.webhook_url || 'Not configured'}</Text>
+                <View style={styles.switchRow}>
+                  <Text style={styles.configLabel}>Enabled</Text>
+                  <Switch
+                    value={!!webhookConfig.paymentWebhook.webhook_url}
+                    disabled
+                    trackColor={{ false: Colors.bgTertiary, true: Colors.success }}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={async () => {
+                    try {
+                      await webhookService.testWebhook();
+                      Alert.alert('Success', 'Test webhook sent successfully');
+                    } catch (error: any) {
+                      Alert.alert('Error', error.message || 'Failed to send test webhook');
+                    }
+                  }}
+                >
+                  <Ionicons name="send-outline" size={24} color={Colors.info} />
+                  <Text style={styles.actionButtonText}>Test Payment Webhook</Text>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.textSubtleLight} />
+                </TouchableOpacity>
               </View>
-            </View>
+            )}
+
+            {webhookConfig.payoutWebhook && (
+              <View style={styles.configCard}>
+                <Text style={styles.configSectionTitle}>Payout Webhook</Text>
+                <Text style={styles.configLabel}>Webhook URL</Text>
+                <Text style={styles.configValue}>{webhookConfig.payoutWebhook.webhook_url || 'Not configured'}</Text>
+                <View style={styles.switchRow}>
+                  <Text style={styles.configLabel}>Enabled</Text>
+                  <Switch
+                    value={!!webhookConfig.payoutWebhook.webhook_url}
+                    disabled
+                    trackColor={{ false: Colors.bgTertiary, true: Colors.success }}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={async () => {
+                    try {
+                      await webhookService.testPayoutWebhook();
+                      Alert.alert('Success', 'Test payout webhook sent successfully');
+                    } catch (error: any) {
+                      Alert.alert('Error', error.message || 'Failed to send test webhook');
+                    }
+                  }}
+                >
+                  <Ionicons name="send-outline" size={24} color={Colors.info} />
+                  <Text style={styles.actionButtonText}>Test Payout Webhook</Text>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.textSubtleLight} />
+                </TouchableOpacity>
+              </View>
+            )}
 
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => router.push('/(admin)/webhook-configure')}
             >
-              <Ionicons name="settings-outline" size={24} color="#10b981" />
-              <Text style={styles.actionButtonText}>Configure Webhook</Text>
-              <Ionicons name="chevron-forward" size={20} color="#999" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={async () => {
-                try {
-                  await apiClient.post(API_ENDPOINTS.WEBHOOK_TEST);
-                  Alert.alert('Success', 'Test webhook sent successfully');
-                } catch (error: any) {
-                  Alert.alert('Error', 'Failed to send test webhook');
-                }
-              }}
-            >
-              <Ionicons name="send-outline" size={24} color="#3b82f6" />
-              <Text style={styles.actionButtonText}>Send Test Webhook</Text>
-              <Ionicons name="chevron-forward" size={20} color="#999" />
+              <Ionicons name="settings-outline" size={24} color={Colors.success} />
+              <Text style={styles.actionButtonText}>Configure Webhooks</Text>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textSubtleLight} />
             </TouchableOpacity>
           </View>
         ) : (
@@ -124,28 +151,29 @@ export default function WebhooksScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: Colors.bgPrimary,
+    paddingTop: 64, // Account for Navbar height
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.bgSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
+    borderBottomColor: Colors.border,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: Colors.textLight,
   },
   content: {
     flex: 1,
@@ -161,24 +189,29 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   configCard: {
-    backgroundColor: '#fff',
+    backgroundColor: Colors.bgSecondary,
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 16,
+  },
+  configSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textLight,
+    marginBottom: 12,
   },
   configLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: Colors.textSubtleLight,
     marginBottom: 8,
   },
   configValue: {
     fontSize: 16,
-    color: '#1a1a1a',
+    color: Colors.textLight,
+    marginBottom: 12,
   },
   switchRow: {
     flexDirection: 'row',
@@ -188,19 +221,17 @@ const styles = StyleSheet.create({
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: Colors.bgTertiary,
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginTop: 8,
   },
   actionButtonText: {
     flex: 1,
     fontSize: 16,
-    color: '#1a1a1a',
+    color: Colors.textLight,
     marginLeft: 12,
   },
   emptyContainer: {
@@ -211,18 +242,18 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#999',
+    color: Colors.textSubtleLight,
     marginTop: 16,
     marginBottom: 24,
   },
   button: {
-    backgroundColor: '#10b981',
+    backgroundColor: Colors.success,
     borderRadius: 8,
     padding: 16,
     paddingHorizontal: 32,
   },
   buttonText: {
-    color: '#fff',
+    color: Colors.textLight,
     fontSize: 16,
     fontWeight: '600',
   },

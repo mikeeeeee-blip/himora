@@ -81,7 +81,7 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      const { role } = await authService.login(email, password);
+      const { role, userId } = await authService.login(email, password);
 
       // Ensure auth is fully loaded before redirecting
       await authService.ensureAuthLoaded();
@@ -93,6 +93,19 @@ export default function LoginScreen() {
       }
 
       console.log('Login complete, redirecting to dashboard. Token available:', !!token);
+
+      // ✅ Setup push notifications for superadmin
+      if (role === USER_ROLES.SUPERADMIN && userId) {
+        try {
+          const { setupPushNotificationsForSuperAdmin } = await import('../services/pushNotificationService');
+          // Setup push notifications in background (don't wait)
+          setupPushNotificationsForSuperAdmin(userId).catch(err => {
+            console.error('Failed to setup push notifications:', err);
+          });
+        } catch (pushError) {
+          console.error('Error importing push notification service:', pushError);
+        }
+      }
 
       if (role === USER_ROLES.SUPERADMIN) {
         router.replace('/(superadmin)/dashboard');

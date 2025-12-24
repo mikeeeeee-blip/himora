@@ -91,6 +91,7 @@ class AuthService {
       }
 
       const role = user?.role;
+      const userId = user?.id || user?._id;
       
       // Normalize role to match our constants
       let normalizedRole = role;
@@ -103,9 +104,12 @@ class AuthService {
         normalizedRole = USER_ROLES.ADMIN;
       }
       
-      // Store token and role in AsyncStorage (use trimmed token)
+      // Store token, role, and userId in AsyncStorage (use trimmed token)
       await AsyncStorage.setItem('token', trimmedToken);
       await AsyncStorage.setItem('role', normalizedRole);
+      if (userId) {
+        await AsyncStorage.setItem('userId', userId);
+      }
       if (user.businessName) {
         await AsyncStorage.setItem('businessName', user.businessName);
       }
@@ -115,10 +119,10 @@ class AuthService {
       this.role = normalizedRole;
       this.authLoaded = true; // Mark as loaded so ensureAuthLoaded doesn't reload
 
-      console.log('Login successful, role:', normalizedRole);
+      console.log('Login successful, role:', normalizedRole, 'userId:', userId);
       console.log('Token stored, length:', trimmedToken.length);
       console.log('Token preview:', trimmedToken.substring(0, 20) + '...');
-      return { token: trimmedToken, role: normalizedRole };
+      return { token: trimmedToken, role: normalizedRole, userId };
     } catch (error: any) {
       console.error('Login error details:', {
         message: error.message,
@@ -147,11 +151,22 @@ class AuthService {
     try {
       await AsyncStorage.removeItem('token');
       await AsyncStorage.removeItem('role');
+      await AsyncStorage.removeItem('userId');
       await AsyncStorage.removeItem('businessName');
       this.token = null;
       this.role = null;
     } catch (error) {
       console.error('Error during logout:', error);
+    }
+  }
+
+  async getUserId(): Promise<string | null> {
+    await this.ensureAuthLoaded();
+    try {
+      return await AsyncStorage.getItem('userId');
+    } catch (error) {
+      console.error('Error getting userId:', error);
+      return null;
     }
   }
 

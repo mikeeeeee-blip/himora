@@ -1587,6 +1587,31 @@ exports.requestPayout = async (req, res) => {
     console.log('Remaining balance after reservation:', remaining_balance);
     console.log('--- REQUEST PAYOUT END ---');
 
+    // ✅ Send push notification to superadmins
+    try {
+      const { notifySuperAdmins } = require('../services/pushNotificationService');
+      await notifySuperAdmins({
+        title: '💰 New Payout Request',
+        body: `${req.merchantName || 'Merchant'} requested payout of ₹${finalAmount.toFixed(2)}`,
+        data: {
+          type: 'payout_request',
+          payoutId: payoutId,
+          merchantId: req.merchantId.toString(),
+          merchantName: req.merchantName,
+          amount: finalAmount,
+          grossAmount: grossAmount,
+          status: 'requested',
+          timestamp: new Date().toISOString()
+        },
+        sound: 'default',
+        badge: 1
+      });
+      console.log('✅ Push notification sent to superadmins');
+    } catch (pushError) {
+      console.error('⚠️ Failed to send push notification:', pushError);
+      // Don't fail the payout request if push notification fails
+    }
+
     return res.json({
       success: true,
       payout: {
