@@ -15,9 +15,9 @@ import BalancePage from "./components/pages/BalancePage";
 import PaymentsPage from "./components/pages/PaymentsPage";
 import SuperadminSignupPage from "./components/pages/SuperadminSignupPage";
 import SuperadminTransactionsPage from "./components/pages/SuperadminTransactionsPage";
-import SuperadminUpdateTransactionsPage from "./components/pages/SuperadminUpdateTransactionsPage";
 import SuperadminPayoutsPage from "./components/pages/PayoutsManagement";
 import SuperadminMerchantsPage from "./components/pages/SuperadminMerchantsPage";
+import MerchantDetailPage from "./components/pages/MerchantDetailPage";
 import SuperadminPaymentGatewaySettings from "./components/pages/SuperadminPaymentGatewaySettings";
 import WebhookPage from "./components/pages/WebhookPage";
 import WebhookHowTo from "./components/pages/WebhookHowTo";
@@ -66,16 +66,6 @@ function App() {
           }
         />
         <Route
-          path="/superadmin/transactions/update"
-          element={
-            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminLayout>
-                <SuperadminUpdateTransactionsPage />
-              </SuperadminLayout>
-            </AuthWrapper>
-          }
-        />
-        <Route
           path="/superadmin/payouts"
           element={
             <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
@@ -91,6 +81,16 @@ function App() {
             <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
               <SuperadminLayout>
                 <SuperadminMerchantsPage />
+              </SuperadminLayout>
+            </AuthWrapper>
+          }
+        />
+        <Route
+          path="/superadmin/merchants/:merchantId"
+          element={
+            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+              <SuperadminLayout>
+                <MerchantDetailPage />
               </SuperadminLayout>
             </AuthWrapper>
           }

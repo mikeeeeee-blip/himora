@@ -46,11 +46,6 @@ const SuperadminNavbar = () => {
       icon: <HiOutlineChartBar />,
     },
     {
-      path: "/superadmin/transactions/update",
-      label: "Update Transactions",
-      icon: <FiEdit3 />,
-    },
-    {
       path: "/superadmin/settings/payment-gateways",
       label: "Payment Gateways",
       icon: <FiSettings />,
