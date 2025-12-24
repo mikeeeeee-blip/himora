@@ -140,24 +140,94 @@ exports.createCashfreePaymentLink = async (req, res) => {
         // Determine environment from CASHFREE_ENVIRONMENT or default to production
         const responseEnvironment = CASHFREE_ENVIRONMENT === 'sandbox' ? 'sandbox' : 'production';
 
-        // Construct checkout URL - always use NEXTJS_API_URL environment variable
-        const checkoutBaseUrl = process.env.NEXTJS_API_URL || 'https://www.shaktisewafoudation.in';
-        const checkoutUrl = new URL(`${checkoutBaseUrl}/checkout`);
-        checkoutUrl.searchParams.set('amount', amountValue);
-        checkoutUrl.searchParams.set('customer_name', customer_name);
-        checkoutUrl.searchParams.set('customer_email', customer_email);
-        checkoutUrl.searchParams.set('customer_phone', cleanPhone);
-        checkoutUrl.searchParams.set('order_id', orderId);
-        checkoutUrl.searchParams.set('transaction_id', transactionId);
-        checkoutUrl.searchParams.set('merchant_id', merchantId.toString());
-        checkoutUrl.searchParams.set('merchant_name', merchantName);
-        checkoutUrl.searchParams.set('description', description || 'Product purchase');
-        checkoutUrl.searchParams.set('environment', responseEnvironment);
+        // Call Next.js create-session API directly to get payment link
+        const nextjsBaseUrl = (process.env.NEXTJS_API_URL || 'https://www.shaktisewafoudation.in').replace(/\/$/, '');
+        const createSessionUrl = `${nextjsBaseUrl}/api/payments/create-session`;
+        
+        console.log('🚀 Calling Next.js create-session API directly...');
+        console.log('   URL:', createSessionUrl);
+        
+        try {
+            const sessionResponse = await axios.post(
+                createSessionUrl,
+                {
+                    orderId: orderId,
+                    orderAmount: amountValue,
+                    customerDetails: {
+                        customerId: `CUST_${cleanPhone}_${Date.now()}`,
+                        customerName: customer_name,
+                        customerEmail: customer_email,
+                        customerPhone: cleanPhone,
+                    },
+                    shippingAddress: {
+                        fullName: customer_name,
+                        phone: cleanPhone,
+                        addressLine1: 'N/A',
+                        city: 'N/A',
+                        state: 'N/A',
+                        pincode: '000000',
+                        country: 'India'
+                    },
+                    billingAddress: {
+                        fullName: customer_name,
+                        phone: cleanPhone,
+                        addressLine1: 'N/A',
+                        city: 'N/A',
+                        state: 'N/A',
+                        pincode: '000000',
+                        country: 'India'
+                    },
+                    items: [], // Empty items for payment link
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    timeout: 30000, // 30 second timeout
+                }
+            );
+
+            if (!sessionResponse.data.success) {
+                throw new Error(sessionResponse.data.message || 'Failed to create payment session');
+            }
+
+            const paymentSessionId = sessionResponse.data.data?.paymentSessionId;
+            const cfOrderId = sessionResponse.data.data?.cfOrderId || sessionResponse.data.data?.orderId;
+
+            if (!paymentSessionId) {
+                throw new Error('Payment session ID not received from create-session API');
+            }
+
+            console.log('✅ Payment session created successfully');
+            console.log('   Payment Session ID:', paymentSessionId ? paymentSessionId.substring(0, 50) + '...' : 'N/A');
+            console.log('   CF Order ID:', cfOrderId || 'N/A');
+
+            // Update transaction with Cashfree order ID if available
+            if (cfOrderId) {
+                await Transaction.findOneAndUpdate(
+                    { transactionId: transactionId },
+                    { cashfreeOrderId: cfOrderId }
+                );
+            }
+
+            // Construct Next.js payment redirect page URL (uses Cashfree SDK like old checkout page)
+            // This page uses the Cashfree SDK to properly handle the session, avoiding "client session is invalid" errors
+            const redirectUrl = new URL(`${nextjsBaseUrl}/payment-redirect`);
+            redirectUrl.searchParams.set('payment_session_id', paymentSessionId);
+            if (cfOrderId) {
+                redirectUrl.searchParams.set('order_id', cfOrderId);
+            }
+            redirectUrl.searchParams.set('environment', responseEnvironment);
+
+            const paymentUrl = redirectUrl.toString();
+
+            console.log('   Next.js Redirect URL:', paymentUrl);
 
         const responseData = {
             success: true,
             transaction_id: transactionId,
             order_id: orderId,
+                cf_order_id: cfOrderId,
             order_amount: amountValue,
             order_currency: 'INR',
             merchant_id: merchantId.toString(),
@@ -168,6 +238,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
             environment: responseEnvironment,
             gateway_used: 'cashfree',
             gateway_name: 'Cashfree',
+                payment_session_id: paymentSessionId,
             payment_data: {
                 amount: amountValue,
                 currency: 'INR',
@@ -180,12 +251,31 @@ exports.createCashfreePaymentLink = async (req, res) => {
                 merchant_id: merchantId.toString(),
                 merchant_name: merchantName
             },
-            message: 'Payment data prepared. Redirect to checkout page to proceed with payment. Gateway: Cashfree.',
-            payment_url: checkoutUrl.toString(),
-            paymentLink: checkoutUrl.toString()
+                message: 'Payment link created successfully. Redirect to payment_url to proceed with payment. Gateway: Cashfree.',
+                payment_url: paymentUrl,
+                paymentLink: paymentUrl
         };
 
         res.json(responseData);
+
+        } catch (sessionError) {
+            console.error('❌ Error calling create-session API:', sessionError.message);
+            if (sessionError.response) {
+                console.error('   Response Status:', sessionError.response.status);
+                console.error('   Response Data:', JSON.stringify(sessionError.response.data, null, 2));
+            }
+            
+            // Mark transaction as failed
+            await Transaction.findOneAndUpdate(
+                { transactionId: transactionId },
+                {
+                    status: 'failed',
+                    failureReason: sessionError.response?.data?.message || sessionError.message || 'Failed to create payment session'
+                }
+            );
+
+            throw sessionError; // Re-throw to be caught by outer catch block
+        }
 
     } catch (error) {
         console.error('\n❌ Cashfree Payment Link Creation Error:');
