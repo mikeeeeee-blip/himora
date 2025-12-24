@@ -106,7 +106,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
 
         // Calculate commission and settlement
         const commissionData = calculatePayinCommission(amountValue);
-        const expectedSettlement = calculateExpectedSettlementDate(new Date());
+        const expectedSettlement = await calculateExpectedSettlementDate(new Date());
 
         // Save transaction to database (status: 'created' - will be updated when payment is initiated)
         const transaction = new Transaction({
@@ -405,7 +405,7 @@ exports.createCashfreePaymentLinkAPI = async (req, res) => {
 
         // Calculate commission and settlement
         const commissionData = calculatePayinCommission(amountValue);
-        const expectedSettlement = calculateExpectedSettlementDate(new Date());
+        const expectedSettlement = await calculateExpectedSettlementDate(new Date());
 
         // Save transaction to database (status: 'created' - will be updated when payment is initiated)
         const transaction = new Transaction({
@@ -669,7 +669,7 @@ exports.handleCashfreeWebhook = async (req, res) => {
             console.log('   ✅ PAYMENT SUCCESSFUL - Updating transaction...');
             
             const paidAt = new Date();
-            const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+            const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
             const commissionData = calculatePayinCommission(transaction.amount);
             
             const update = {
@@ -924,7 +924,7 @@ exports.handleCashfreeCallback = async (req, res) => {
             console.log('   ✅ PAYMENT SUCCESSFUL - Updating transaction...');
             
             const paidAt = new Date();
-            const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+            const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
             const commissionData = calculatePayinCommission(transaction.amount);
             
             // Get payment details from Cashfree API response if available
@@ -1064,7 +1064,7 @@ exports.handleCashfreeCallback = async (req, res) => {
                     console.log('   ✅ API verified payment as PAID - Updating transaction...');
                     
                     const paidAt = new Date();
-                    const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+                    const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
                     const commissionData = calculatePayinCommission(transaction.amount);
                     
                     const paymentId = cashfreeOrderData?.payment_id || cashfreeOrderData?.cf_payment_id || payload.payment_id;
@@ -1113,7 +1113,7 @@ exports.handleCashfreeCallback = async (req, res) => {
                     console.log('   ⚠️ Callback URL is ambiguous, no API status - defaulting to success (optimistic update)');
                     
                     const paidAt = new Date();
-                    const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+                    const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
                     const commissionData = calculatePayinCommission(transaction.amount);
                     
                     const update = {

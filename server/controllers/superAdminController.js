@@ -8,6 +8,32 @@ const { sendMerchantWebhook, sendPayoutWebhook } = require('./merchantWebhookCon
 const mongoose = require('mongoose');
 const COMMISSION_RATE = 0.038; // 3.8%
 
+// Helper function to validate cron expression (simple validation)
+function validateCronExpression(cronExpression) {
+    if (!cronExpression || typeof cronExpression !== 'string') {
+        return false;
+    }
+    
+    // Basic validation: should have 5 parts separated by spaces
+    const parts = cronExpression.trim().split(/\s+/);
+    if (parts.length !== 5) {
+        return false;
+    }
+    
+    // Check if it matches the expected pattern: */{number} * * * 1-6
+    const minutePattern = /^\*\/(\d+)$/;
+    if (!minutePattern.test(parts[0])) {
+        return false;
+    }
+    
+    // Check weekday is 1-6 (Monday to Saturday)
+    if (parts[4] !== '1-6') {
+        return false;
+    }
+    
+    return true;
+}
+
 // ============ GET ALL PAYOUTS (SuperAdmin) ============
 exports.getAllPayouts = async (req, res) => {
     try {
@@ -682,7 +708,7 @@ exports.updateTransactionStatus = async (req, res) => {
             const commissionData = calculatePayinCommission(transaction.amount);
             
             // Calculate expected settlement date
-            const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+            const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
             
             // Update all relevant fields
             updateOperation.$set.paidAt = paidAt;
@@ -1594,6 +1620,146 @@ exports.getAllMerchantsData = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to fetch merchants comprehensive data',
+            detail: error.message
+        });
+    }
+};
+
+// ============ GET SETTLEMENT SETTINGS ============
+exports.getSettlementSettings = async (req, res) => {
+    try {
+        console.log(`⚙️ ${req.user.role === 'superAdmin' ? 'SuperAdmin' : 'Sub-SuperAdmin'} ${req.user.name} fetching settlement settings`);
+
+        const settings = await Settings.getSettings();
+        const settlementSettings = settings.settlement || {
+            settlementDays: 1,
+            settlementHour: 16,
+            settlementMinute: 0,
+            cutoffHour: 16,
+            cutoffMinute: 0,
+            skipWeekends: true,
+            cronSchedule: '*/15 * * * 1-6'
+        };
+
+        res.json({
+            success: true,
+            settlement: settlementSettings,
+            updated_at: settings.updatedAt,
+            updated_by: settings.updatedBy
+        });
+
+    } catch (error) {
+        console.error('❌ Get Settlement Settings Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch settlement settings',
+            detail: error.message
+        });
+    }
+};
+
+// ============ UPDATE SETTLEMENT SETTINGS ============
+exports.updateSettlementSettings = async (req, res) => {
+    try {
+        const { settlement } = req.body;
+
+        console.log(`⚙️ ${req.user.role === 'superAdmin' ? 'SuperAdmin' : 'Sub-SuperAdmin'} ${req.user.name} updating settlement settings`);
+        console.log('   Settlement settings:', settlement);
+
+        if (!settlement || typeof settlement !== 'object') {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid settlement data. Must be an object.'
+            });
+        }
+
+        // Get current settings
+        const settings = await Settings.getSettings();
+
+        // Initialize settlement if not exists
+        if (!settings.settlement) {
+            settings.settlement = {
+                settlementDays: 1,
+                settlementHour: 16,
+                settlementMinute: 0,
+                cutoffHour: 16,
+                cutoffMinute: 0,
+                skipWeekends: true
+            };
+        }
+
+        // Validate and update settlement settings
+        if (typeof settlement.settlementDays === 'number' && settlement.settlementDays >= 0) {
+            settings.settlement.settlementDays = settlement.settlementDays;
+        }
+
+        if (typeof settlement.settlementHour === 'number' && settlement.settlementHour >= 0 && settlement.settlementHour <= 23) {
+            settings.settlement.settlementHour = settlement.settlementHour;
+        }
+
+        if (typeof settlement.settlementMinute === 'number' && settlement.settlementMinute >= 0 && settlement.settlementMinute <= 59) {
+            settings.settlement.settlementMinute = settlement.settlementMinute;
+        }
+
+        if (typeof settlement.cutoffHour === 'number' && settlement.cutoffHour >= 0 && settlement.cutoffHour <= 23) {
+            settings.settlement.cutoffHour = settlement.cutoffHour;
+        }
+
+        if (typeof settlement.cutoffMinute === 'number' && settlement.cutoffMinute >= 0 && settlement.cutoffMinute <= 59) {
+            settings.settlement.cutoffMinute = settlement.cutoffMinute;
+        }
+
+        if (typeof settlement.skipWeekends === 'boolean') {
+            settings.settlement.skipWeekends = settlement.skipWeekends;
+        }
+
+        if (typeof settlement.cronSchedule === 'string' && settlement.cronSchedule.trim()) {
+            // Validate cron expression (simple validation)
+            const cronSchedule = settlement.cronSchedule.trim();
+            if (!validateCronExpression(cronSchedule)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid cron expression. Expected format: "*/{minutes} * * * 1-6" (e.g., "*/15 * * * 1-6")',
+                    detail: 'Cron expression must match pattern: */{number} * * * 1-6'
+                });
+            }
+            settings.settlement.cronSchedule = cronSchedule;
+        }
+
+        // Update metadata
+        settings.updatedBy = req.user._id;
+        settings.updatedAt = new Date();
+
+        // Mark settlement as modified
+        settings.markModified('settlement');
+
+        await settings.save();
+
+        // Restart settlement job if cron schedule changed
+        const { restartSettlementJob } = require('../jobs/settlementJob');
+        try {
+            await restartSettlementJob();
+            console.log('✅ Settlement job restarted with new schedule');
+        } catch (jobError) {
+            console.error('⚠️ Warning: Failed to restart settlement job:', jobError.message);
+            // Don't fail the request if job restart fails
+        }
+
+        console.log('✅ Settlement settings updated successfully');
+
+        res.json({
+            success: true,
+            message: 'Settlement settings updated successfully',
+            settlement: settings.settlement,
+            updated_at: settings.updatedAt,
+            updated_by: settings.updatedBy
+        });
+
+    } catch (error) {
+        console.error('❌ Update Settlement Settings Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update settlement settings',
             detail: error.message
         });
     }

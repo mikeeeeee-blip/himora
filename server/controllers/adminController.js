@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const Payout = require('../models/Payout');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
+const Settings = require('../models/Settings');
 const { calculatePayinCommission, calculatePayoutCommission } = require('../utils/commissionCalculator');
 const { getSettlementStatusMessage } = require('../utils/settlementCalculator');
 const mongoose = require('mongoose');
@@ -17,6 +18,62 @@ function parseList(value) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+// Helper function to calculate next settlement job run time from cron expression
+function calculateNextJobRunTime(cronSchedule) {
+    try {
+        // Parse cron expression: */{minutes} * * * 1-6
+        const match = cronSchedule.match(/^\*\/(\d+)/);
+        if (!match) return null;
+        
+        const minutes = parseInt(match[1]);
+        if (!minutes || minutes < 1) return null;
+
+        const now = new Date();
+        const currentMinute = now.getMinutes();
+        const currentSecond = now.getSeconds();
+        const currentMillisecond = now.getMilliseconds();
+        
+        // Calculate minutes until next run
+        const minutesUntilNext = minutes - (currentMinute % minutes);
+        
+        // Create next run time
+        const nextRun = new Date(now);
+        nextRun.setMinutes(currentMinute + minutesUntilNext);
+        nextRun.setSeconds(0);
+        nextRun.setMilliseconds(0);
+        
+        // If we're exactly on a run time, add the interval
+        if (minutesUntilNext === minutes && currentSecond === 0 && currentMillisecond === 0) {
+            nextRun.setMinutes(nextRun.getMinutes() + minutes);
+        }
+        
+        // Check if it's Sunday (day 0) - skip to Monday
+        const dayOfWeek = nextRun.getDay();
+        if (dayOfWeek === 0) {
+            // Sunday - move to Monday at 00:00
+            nextRun.setDate(nextRun.getDate() + 1);
+            nextRun.setHours(0, 0, 0, 0);
+        }
+        
+        return {
+            timestamp: nextRun.toISOString(),
+            formatted: nextRun.toLocaleString('en-IN', {
+                timeZone: 'Asia/Kolkata',
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            }),
+            intervalMinutes: minutes
+        };
+    } catch (error) {
+        console.error('Error calculating next job run time:', error);
+        return null;
+    }
 }
 
 
@@ -278,9 +335,27 @@ exports.getMyBalance = async (req, res) => {
 
         // Settlement status message
         const nextSettlementText = nextUnsettledTransaction
-            ? getSettlementStatusMessage(nextUnsettledTransaction.paidAt, nextUnsettledTransaction.expectedSettlementDate)
+            ? await getSettlementStatusMessage(nextUnsettledTransaction.paidAt, nextUnsettledTransaction.expectedSettlementDate)
             : 'No pending settlements';
         const nextSettlementStatus = nextUnsettledTransaction?.settlementStatus || null;
+
+        // Get settlement job schedule info
+        let settlementJobSchedule = null;
+        try {
+            const settings = await Settings.getSettings();
+            const cronSchedule = settings.settlement?.cronSchedule || '*/15 * * * 1-6';
+            const nextJobRun = calculateNextJobRunTime(cronSchedule);
+            if (nextJobRun) {
+                settlementJobSchedule = {
+                    cronSchedule: cronSchedule,
+                    intervalMinutes: nextJobRun.intervalMinutes,
+                    nextRunTime: nextJobRun.formatted,
+                    nextRunTimestamp: nextJobRun.timestamp
+                };
+            }
+        } catch (error) {
+            console.error('Error fetching settlement job schedule:', error);
+        }
 
         res.json({
             success: true,
@@ -355,7 +430,9 @@ exports.getMyBalance = async (req, res) => {
                     'Friday payment': 'Settles Monday (skip weekend)',
                     'Saturday payment': 'Settles Monday (skip Sunday)',
                     'Sunday payment': 'Settles Monday (24+ hours)'
-                }
+                },
+                // Settlement job schedule info
+                job_schedule: settlementJobSchedule
             },
             transaction_summary: {
                 total_transactions: settled.settledCount + unsettled.unsettledCount,

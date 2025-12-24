@@ -1698,7 +1698,7 @@ async function handleEasebuzzPaymentSuccess(transaction, payload) {
         let settlementDateCalculated = false;
         
         try {
-            expectedSettlementDate = calculateExpectedSettlementDate(paidAt);
+            expectedSettlementDate = await calculateExpectedSettlementDate(paidAt);
             console.log('      Expected Settlement Date (calculated):', expectedSettlementDate ? expectedSettlementDate.toISOString() : 'null');
             
             // Validate the returned date

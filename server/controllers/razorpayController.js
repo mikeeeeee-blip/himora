@@ -544,7 +544,7 @@ async function handlePhonePePaymentSuccess(payload) {
     }
 
     const paidAt = new Date(paymentDetail.timestamp || Date.now());
-    const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+    const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
 
     // Build atomic update object
     const update = {
@@ -692,7 +692,7 @@ exports.handleRazorpayCallback = async (req, res) => {
                     // Payment is successful, update transaction if not already updated
                     if (transaction.status !== 'paid') {
                         const paidAt = new Date(payment.created_at * 1000);
-                        const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+                        const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
 
                         // Calculate commission if not already set
                         const commissionData = calculatePayinCommission(transaction.amount);
@@ -1076,7 +1076,7 @@ async function handleRazorpayPaymentSuccess(payload) {
         const paymentEntity = payload.payload?.payment?.entity || payload.payload?.payment_link?.entity || {};
         const amountPaid = (paymentEntity.amount || paymentEntity.amount_paid || transaction.amount || 0) / 100; // Convert from paisa
         const paidAt = paymentEntity.created_at ? new Date(paymentEntity.created_at * 1000) : new Date();
-        const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+        const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
 
         // Extract payment method
         const paymentMethod = paymentEntity.method || 

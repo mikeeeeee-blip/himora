@@ -13,6 +13,7 @@ import {
   FiExternalLink,
   FiX,
   FiSmartphone,
+  FiClock,
 } from "react-icons/fi";
 import { TbArrowsTransferDown } from "react-icons/tb";
 import { RiMoneyDollarCircleLine, RiWalletLine } from "react-icons/ri";
@@ -58,6 +59,7 @@ const AdminDashboard = () => {
     loading: true,
   });
 
+
   // Payment link modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [createLinkLoading, setCreateLinkLoading] = useState(false);
@@ -70,6 +72,27 @@ const AdminDashboard = () => {
     customerPhone: "",
     description: "",
   });
+
+  // Helper to get relative time from timestamp
+  const getRelativeTime = (timestamp) => {
+    if (!timestamp) return '';
+    const now = new Date();
+    const date = new Date(timestamp);
+    const diff = date - now;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    
+    if (minutes < 1) {
+      return 'now';
+    } else if (minutes < 60) {
+      return `in ${minutes} minute${minutes > 1 ? 's' : ''}`;
+    } else if (hours < 24) {
+      return `in ${hours} hour${hours > 1 ? 's' : ''} ${minutes % 60} minute${(minutes % 60) > 1 ? 's' : ''}`;
+    } else {
+      const days = Math.floor(hours / 24);
+      return `in ${days} day${days > 1 ? 's' : ''}`;
+    }
+  };
 
   // Fetch data on component mount and when date range changes
   useEffect(() => {
@@ -87,6 +110,7 @@ const AdminDashboard = () => {
 
     return () => clearInterval(interval);
   }, []);
+
 
   const fetchDashboardStats = async () => {
     try {
@@ -334,18 +358,18 @@ const AdminDashboard = () => {
     }
   };
 
-  // Fetch transactions for the last 25 hours (frontend filtered)
+  // Fetch transactions for the last 24 hours (frontend filtered)
   const fetchTodayTransactions = async () => {
     try {
       setTodayTransactions((prev) => ({ ...prev, loading: true }));
 
-      // Calculate 25 hours ago timestamp
+      // Calculate 24 hours ago timestamp
       const now = new Date();
-      const twentyFiveHoursAgo = new Date(now.getTime() - 25 * 60 * 60 * 1000);
+      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-      console.log("📅 Fetching transactions from last 25 hours:", {
+      console.log("📅 Fetching transactions from last 24 hours:", {
         now: now.toISOString(),
-        twentyFiveHoursAgo: twentyFiveHoursAgo.toISOString(),
+        twentyFourHoursAgo: twentyFourHoursAgo.toISOString(),
       });
 
       // Fetch all payin transactions (no date limit, we'll filter on frontend)
@@ -358,7 +382,7 @@ const AdminDashboard = () => {
           sortOrder: "desc",
         });
         const rawPayins = payinResult.transactions || [];
-        // Filter: must be within last 25 hours (createdAt or updatedAt)
+        // Filter: must be within last 24 hours (createdAt or updatedAt)
         // IMPORTANT: Exclude settled transactions from payin data
         payinData = rawPayins.filter((txn) => {
           if (!txn) return false;
@@ -378,14 +402,14 @@ const AdminDashboard = () => {
             ? new Date(updatedAt)
             : null;
           if (!txnDate) return false;
-          const isWithin25Hours = txnDate >= twentyFiveHoursAgo;
+          const isWithin24Hours = txnDate >= twentyFourHoursAgo;
           const hasValidAmount =
             typeof (txn.amount || 0) === "number" &&
             parseFloat(txn.amount || 0) > 0;
-          return isWithin25Hours && hasValidAmount;
+          return isWithin24Hours && hasValidAmount;
         });
         console.log(
-          "✅ Payin fetched (last 25 hours):",
+          "✅ Payin fetched (last 24 hours):",
           payinData.length,
           "valid transactions out of",
           rawPayins.length,
@@ -406,7 +430,7 @@ const AdminDashboard = () => {
           sortOrder: "desc",
         });
         const rawPayouts = payoutResult.payouts || [];
-        // Filter: must be within last 25 hours (createdAt or updatedAt)
+        // Filter: must be within last 24 hours (createdAt or updatedAt)
         // IMPORTANT: Only include actual payout records (not transactions)
         payoutData = rawPayouts.filter((payout) => {
           if (!payout) return false;
@@ -422,14 +446,14 @@ const AdminDashboard = () => {
             ? new Date(updatedAt)
             : null;
           if (!payoutDate) return false;
-          const isWithin25Hours = payoutDate >= twentyFiveHoursAgo;
+          const isWithin24Hours = payoutDate >= twentyFourHoursAgo;
           const hasValidAmount =
             typeof (payout.netAmount || payout.amount || 0) === "number" &&
             parseFloat(payout.netAmount || payout.amount || 0) > 0;
-          return isWithin25Hours && hasValidAmount;
+          return isWithin24Hours && hasValidAmount;
         });
         console.log(
-          "✅ Payout fetched (last 25 hours):",
+          "✅ Payout fetched (last 24 hours):",
           payoutData.length,
           "valid payouts out of",
           rawPayouts.length,
@@ -452,7 +476,7 @@ const AdminDashboard = () => {
           sortOrder: "desc",
         });
         const rawSettlements = settlementResult.transactions || [];
-        // Filter: must be within last 25 hours (createdAt or updatedAt)
+        // Filter: must be within last 24 hours (createdAt or updatedAt)
         // IMPORTANT: Only include truly settled transactions
         settlementData = rawSettlements.filter((txn) => {
           if (!txn) return false;
@@ -472,15 +496,15 @@ const AdminDashboard = () => {
             ? new Date(updatedAt)
             : null;
           if (!txnDate) return false;
-          const isWithin25Hours = txnDate >= twentyFiveHoursAgo;
+          const isWithin24Hours = txnDate >= twentyFourHoursAgo;
           const hasValidAmount =
             typeof (txn.netAmount || txn.net_amount || txn.amount || 0) ===
               "number" &&
             parseFloat(txn.netAmount || txn.net_amount || txn.amount || 0) > 0;
-          return isWithin25Hours && hasValidAmount;
+          return isWithin24Hours && hasValidAmount;
         });
         console.log(
-          "✅ Settlement fetched (last 25 hours):",
+          "✅ Settlement fetched (last 24 hours):",
           settlementData.length,
           "valid settled transactions out of",
           rawSettlements.length,
@@ -1452,6 +1476,34 @@ const AdminDashboard = () => {
                     <MetricCard key={index} {...card} />
                   ))}
                 </div>
+
+                {/* Next Settlement Job Run Time Info Card - Only show if unsettled balance > 0 */}
+                {balanceData?.settlement_info?.job_schedule && parseFloat(unsettledBalance) > 0 && (
+                  <div className="mt-4 sm:mt-6 p-4 bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-xl">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-500/30 rounded-lg">
+                          <FiClock className="text-blue-300 text-xl" />
+                        </div>
+                        <div>
+                          <p className="text-blue-300 text-xs font-medium mb-1 uppercase tracking-wide">
+                            Next Settlement Job Run
+                          </p>
+                          <p className="text-white font-semibold text-lg">
+                            {balanceData.settlement_info.job_schedule.nextRunTime}
+                          </p>
+                          <p className="text-blue-200 text-xs mt-1">
+                            Runs every {balanceData.settlement_info.job_schedule.intervalMinutes} minutes, Monday to Saturday • {getRelativeTime(balanceData.settlement_info.job_schedule.nextRunTimestamp)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                        <span className="text-blue-300 text-xs font-medium">Active</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1474,7 +1526,7 @@ const AdminDashboard = () => {
                   <div className="flex flex-col gap-3 mb-4 sm:mb-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <h2 className="text-lg sm:text-xl font-medium text-white font-['Albert_Sans']">
-                        Last 25 Hours{" "}
+                        Last 24 Hours{" "}
                         {todayTransactions.loading
                           ? "..."
                           : filteredTransactions.length || 0}

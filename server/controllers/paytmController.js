@@ -824,7 +824,7 @@ exports.handlePaytmCallback = async (req, res) => {
                 console.log('⚡ Fast path: Valid checksum detected, updating transaction immediately');
                 try {
                         const paidAt = new Date();
-                        const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+                        const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
                         const commissionData = calculatePayinCommission(amount);
 
                         const update = {

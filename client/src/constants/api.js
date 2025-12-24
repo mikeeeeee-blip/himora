@@ -67,6 +67,8 @@ export const API_ENDPOINTS = {
   // ============ SUPERADMIN - SETTINGS ============
   GET_PAYMENT_GATEWAY_SETTINGS: `${BASE_URL}/superadmin/settings/payment-gateways`,
   UPDATE_PAYMENT_GATEWAY_SETTINGS: `${BASE_URL}/superadmin/settings/payment-gateways`,
+  GET_SETTLEMENT_SETTINGS: `${BASE_URL}/superadmin/settings/settlement`,
+  UPDATE_SETTLEMENT_SETTINGS: `${BASE_URL}/superadmin/settings/settlement`,
   // ============ SUPERADMIN - MERCHANTS ============
   SUPERADMIN_MERCHANTS_COMPREHENSIVE: `${BASE_URL}/superadmin/merchants/comprehensive`,
   

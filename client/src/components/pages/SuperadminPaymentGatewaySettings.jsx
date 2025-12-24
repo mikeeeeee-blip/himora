@@ -28,6 +28,9 @@ const SuperadminPaymentGatewaySettings = () => {
     }
   });
   const [customCounts, setCustomCounts] = useState({});
+  const [settlementSettings, setSettlementSettings] = useState({
+    settlementIntervalMinutes: 15
+  });
   const intervalRef = useRef(null);
 
   // Memoized function to update only rotation data (lightweight)
@@ -139,18 +142,46 @@ const SuperadminPaymentGatewaySettings = () => {
     }
   }, []);
 
+  // Fetch settlement settings
+  const fetchSettlementSettings = useCallback(async () => {
+    try {
+      const response = await superadminSettingsService.getSettlementSettings();
+      if (response.success && response.settlement) {
+        // Extract minutes from cron expression (e.g., "*/15 * * * 1-6" -> 15)
+        const cronSchedule = response.settlement.cronSchedule || '*/15 * * * 1-6';
+        const minutesMatch = cronSchedule.match(/^\*\/(\d+)/);
+        const minutes = minutesMatch ? parseInt(minutesMatch[1]) : 15;
+        
+        setSettlementSettings({
+          settlementIntervalMinutes: minutes
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching settlement settings:', err);
+    }
+  }, []);
+
   useEffect(() => {
     // Initial load
     fetchSettings(true);
+    fetchSettlementSettings();
     
     // Set up interval for lightweight rotation data updates (every 2 seconds)
     intervalRef.current = setInterval(() => {
       updateRotationDataOnly();
     }, 2000);
     
+    // Update next settlement time every minute
+    const settlementInterval = setInterval(() => {
+      fetchSettlementSettings();
+    }, 60000);
+    
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+      }
+      if (settlementInterval) {
+        clearInterval(settlementInterval);
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -268,15 +299,30 @@ const SuperadminPaymentGatewaySettings = () => {
     }
 
     try {
+      // Update payment gateway settings
       const response = await superadminSettingsService.updatePaymentGatewaySettings(
         gateways,
         roundRobinRotation.enabled,
         hasCustomCounts ? customCounts : {}
       );
       
+      // Update settlement settings - convert minutes to cron expression
+      try {
+        const cronSchedule = `*/${settlementSettings.settlementIntervalMinutes} * * * 1-6`;
+        await superadminSettingsService.updateSettlementSettings({
+          cronSchedule: cronSchedule
+        });
+        // Refresh settlement settings to get updated next settlement time
+        await fetchSettlementSettings();
+      } catch (settlementErr) {
+        console.error('Error updating settlement settings:', settlementErr);
+        // Don't fail the whole operation if settlement update fails
+        setError(`Payment gateway settings saved, but settlement settings update failed: ${settlementErr.message}`);
+      }
+      
       if (response.success) {
         const rotationMode = response.rotation_mode || 'round-robin';
-        setSuccess(`Payment gateway settings updated successfully! Rotation mode: ${rotationMode}.`);
+        setSuccess(`Settings updated successfully! Rotation mode: ${rotationMode}. Settlement job schedule updated.`);
         
         if (response.round_robin_rotation) {
           setRoundRobinRotation({
@@ -632,6 +678,48 @@ const SuperadminPaymentGatewaySettings = () => {
                 </div>
               );
             })}
+          </div>
+
+          {/* Settlement Settings Section */}
+          <div className="mt-8 pt-8 border-t border-white/10">
+            <div className="flex items-center gap-3 mb-4">
+              <FiClock className="text-accent text-xl" />
+              <h2 className="text-xl font-bold text-white font-['Albert_Sans']">Settlement Job Schedule</h2>
+            </div>
+            <p className="text-white/70 text-sm mb-4 font-['Albert_Sans']">
+              Configure how often the automatic settlement job runs to process paid transactions. Runs Monday to Saturday.
+            </p>
+
+            <div className="space-y-4">
+              {/* Settlement Interval Input */}
+              <div>
+                <label className="block text-white font-medium mb-2 font-['Albert_Sans']">
+                  Settlement Interval (Minutes)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="1"
+                    max="1440"
+                    value={settlementSettings.settlementIntervalMinutes}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 1;
+                      if (value >= 1 && value <= 1440) {
+                        setSettlementSettings(prev => ({ ...prev, settlementIntervalMinutes: value }));
+                      }
+                    }}
+                    className="w-32 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/50"
+                  />
+                  <span className="text-white/70 text-sm">minutes</span>
+                </div>
+                <p className="text-white/60 text-xs mt-2">
+                  The settlement job will run every <strong className="text-white">{settlementSettings.settlementIntervalMinutes}</strong> minutes, Monday to Saturday.
+                  <br />
+                  <span className="text-white/50">Example: 15 = every 15 minutes, 60 = every hour, 1440 = once per day</span>
+                </p>
+              </div>
+
+            </div>
           </div>
 
           {/* Info Box */}

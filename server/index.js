@@ -18,7 +18,7 @@ if (result.error) {
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
-const { settlementJob, manualSettlement } = require('./jobs/settlementJob'); // ✅ Import backfill
+const { initializeSettlementJob, restartSettlementJob, manualSettlement } = require('./jobs/settlementJob'); // ✅ Import settlement job functions
 const Transaction = require('./models/Transaction');
 const Payout = require('./models/Payout');
 const User = require('./models/User');
@@ -380,9 +380,9 @@ async function startServer() {
         await connectDB();
         console.log('✅ MongoDB connection established');
         
-        // Start settlement job after DB connection
-        settlementJob.start();
-        console.log('✅ Settlement cron job started - runs daily at 4:00 PM IST');
+        // Initialize and start settlement job after DB connection
+        await initializeSettlementJob();
+        console.log('✅ Settlement cron job initialized and started');
         
         // Only listen if not in Vercel serverless environment
         if (!process.env.VERCEL) {

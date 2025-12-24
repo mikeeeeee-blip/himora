@@ -1,68 +1,95 @@
 // utils/settlementCalculator.js
+const Settings = require('../models/Settings');
 
 /**
- * Calculate expected settlement date with 4 PM cutoff rule
- * Settlement happens AFTER 4 PM on the settlement date
+ * Get settlement settings from database
  */
-function calculateExpectedSettlementDate(paidAt) {
+async function getSettlementSettings() {
+    const settings = await Settings.getSettings();
+    return settings.settlement || {
+        settlementDays: 1,
+        settlementHour: 16,
+        settlementMinute: 0,
+        cutoffHour: 16,
+        cutoffMinute: 0,
+        skipWeekends: true
+    };
+}
+
+/**
+ * Calculate expected settlement date with customizable settings
+ * Settlement happens AFTER the configured settlement time on the settlement date
+ */
+async function calculateExpectedSettlementDate(paidAt) {
+    const settlementSettings = await getSettlementSettings();
     const paymentDate = new Date(paidAt);
     const paymentHour = paymentDate.getHours();
+    const paymentMinute = paymentDate.getMinutes();
     
-    // If payment is after 4 PM (16:00), consider it as next day
-    const effectivePaymentDate = paymentHour >= 16 
+    // Check if payment is after cutoff time
+    const isAfterCutoff = paymentHour > settlementSettings.cutoffHour || 
+                         (paymentHour === settlementSettings.cutoffHour && paymentMinute >= settlementSettings.cutoffMinute);
+    
+    // If payment is after cutoff time, consider it as next day
+    const effectivePaymentDate = isAfterCutoff 
         ? new Date(paymentDate.getTime() + 24 * 60 * 60 * 1000) // Add 1 day
         : paymentDate;
     
-    // Calculate T+1 from effective payment date
+    // Calculate T+N from effective payment date
     let settlementDate = new Date(effectivePaymentDate);
-    settlementDate.setDate(settlementDate.getDate() + 1); // T+1
+    settlementDate.setDate(settlementDate.getDate() + settlementSettings.settlementDays);
     
-    // Handle weekends
-    const dayOfWeek = settlementDate.getDay();
-    
-    if (dayOfWeek === 0) { // Sunday -> Monday
-        settlementDate.setDate(settlementDate.getDate() + 1);
-    } else if (dayOfWeek === 6) { // Saturday -> Monday
-        settlementDate.setDate(settlementDate.getDate() + 2);
+    // Handle weekends if enabled
+    if (settlementSettings.skipWeekends) {
+        const dayOfWeek = settlementDate.getDay();
+        
+        if (dayOfWeek === 0) { // Sunday -> Monday
+            settlementDate.setDate(settlementDate.getDate() + 1);
+        } else if (dayOfWeek === 6) { // Saturday -> Monday
+            settlementDate.setDate(settlementDate.getDate() + 2);
+        }
     }
     
-    // ✅ NEW: Set settlement time to 4 PM (16:00) of the settlement date
-    settlementDate.setHours(16, 0, 0, 0);
+    // Set settlement time to configured hour and minute
+    settlementDate.setHours(settlementSettings.settlementHour, settlementSettings.settlementMinute, 0, 0);
     
     return settlementDate;
 }
 
 /**
  * Check if transaction is ready for settlement
- * Now checks if current time >= settlement date at 4 PM
+ * Now checks if current time >= settlement date at configured time
  */
-function isReadyForSettlement(paidAt, expectedSettlementDate) {
+async function isReadyForSettlement(paidAt, expectedSettlementDate) {
+    const settlementSettings = await getSettlementSettings();
     const now = new Date();
     const currentDay = now.getDay();
-    const currentHour = now.getHours();
     
-    // Don't settle on weekends
-    if (currentDay === 0 || currentDay === 6) {
+    // Don't settle on weekends if enabled
+    if (settlementSettings.skipWeekends && (currentDay === 0 || currentDay === 6)) {
         return false;
     }
     
     const settlementTime = new Date(expectedSettlementDate);
     
-    // ✅ NEW: Must be after 4 PM on the settlement date
-    // Ready if current time >= expected settlement time (which is 4 PM on settlement date)
+    // Must be after configured settlement time on the settlement date
+    // Ready if current time >= expected settlement time
     return now >= settlementTime;
 }
 
 /**
  * Get settlement status message for display
  */
-function getSettlementStatusMessage(paidAt, expectedSettlementDate) {
+async function getSettlementStatusMessage(paidAt, expectedSettlementDate) {
+    const settlementSettings = await getSettlementSettings();
     const now = new Date();
     const paymentDate = new Date(paidAt);
     const paymentHour = paymentDate.getHours();
+    const paymentMinute = paymentDate.getMinutes();
     const settlementDate = new Date(expectedSettlementDate);
     
-    const isAfter4PM = paymentHour >= 16;
+    const isAfterCutoff = paymentHour > settlementSettings.cutoffHour || 
+                          (paymentHour === settlementSettings.cutoffHour && paymentMinute >= settlementSettings.cutoffMinute);
     
     if (now >= settlementDate) {
         return 'Ready for settlement';
@@ -73,26 +100,26 @@ function getSettlementStatusMessage(paidAt, expectedSettlementDate) {
     const hoursUntil = Math.ceil(msUntilSettlement / (1000 * 60 * 60));
     const daysUntil = Math.ceil(msUntilSettlement / (1000 * 60 * 60 * 24));
     
-    // Format settlement date nicely
+    // Format settlement date and time nicely
     const settlementDateStr = settlementDate.toLocaleDateString('en-IN', { 
         weekday: 'short', 
         month: 'short', 
         day: 'numeric' 
     });
     
+    const settlementTimeStr = `${String(settlementSettings.settlementHour).padStart(2, '0')}:${String(settlementSettings.settlementMinute).padStart(2, '0')}`;
+    
     if (hoursUntil < 24) {
-        return `Settles today at 4 PM`;
+        return `Settles today at ${settlementTimeStr}`;
     }
     
-    if (isAfter4PM) {
-        return `Settles on ${settlementDateStr} at 4 PM (paid after 4 PM - T+2)`;
-    }
-    
-    return `Settles on ${settlementDateStr} at 4 PM (T+1)`;
+    const tPlusDays = settlementSettings.settlementDays + (isAfterCutoff ? 1 : 0);
+    return `Settles on ${settlementDateStr} at ${settlementTimeStr} (T+${tPlusDays})`;
 }
 
 module.exports = {
     calculateExpectedSettlementDate,
     isReadyForSettlement,
-    getSettlementStatusMessage
+    getSettlementStatusMessage,
+    getSettlementSettings
 };

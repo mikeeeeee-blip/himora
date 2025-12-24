@@ -7,6 +7,8 @@ const {
     getAllMerchantsData,
     getPaymentGatewaySettings,
     updatePaymentGatewaySettings,
+    getSettlementSettings,
+    updateSettlementSettings,
     blockMerchantFunds
 } = require('../controllers/superAdminController');
 const { deleteUser, changeUserPassword } = require('../controllers/authController');
@@ -25,9 +27,13 @@ const {
 router.get('/dashboard/stats', subSuperAdminAuth, subSuperAdminAuth.checkAccess('canViewDashboard'), getDashboardStats);
 router.get('/merchants/comprehensive', subSuperAdminAuth, subSuperAdminAuth.checkAccess('canViewMerchants'), getAllMerchantsData);
 
-// Payment Gateway Settings routes (SuperAdmin only)
-router.get('/settings/payment-gateways', auth, getPaymentGatewaySettings);
-router.put('/settings/payment-gateways', auth, updatePaymentGatewaySettings);
+// Payment Gateway Settings routes (SuperAdmin and Sub-SuperAdmin with permission)
+router.get('/settings/payment-gateways', subSuperAdminAuth, subSuperAdminAuth.checkAccess('canManageSettings'), getPaymentGatewaySettings);
+router.put('/settings/payment-gateways', subSuperAdminAuth, subSuperAdminAuth.checkAccess('canManageSettings'), updatePaymentGatewaySettings);
+
+// Settlement Settings routes (SuperAdmin and Sub-SuperAdmin with permission)
+router.get('/settings/settlement', subSuperAdminAuth, subSuperAdminAuth.checkAccess('canManageSettings'), getSettlementSettings);
+router.put('/settings/settlement', subSuperAdminAuth, subSuperAdminAuth.checkAccess('canManageSettings'), updateSettlementSettings);
 
 // User management routes (SuperAdmin only)
 router.delete('/users/:userId', auth, deleteUser);
