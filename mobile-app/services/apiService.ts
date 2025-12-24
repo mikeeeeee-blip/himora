@@ -18,8 +18,10 @@ apiClient.interceptors.request.use(
     const token = await authService.getToken();
     
     if (token) {
-      // Use x-auth-token header to match client implementation
-      config.headers['x-auth-token'] = token;
+      // Trim token and use x-auth-token header to match client implementation
+      const trimmedToken = token.trim();
+      config.headers['x-auth-token'] = trimmedToken;
+      console.log('API Request:', config.url, 'Token:', trimmedToken.substring(0, 20) + '...');
     } else {
       // If no token and this is not a public endpoint, reject the request
       // Public endpoints: login, signup, webhooks

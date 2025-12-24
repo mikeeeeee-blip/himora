@@ -82,6 +82,9 @@ class AuthService {
       if (!token) {
         throw new Error('No token received from server');
       }
+      
+      // Trim token to remove any whitespace
+      const trimmedToken = token.trim();
 
       if (!user) {
         throw new Error('No user data received from server');
@@ -100,18 +103,22 @@ class AuthService {
         normalizedRole = USER_ROLES.ADMIN;
       }
       
-      // Store token and role in AsyncStorage
-      await AsyncStorage.setItem('token', token);
+      // Store token and role in AsyncStorage (use trimmed token)
+      await AsyncStorage.setItem('token', trimmedToken);
       await AsyncStorage.setItem('role', normalizedRole);
       if (user.businessName) {
         await AsyncStorage.setItem('businessName', user.businessName);
       }
       
-      this.token = token;
+      // Update in-memory state immediately (before AsyncStorage completes)
+      this.token = trimmedToken;
       this.role = normalizedRole;
+      this.authLoaded = true; // Mark as loaded so ensureAuthLoaded doesn't reload
 
       console.log('Login successful, role:', normalizedRole);
-      return { token, role: normalizedRole };
+      console.log('Token stored, length:', trimmedToken.length);
+      console.log('Token preview:', trimmedToken.substring(0, 20) + '...');
+      return { token: trimmedToken, role: normalizedRole };
     } catch (error: any) {
       console.error('Login error details:', {
         message: error.message,
