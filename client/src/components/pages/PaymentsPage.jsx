@@ -327,12 +327,12 @@ const PaymentsPage = () => {
                 <div className="relative flex gap-2">
                   <input 
                     type="text" 
-                    value={createdLink.paymentLink || createdLink.payment_url || 'Link generated'} 
+                    value={createdLink.paymentLink || createdLink.payment_url || createdLink.raw?.link_url || 'Link generated'} 
                     readOnly 
                     className="flex-1 px-4 py-3 border-2 border-white/10 rounded-lg bg-bg-secondary text-green-400 text-sm font-mono focus:outline-none focus:border-accent pr-24"
                   />
                   <button 
-                    onClick={() => copyToClipboard(createdLink.paymentLink || createdLink.payment_url)} 
+                    onClick={() => copyToClipboard(createdLink.paymentLink || createdLink.payment_url || createdLink.raw?.link_url)} 
                     className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-3 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-2"
                     title="Copy to clipboard"
                   >
@@ -340,7 +340,17 @@ const PaymentsPage = () => {
                     <span className="hidden sm:inline">Copy</span>
                   </button>
                   <button 
-                    onClick={() => openPaymentLink(createdLink.paymentLink || createdLink.payment_url || createdLink.paytmPaymentUrl, createdLink.paytmParams)} 
+                    onClick={() => {
+                      const paymentUrl = createdLink.paymentLink || createdLink.payment_url || createdLink.raw?.link_url;
+                      // For Cashfree, open direct link; for others use openPaymentLink
+                      if (createdLink.raw?.link_url || createdLink.gateway_used === 'cashfree') {
+                        if (paymentUrl) {
+                          window.open(paymentUrl, '_blank', 'noopener,noreferrer');
+                        }
+                      } else {
+                        openPaymentLink(paymentUrl || createdLink.paytmPaymentUrl, createdLink.paytmParams);
+                      }
+                    }}
                     className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-500 text-white px-4 py-3 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-2"
                     title="Open payment link"
                   >

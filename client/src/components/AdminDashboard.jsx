@@ -1956,6 +1956,7 @@ const AdminDashboard = () => {
                           value={
                             createdPaymentLink.paymentLink || 
                             createdPaymentLink.payment_url || 
+                            createdPaymentLink.raw?.link_url || // Cashfree Payment Links API
                             createdPaymentLink.raw?.payment_url ||
                             createdPaymentLink.raw?.paymentLink ||
                             ""
@@ -1969,6 +1970,7 @@ const AdminDashboard = () => {
                               copyPaymentLinkToClipboard(
                                 createdPaymentLink.paymentLink || 
                                 createdPaymentLink.payment_url || 
+                                createdPaymentLink.raw?.link_url || // Cashfree Payment Links API
                                 createdPaymentLink.raw?.payment_url ||
                                 createdPaymentLink.raw?.paymentLink
                               )
@@ -1981,14 +1983,16 @@ const AdminDashboard = () => {
                           </button>
                           <button
                             onClick={() => {
+                              // Get payment URL - prioritize Cashfree link_url
                               const paymentUrl = createdPaymentLink.paymentLink || 
                                 createdPaymentLink.payment_url || 
+                                createdPaymentLink.raw?.link_url || // Cashfree Payment Links API direct link
                                 createdPaymentLink.raw?.payment_url ||
                                 createdPaymentLink.raw?.paymentLink;
                               
                               // For Cashfree, it's a direct URL - just open it
                               const gatewayUsed = createdPaymentLink?.gateway_used || createdPaymentLink?.raw?.gateway_used;
-                              if (gatewayUsed === 'cashfree') {
+                              if (gatewayUsed === 'cashfree' || createdPaymentLink.raw?.link_url) {
                                 if (paymentUrl) {
                                   window.open(paymentUrl, '_blank', 'noopener,noreferrer');
                                 }

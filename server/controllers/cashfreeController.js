@@ -325,6 +325,289 @@ exports.createCashfreePaymentLink = async (req, res) => {
     }
 };
 
+// ============ CREATE CASHFREE PAYMENT LINK (Payment Links API) ============
+/**
+ * Create Cashfree Payment Link using Payment Links API
+ * Reference: https://www.cashfree.com/docs/api-reference/payments/previous/v2023-08-01/payment-links/create
+ * 
+ * This uses the dedicated Payment Links API endpoint: POST /pg/links
+ * Different from order-based payment links - this creates a shareable payment link
+ */
+exports.createCashfreePaymentLinkAPI = async (req, res) => {
+    let transactionId = null;
+    try {
+        // Get merchant info from apiKeyAuth middleware (sets req.merchantId and req.merchantName)
+        const merchantId = req.merchantId || req.user?._id;
+        const merchantName = req.merchantName || req.user?.name;
+        
+        if (!merchantId || !merchantName) {
+            return res.status(401).json({
+                success: false,
+                error: 'Merchant authentication required. Please provide a valid API key in x-api-key header.'
+            });
+        }
+
+        const {
+            amount,
+            customer_name,
+            customer_email,
+            customer_phone,
+            description,
+            callback_url,
+            success_url,
+            failure_url,
+            link_id, // Optional: custom link ID
+            link_partial_payments, // Optional: allow partial payments
+            link_minimum_partial_amount, // Optional: minimum partial amount
+            link_expiry_time, // Optional: ISO 8601 format expiry time
+            link_auto_reminders, // Optional: enable auto reminders
+            link_notes, // Optional: key-value pairs for additional info
+            order_splits // Optional: vendor splits if Easy Split enabled
+        } = req.body;
+
+        // Validate required fields
+        if (!amount || amount <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid amount'
+            });
+        }
+
+        if (!customer_name || !customer_email || !customer_phone) {
+            return res.status(400).json({
+                success: false,
+                error: 'Customer details are required (customer_name, customer_email, customer_phone)'
+            });
+        }
+
+        // Clean phone number (remove non-digits)
+        const cleanPhone = customer_phone.replace(/\D/g, '');
+
+        // Generate transaction and order IDs
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        transactionId = `TXN_${timestamp}_${randomSuffix}`;
+        const orderId = `ORDER_${timestamp}_${randomSuffix}`;
+        
+        // Use custom link_id if provided, otherwise generate one
+        const finalLinkId = link_id || `LINK_${timestamp}_${randomSuffix}`;
+
+        const amountValue = parseFloat(amount);
+
+        // Build callback URLs
+        const backendBaseUrl = (process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5001').replace(/\/$/, '');
+        const cashfreeCallbackUrl = `${backendBaseUrl}/api/cashfree/callback?transaction_id=${encodeURIComponent(transactionId)}`;
+        const cashfreeWebhookUrl = `${backendBaseUrl}/api/payments/webhook`;
+
+        // Use provided URLs or defaults
+        const finalCallbackUrl = callback_url || success_url || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
+        const finalFailureUrl = failure_url || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`;
+
+        // Calculate commission and settlement
+        const commissionData = calculatePayinCommission(amountValue);
+        const expectedSettlement = calculateExpectedSettlementDate(new Date());
+
+        // Save transaction to database (status: 'created' - will be updated when payment is initiated)
+        const transaction = new Transaction({
+            transactionId: transactionId,
+            orderId: orderId,
+            merchantId: merchantId,
+            merchantName: merchantName,
+            customerId: `CUST_${cleanPhone}_${Date.now()}`,
+            customerName: customer_name,
+            customerEmail: customer_email,
+            customerPhone: cleanPhone,
+            amount: amountValue,
+            currency: 'INR',
+            description: description || `Payment for ${merchantName}`,
+            status: 'created',
+            paymentGateway: 'cashfree',
+            successUrl: finalCallbackUrl,
+            failureUrl: finalFailureUrl,
+            callbackUrl: cashfreeCallbackUrl,
+            commission: commissionData.commission,
+            netAmount: parseFloat((amountValue - commissionData.commission).toFixed(2)),
+            settlementStatus: 'unsettled',
+            expectedSettlementDate: expectedSettlement,
+            // Store the environment used for this transaction
+            cashfreeEnvironment: CASHFREE_ENVIRONMENT
+        });
+
+        await transaction.save();
+        console.log('✅ Transaction saved to database (status: created)');
+
+        // Determine environment from CASHFREE_ENVIRONMENT or default to production
+        const responseEnvironment = CASHFREE_ENVIRONMENT === 'sandbox' ? 'sandbox' : 'production';
+
+        // Prepare Payment Link request body according to Cashfree API documentation
+        // Reference: https://www.cashfree.com/docs/api-reference/payments/previous/v2023-08-01/payment-links/create
+        const paymentLinkData = {
+            link_id: finalLinkId, // Unique identifier for the link (max 50 chars, alphanumeric, - and _ allowed)
+            link_amount: amountValue, // Amount to be collected
+            link_currency: 'INR', // Currency (default INR)
+            link_purpose: description || `Payment for ${merchantName}`, // Brief description (max 500 chars)
+            customer_details: {
+                customer_name: customer_name,
+                customer_phone: cleanPhone,
+                customer_email: customer_email
+            },
+            link_meta: {
+                notify_url: cashfreeWebhookUrl, // Webhook URL for payment notifications
+                return_url: finalCallbackUrl, // Return URL after payment
+                upi_intent: false // Set to true if you want UPI intent flow
+            }
+        };
+
+        // Optional fields
+        if (link_partial_payments !== undefined) {
+            paymentLinkData.link_partial_payments = link_partial_payments;
+        }
+        if (link_minimum_partial_amount !== undefined) {
+            paymentLinkData.link_minimum_partial_amount = link_minimum_partial_amount;
+        }
+        if (link_expiry_time) {
+            paymentLinkData.link_expiry_time = link_expiry_time; // ISO 8601 format
+        }
+        if (link_auto_reminders !== undefined) {
+            paymentLinkData.link_auto_reminders = link_auto_reminders;
+        }
+        if (link_notes && typeof link_notes === 'object') {
+            paymentLinkData.link_notes = link_notes; // Key-value pairs (max 5 pairs)
+        }
+        if (order_splits && Array.isArray(order_splits)) {
+            paymentLinkData.order_splits = order_splits; // Vendor splits if Easy Split enabled
+        }
+
+        // Optional: Configure notifications
+        paymentLinkData.link_notify = {
+            send_email: true,
+            send_sms: false // Set to true if you want SMS notifications
+        };
+
+        console.log('\n🚀 Creating Cashfree Payment Link using Payment Links API...');
+        console.log('   Environment:', responseEnvironment);
+        console.log('   Link ID:', finalLinkId);
+        console.log('   Amount:', amountValue);
+        console.log('   Customer:', customer_name, customer_email);
+
+        // Create Payment Link using Cashfree Payment Links API
+        const paymentLinkResponse = await axios.post(
+            `${CASHFREE_BASE_URL}/pg/links`,
+            paymentLinkData,
+            {
+                headers: {
+                    'x-client-id': CASHFREE_APP_ID,
+                    'x-client-secret': CASHFREE_SECRET_KEY,
+                    'x-api-version': CASHFREE_API_VERSION, // 2023-08-01
+                    'Content-Type': 'application/json',
+                },
+                timeout: 30000, // 30 second timeout
+            }
+        );
+
+        if (!paymentLinkResponse.data) {
+            throw new Error('Invalid response from Cashfree Payment Links API');
+        }
+
+        const linkData = paymentLinkResponse.data;
+        const cfLinkId = linkData.cf_link_id;
+        const linkUrl = linkData.link_url;
+        const linkStatus = linkData.link_status;
+        const linkQrCode = linkData.link_qrcode; // Base64 encoded QR code
+
+        console.log('✅ Payment Link created successfully');
+        console.log('   CF Link ID:', cfLinkId);
+        console.log('   Link Status:', linkStatus);
+        console.log('   Link URL:', linkUrl);
+
+        // Update transaction with Cashfree link ID
+        await Transaction.findOneAndUpdate(
+            { transactionId: transactionId },
+            { 
+                cashfreeOrderId: cfLinkId, // Store link ID in cashfreeOrderId field
+                cashfreeLinkId: cfLinkId // Also store in dedicated field if exists in schema
+            }
+        );
+
+        const responseData = {
+            success: true,
+            transaction_id: transactionId,
+            order_id: orderId,
+            link_id: finalLinkId,
+            cf_link_id: cfLinkId,
+            link_status: linkStatus,
+            link_amount: amountValue,
+            link_currency: 'INR',
+            link_amount_paid: linkData.link_amount_paid || 0,
+            merchant_id: merchantId.toString(),
+            merchant_name: merchantName,
+            callback_url: finalCallbackUrl,
+            failure_url: finalFailureUrl,
+            webhook_url: cashfreeWebhookUrl,
+            environment: responseEnvironment,
+            gateway_used: 'cashfree',
+            gateway_name: 'Cashfree',
+            payment_data: {
+                amount: amountValue,
+                currency: 'INR',
+                customer_name: customer_name,
+                customer_email: customer_email,
+                customer_phone: cleanPhone,
+                description: description || `Payment for ${merchantName}`,
+                order_id: orderId,
+                transaction_id: transactionId,
+                merchant_id: merchantId.toString(),
+                merchant_name: merchantName
+            },
+            message: 'Payment link created successfully using Cashfree Payment Links API. Share the link_url with customer.',
+            link_url: linkUrl,
+            link_qrcode: linkQrCode, // Base64 encoded QR code for scanning
+            paymentLink: linkUrl, // Alias for backward compatibility
+            payment_url: linkUrl // Alias for backward compatibility
+        };
+
+        console.log('✅ Payment Link response prepared');
+        return res.json(responseData);
+
+    } catch (error) {
+        console.error('\n❌ Cashfree Payment Link Creation Error (Payment Links API):');
+        console.error('   Transaction ID:', transactionId || 'N/A');
+        console.error('   Error Type:', error.constructor.name);
+        console.error('   Error Message:', error.message);
+        
+        if (error.response) {
+            console.error('   Cashfree API Response Status:', error.response.status);
+            console.error('   Cashfree API Response Data:', JSON.stringify(error.response.data, null, 2));
+        }
+        
+        console.error('   Stack Trace:', error.stack);
+        console.error('='.repeat(80) + '\n');
+
+        // If transaction was created, mark it as failed
+        if (transactionId) {
+            try {
+                await Transaction.findOneAndUpdate(
+                    { transactionId: transactionId },
+                    {
+                        status: 'failed',
+                        failureReason: error.response?.data?.message || error.message || 'Payment link creation failed'
+                    }
+                );
+            } catch (dbError) {
+                console.error('   Failed to update transaction status:', dbError.message);
+            }
+        }
+
+        return res.status(error.response?.status || 500).json({
+            success: false,
+            error: 'Failed to create payment link',
+            detail: error.response?.data?.message || error.message,
+            code: error.response?.data?.code,
+            type: error.response?.data?.type
+        });
+    }
+};
+
 // ============ CASHFREE WEBHOOK HANDLER ============
 /**
  * Handle Cashfree payment webhook

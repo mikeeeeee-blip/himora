@@ -375,22 +375,27 @@ console.log(url);
       // Normalize API response for UI consumption
       const api = response.data || {};
       const normalized = {
-        paymentLink: api.payment_url || null,
-        linkId: api.payment_link_id || api.order_id || null,
+        // For Cashfree Payment Links API, use link_url; otherwise use payment_url
+        paymentLink: api.link_url || api.payment_url || api.paymentLink || null,
+        payment_url: api.link_url || api.payment_url || api.paymentLink || null, // Alias for consistency
+        linkId: api.link_id || api.cf_link_id || api.payment_link_id || api.order_id || null,
         orderId: api.order_id || api.transaction_id || null,
         transactionId: api.transaction_id || null,
-        amount: api.order_amount || paymentData?.amount || null,
-        currency: api.order_currency || 'INR',
-        status: 'created',
+        amount: api.link_amount || api.order_amount || paymentData?.amount || null,
+        currency: api.link_currency || api.order_currency || 'INR',
+        status: api.link_status || api.status || 'created',
         customerName: paymentData?.customerName || null,
         merchantName: api.merchant_name || null,
         merchantId: api.merchant_id || null,
         referenceId: api.reference_id || null,
         createdAt: new Date().toISOString(),
-        qrCode: null, // Not provided in this API
+        // For Cashfree Payment Links API, include QR code
+        qrCode: api.link_qrcode || null,
         expiresAt: api.expires_at ? new Date(api.expires_at * 1000).toISOString() : null,
         message: api.message || 'Payment link created successfully',
         success: api.success || false,
+        // Gateway information
+        gateway_used: api.gateway_used || null,
         // Paytm specific fields
         paytmParams: api.paytm_params || null,
         paytmPaymentUrl: api.payment_url || null,
