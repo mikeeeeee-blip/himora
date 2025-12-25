@@ -116,50 +116,48 @@ const AdminDashboard = () => {
     try {
       setDashboardStats((prev) => ({ ...prev, loading: true }));
 
-      // ✅ Fetch balance (requires JWT token only)
-      let balanceData = null;
-      let transactionsData = null;
-      let payoutsData = null;
+      // ✅ Fetch all data in parallel for faster loading
+      const [balanceResult, transactionsResult, payoutsResult] = await Promise.allSettled([
+        paymentService.getBalance().catch(err => {
+          console.error("❌ Balance fetch error:", err.message);
+          return null;
+        }),
+        paymentService.getTransactions().catch(err => {
+          console.error("❌ Transactions fetch error:", err.message);
+          // Return empty data if API key not found
+          return {
+            transactions: [],
+            summary: {
+              total_transactions: 0,
+              successful_transactions: 0,
+            },
+          };
+        }),
+        paymentService.getPayouts().catch(err => {
+          console.error("❌ Payouts fetch error:", err.message);
+          return {
+            payouts: [],
+            summary: {
+              total_payout_requests: 0,
+            },
+          };
+        })
+      ]);
 
-      try {
-        balanceData = await paymentService.getBalance();
-        console.log("✅ Balance fetched:", balanceData);
-        // Extract merchant name from balance data
-        if (balanceData?.merchant?.merchantName) {
-          setMerchantName(balanceData.merchant.merchantName);
-        }
-      } catch (err) {
-        console.error("❌ Balance fetch error:", err.message);
-      }
+      // Extract results
+      const balanceData = balanceResult.status === 'fulfilled' ? balanceResult.value : null;
+      const transactionsData = transactionsResult.status === 'fulfilled' ? transactionsResult.value : {
+        transactions: [],
+        summary: { total_transactions: 0, successful_transactions: 0 },
+      };
+      const payoutsData = payoutsResult.status === 'fulfilled' ? payoutsResult.value : {
+        payouts: [],
+        summary: { total_payout_requests: 0 },
+      };
 
-      // ✅ Fetch transactions (requires API key - may fail if no API key)
-      try {
-        transactionsData = await paymentService.getTransactions();
-        console.log("✅ Transactions fetched:", transactionsData);
-      } catch (err) {
-        console.error("❌ Transactions fetch error:", err.message);
-        // Set empty data if API key not found
-        transactionsData = {
-          transactions: [],
-          summary: {
-            total_transactions: 0,
-            successful_transactions: 0,
-          },
-        };
-      }
-
-      // ✅ Fetch payouts (requires JWT token only)
-      try {
-        payoutsData = await paymentService.getPayouts();
-        console.log("✅ Payouts fetched:", payoutsData);
-      } catch (err) {
-        console.error("❌ Payouts fetch error:", err.message);
-        payoutsData = {
-          payouts: [],
-          summary: {
-            total_payout_requests: 0,
-          },
-        };
+      // Extract merchant name from balance data
+      if (balanceData?.merchant?.merchantName) {
+        setMerchantName(balanceData.merchant.merchantName);
       }
 
       setDashboardStats({
@@ -1472,9 +1470,16 @@ const AdminDashboard = () => {
 
                 {/* Metric Cards Grid - 2 rows of 4 cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 lg:gap-6">
-                  {metricCards.map((card, index) => (
-                    <MetricCard key={index} {...card} />
-                  ))}
+                  {dashboardStats.loading ? (
+                    // Show skeleton cards while loading
+                    Array.from({ length: 8 }).map((_, index) => (
+                      <MetricCard key={index} loading={true} />
+                    ))
+                  ) : (
+                    metricCards.map((card, index) => (
+                      <MetricCard key={index} {...card} loading={false} />
+                    ))
+                  )}
                 </div>
 
               </div>

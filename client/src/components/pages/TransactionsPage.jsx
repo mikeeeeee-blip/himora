@@ -1048,51 +1048,37 @@ const TransactionsPage = () => {
                     <div className="transactions-container">
                       {/* PAYIN TAB */}
                       {activeTab === "payin" && transactions.length > 0 ? (
-                        <div className="bg-[#122D32] border border-white/10 rounded-xl overflow-auto shadow-lg">
-                          <table className="w-full border-collapse">
-                            <thead className="bg-green-600/30 sticky top-0 z-10">
-                              <tr>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  Transaction ID
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  Order ID
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  Description
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  Customer
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  Amount
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  Commission
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  GST Rate Amount
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  Net Amount
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  Status
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  Payment Method
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  Gateway
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  Created At
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']">
-                                  Paid At
-                                </th>
-                              </tr>
-                            </thead>
+                        <div className="bg-[#122D32] border border-white/10 rounded-xl shadow-lg w-full overflow-hidden">
+                          <div className="overflow-x-auto w-full">
+                            <table className="w-full border-collapse" style={{ tableLayout: 'fixed', width: '100%' }}>
+                              <thead className="bg-green-600/30 sticky top-0 z-10">
+                                <tr>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '15%' }}>
+                                    Transaction ID
+                                  </th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '12%' }}>
+                                    Order ID
+                                  </th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '18%' }}>
+                                    Customer
+                                  </th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '10%' }}>
+                                    Amount
+                                  </th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '10%' }}>
+                                    Status
+                                  </th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '12%' }}>
+                                    Payment Method
+                                  </th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '10%' }}>
+                                    Gateway
+                                  </th>
+                                  <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '13%' }}>
+                                    Created At
+                                  </th>
+                                </tr>
+                              </thead>
                             <tbody className="bg-[#263F43]">
                               {transactions.map((transaction, index) => (
                                 <tr
@@ -1111,60 +1097,32 @@ const TransactionsPage = () => {
                                     )
                                   }
                                 >
-                                  <td className="px-4 py-3 text-sm text-white border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                                  <td className="px-3 py-3 text-sm text-white border-b border-white/10 font-['Albert_Sans'] truncate" title={transaction.transaction_id || transaction.transactionId || "-"}>
                                     {transaction.transaction_id ||
                                       transaction.transactionId ||
                                       "-"}
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-white border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                                  <td className="px-3 py-3 text-sm text-white border-b border-white/10 font-['Albert_Sans'] truncate" title={transaction.order_id || transaction.orderId || "-"}>
                                     {transaction.order_id ||
                                       transaction.orderId ||
                                       "-"}
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-white border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
-                                    {transaction.description ||
-                                      transaction.description ||
-                                      "-"}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-white border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
-                                    <div className="font-medium">
+                                  <td className="px-3 py-3 text-sm text-white border-b border-white/10 font-['Albert_Sans']">
+                                    <div className="font-medium truncate" title={transaction.customer_name || transaction.customer?.name || "-"}>
                                       {transaction.customer_name ||
                                         transaction.customer?.name ||
                                         "-"}
                                     </div>
-                                    <div className="text-xs text-white/70 mt-0.5">
+                                    <div className="text-xs text-white/70 mt-0.5 truncate" title={transaction.customer_email || transaction.customer?.email || "-"}>
                                       {transaction.customer_email ||
                                         transaction.customer?.email ||
                                         "-"}
                                     </div>
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                                  <td className="px-3 py-3 text-sm text-white font-semibold border-b border-white/10 font-['Albert_Sans']">
                                     {formatAmount(transaction.amount)}
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
-                                    {formatAmount(transaction.commission)}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
-                                    {(() => {
-                                      // Calculate GST amount
-                                      // GST rate is 18% (from commissionCalculator.js)
-                                      const baseRate = 3.8; // 3.8% base commission rate
-                                      const gstRate = 18; // 18% GST rate
-                                      let gstAmount = 0;
-                                      
-                                      if (transaction.amount && transaction.amount > 0) {
-                                        // Calculate base commission first, then GST on it
-                                        const baseCommission = (transaction.amount * baseRate) / 100;
-                                        gstAmount = (baseCommission * gstRate) / 100;
-                                      }
-                                      
-                                      return formatAmount(gstAmount);
-                                    })()}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-white font-semibold border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
-                                    {formatAmount(transaction.netAmount)}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm border-b border-white/10 whitespace-nowrap">
+                                  <td className="px-3 py-3 text-sm border-b border-white/10">
                                     <span
                                       className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase font-['Albert_Sans'] ${getStatusClass(
                                         transaction.status
@@ -1173,31 +1131,27 @@ const TransactionsPage = () => {
                                       {transaction.status || "Pending"}
                                     </span>
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-white border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                                  <td className="px-3 py-3 text-sm text-white border-b border-white/10 font-['Albert_Sans'] truncate">
                                     {transaction.payment_method ||
                                       transaction.paymentMethod ||
                                       "-"}
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-white border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                                  <td className="px-3 py-3 text-sm text-white border-b border-white/10 font-['Albert_Sans'] truncate">
                                     {transaction.payment_gateway ||
                                       transaction.paymentGateway ||
                                       "-"}
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-white/90 border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
+                                  <td className="px-3 py-3 text-sm text-white/90 border-b border-white/10 font-['Albert_Sans']">
                                     {formatDate(
                                       transaction.created_at ||
                                         transaction.createdAt
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-white/90 border-b border-white/10 whitespace-nowrap font-['Albert_Sans']">
-                                    {formatDate(
-                                      transaction.paid_at || transaction.paidAt
                                     )}
                                   </td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
+                          </div>
                         </div>
                       ) : activeTab === "payin" && transactions.length === 0 ? (
                         <div className="empty-state">

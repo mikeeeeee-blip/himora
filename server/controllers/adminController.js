@@ -87,8 +87,62 @@ exports.getMyBalance = async (req, res) => {
     try {
         const merchantObjectId =  new mongoose.Types.ObjectId(req.merchantId);
 
-        // Fetch merchant to get blocked balance
-        const merchant = await User.findById(req.merchantId);
+        // ✅ OPTIMIZATION: Run independent queries in parallel
+        const [merchant, settledAgg, unsettledAgg, nextUnsettledTransaction, todayData, completedPayoutAgg, pendingPayoutAgg] = await Promise.all([
+            // Fetch merchant to get blocked balance
+            User.findById(req.merchantId),
+            
+            // Aggregate settled transactions (use stored netAmount for accurate calculation)
+            Transaction.aggregate([
+                { $match: { merchantId: merchantObjectId, status: 'paid', settlementStatus: 'settled' } },
+                {
+                    $group: {
+                        _id: null,
+                        settledRevenue: { $sum: '$amount' },
+                        settledRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
+                        settledCommission: { $sum: { $ifNull: ['$commission', 0] } },
+                        settledNetAmount: { $sum: { $ifNull: ['$netAmount', { $subtract: ['$amount', { $ifNull: ['$commission', 0] }] }] } },
+                        settledCount: { $sum: 1 }
+                    }
+                }
+            ]),
+            
+            // Aggregate unsettled transactions
+            Transaction.aggregate([
+                { $match: { merchantId: merchantObjectId, status: 'paid', settlementStatus: 'unsettled' } },
+                {
+                    $group: {
+                        _id: null,
+                        unsettledRevenue: { $sum: '$amount' },
+                        unsettledCommission: { $sum: { $ifNull: ['$commission', 0] } },
+                        unsettledCount: { $sum: 1 }
+                    }
+                }
+            ]),
+            
+            // Get next settlement info
+            Transaction.findOne({
+                merchantId: merchantObjectId,
+                status: 'paid',
+                settlementStatus: 'unsettled'
+            }).sort({ expectedSettlementDate: 1 }).lean(),
+            
+            // Get today's revenue and commission
+            todayRevenueAndCommission(merchantObjectId),
+            
+            // Aggregate completed payouts
+            Payout.aggregate([
+                { $match: { merchantId: merchantObjectId, status: 'completed' } },
+                { $group: { _id: null, totalPaidOut: { $sum: '$netAmount' }, count: { $sum: 1 } } }
+            ]),
+            
+            // Aggregate pending payouts
+            Payout.aggregate([
+                { $match: { merchantId: merchantObjectId, status: { $in: ['requested', 'pending', 'processing'] } } },
+                { $group: { _id: null, totalPending: { $sum: '$netAmount' }, count: { $sum: 1 } } }
+            ])
+        ]);
+
         if (!merchant) {
             return res.status(404).json({
                 success: false,
@@ -96,223 +150,177 @@ exports.getMyBalance = async (req, res) => {
             });
         }
 
-        // Aggregate settled transactions (use stored netAmount for accurate calculation)
-        // When transactions are settled, they automatically move to available balance
-        const settledAgg = await Transaction.aggregate([
-            { $match: { merchantId: merchantObjectId, status: 'paid', settlementStatus: 'settled' } },
-            {
-                $group: {
-                    _id: null,
-                    settledRevenue: { $sum: '$amount' },
-                    settledRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
-                    settledCommission: { $sum: { $ifNull: ['$commission', 0] } },
-                    settledNetAmount: { $sum: { $ifNull: ['$netAmount', { $subtract: ['$amount', { $ifNull: ['$commission', 0] }] }] } }, // Use netAmount if available, otherwise calculate
-                    settledCount: { $sum: 1 }
-                }
-            }
-        ]);
         const settled = settledAgg[0] || { settledRevenue: 0, settledRefunded: 0, settledCommission: 0, settledNetAmount: 0, settledCount: 0 };
         const settledCommission = settled.settledCommission || 0;
-
-        // Aggregate unsettled transactions (use stored commission so GST & any overrides are respected)
-        const unsettledAgg = await Transaction.aggregate([
-            { $match: { merchantId: merchantObjectId, status: 'paid', settlementStatus: 'unsettled' } },
-            {
-                $group: {
-                    _id: null,
-                    unsettledRevenue: { $sum: '$amount' },
-                    unsettledCommission: { $sum: { $ifNull: ['$commission', 0] } },
-                    unsettledCount: { $sum: 1 }
-                }
-            }
-        ]);
         const unsettled = unsettledAgg[0] || { unsettledRevenue: 0, unsettledCommission: 0, unsettledCount: 0 };
         const unsettledCommission = unsettled.unsettledCommission || 0;
-
-        // Get next settlement info
-        const nextUnsettledTransaction = await Transaction.findOne({
-            merchantId: merchantObjectId,
-            status: 'paid',
-            settlementStatus: 'unsettled'
-        }).sort({ expectedSettlementDate: 1 });
-
-        // totalTodayRevenue 
-        // get all paid transactions that are created or updated today only and then calculate the amount and then 
-        // totalPayinCommission 
-        // get all transattion that are created and updated for today only and calculate them by the commission feild 
-          
-         const  { totalTodayRevenue , totalPayinCommission , transactionCount} = await todayRevenueAndCommission(merchantObjectId)
-
-        // Aggregate payouts
-        const completedPayoutAgg = await Payout.aggregate([
-            { $match: { merchantId: merchantObjectId, status: 'completed' } },
-            { $group: { _id: null, totalPaidOut: { $sum: '$netAmount' }, count: { $sum: 1 } } }
-        ]);
-        const pendingPayoutAgg = await Payout.aggregate([
-            { $match: { merchantId: merchantObjectId, status: { $in: ['requested', 'pending', 'processing'] } } },
-            { $group: { _id: null, totalPending: { $sum: '$netAmount' }, count: { $sum: 1 } } }
-        ]);
-        // Todays payin data 
+        const { totalTodayRevenue, totalPayinCommission, transactionCount } = todayData || { totalTodayRevenue: 0, totalPayinCommission: 0, transactionCount: 0 };
         const totalPaidOut = completedPayoutAgg[0]?.totalPaidOut || 0;
         const totalPending = pendingPayoutAgg[0]?.totalPending || 0;
-        // todays pauout data 
+
         // Get total payout commission for today (completed payouts created or updated today)
         const { start: todayStart, end: todayEnd } = getIstDayRange();
-        const todayPayoutCommissionAgg = await Payout.aggregate([
-            { 
-                $match: { 
-                    merchantId: merchantObjectId, 
-                    status: 'completed',
-                    $or: [
-                        { createdAt: { $gte: todayStart, $lte: todayEnd } },
-                        { updatedAt: { $gte: todayStart, $lte: todayEnd } }
-                    ]
-                } 
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalTodaysPayoutCommission: { $sum: { $ifNull: ['$commission', 0] } }
-                }
-            }
-        ]);
-        const totalTodaysPayoutCommission = todayPayoutCommissionAgg[0]?.totalTodaysPayoutCommission || 0;
         
-        // Calculate past week and past month date ranges (IST)
-        // Past week: 7 days ago to today (inclusive)
+        // Calculate past week and past month date ranges (IST) - do this before parallel queries
         const weekAgo = new Date(todayStart);
-        weekAgo.setDate(weekAgo.getDate() - 6); // 7 days including today
+        weekAgo.setDate(weekAgo.getDate() - 6);
         const weekStart = getIstDayRange(weekAgo).start;
         const weekEnd = todayEnd;
-        
-        // Past month: 30 days ago to today (inclusive)
         const monthAgo = new Date(todayStart);
-        monthAgo.setDate(monthAgo.getDate() - 29); // 30 days including today
+        monthAgo.setDate(monthAgo.getDate() - 29);
         const monthStart = getIstDayRange(monthAgo).start;
         const monthEnd = todayEnd;
 
-        // Aggregate past week transactions
-        const weekTransactionAgg = await Transaction.aggregate([
-            {
-                $match: {
-                    merchantId: merchantObjectId,
-                    status: 'paid',
-                    $or: [
-                        { createdAt: { $gte: weekStart, $lte: weekEnd } },
-                        { updatedAt: { $gte: weekStart, $lte: weekEnd } }
-                    ]
+        // ✅ OPTIMIZATION: Run remaining queries in parallel
+        const [todayPayoutCommissionAgg, weekTransactionAgg, weekPayoutAgg, monthTransactionAgg, monthPayoutAgg, settings] = await Promise.all([
+            // Today's payout commission
+            Payout.aggregate([
+                { 
+                    $match: { 
+                        merchantId: merchantObjectId, 
+                        status: 'completed',
+                        $or: [
+                            { createdAt: { $gte: todayStart, $lte: todayEnd } },
+                            { updatedAt: { $gte: todayStart, $lte: todayEnd } }
+                        ]
+                    } 
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalTodaysPayoutCommission: { $sum: { $ifNull: ['$commission', 0] } }
+                    }
                 }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalRevenue: { $sum: '$amount' },
-                    totalCommission: { $sum: { $ifNull: ['$commission', 0] } },
-                    totalRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
-                    transactionCount: { $sum: 1 }
+            ]),
+            
+            // Past week transactions
+            Transaction.aggregate([
+                {
+                    $match: {
+                        merchantId: merchantObjectId,
+                        status: 'paid',
+                        $or: [
+                            { createdAt: { $gte: weekStart, $lte: weekEnd } },
+                            { updatedAt: { $gte: weekStart, $lte: weekEnd } }
+                        ]
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalRevenue: { $sum: '$amount' },
+                        totalCommission: { $sum: { $ifNull: ['$commission', 0] } },
+                        totalRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
+                        transactionCount: { $sum: 1 }
+                    }
                 }
-            }
+            ]),
+            
+            // Past week payouts
+            Payout.aggregate([
+                {
+                    $match: {
+                        merchantId: merchantObjectId,
+                        $or: [
+                            { createdAt: { $gte: weekStart, $lte: weekEnd } },
+                            { updatedAt: { $gte: weekStart, $lte: weekEnd } }
+                        ]
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalPaidOut: {
+                            $sum: {
+                                $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$netAmount', 0] }, 0]
+                            }
+                        },
+                        totalPending: {
+                            $sum: {
+                                $cond: [
+                                    { $in: ['$status', ['requested', 'pending', 'processing']] },
+                                    { $ifNull: ['$netAmount', 0] },
+                                    0
+                                ]
+                            }
+                        },
+                        totalPayoutCommission: {
+                            $sum: {
+                                $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$commission', 0] }, 0]
+                            }
+                        }
+                    }
+                }
+            ]),
+            
+            // Past month transactions
+            Transaction.aggregate([
+                {
+                    $match: {
+                        merchantId: merchantObjectId,
+                        status: 'paid',
+                        $or: [
+                            { createdAt: { $gte: monthStart, $lte: monthEnd } },
+                            { updatedAt: { $gte: monthStart, $lte: monthEnd } }
+                        ]
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalRevenue: { $sum: '$amount' },
+                        totalCommission: { $sum: { $ifNull: ['$commission', 0] } },
+                        totalRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
+                        transactionCount: { $sum: 1 }
+                    }
+                }
+            ]),
+            
+            // Past month payouts
+            Payout.aggregate([
+                {
+                    $match: {
+                        merchantId: merchantObjectId,
+                        $or: [
+                            { createdAt: { $gte: monthStart, $lte: monthEnd } },
+                            { updatedAt: { $gte: monthStart, $lte: monthEnd } }
+                        ]
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalPaidOut: {
+                            $sum: {
+                                $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$netAmount', 0] }, 0]
+                            }
+                        },
+                        totalPending: {
+                            $sum: {
+                                $cond: [
+                                    { $in: ['$status', ['requested', 'pending', 'processing']] },
+                                    { $ifNull: ['$netAmount', 0] },
+                                    0
+                                ]
+                            }
+                        },
+                        totalPayoutCommission: {
+                            $sum: {
+                                $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$commission', 0] }, 0]
+                            }
+                        }
+                    }
+                }
+            ]),
+            
+            // Get settings for settlement job schedule
+            Settings.getSettings().catch(() => null)
         ]);
+        
+        const totalTodaysPayoutCommission = todayPayoutCommissionAgg[0]?.totalTodaysPayoutCommission || 0;
         const weekTransactions = weekTransactionAgg[0] || { totalRevenue: 0, totalCommission: 0, totalRefunded: 0, transactionCount: 0 };
-
-        // Aggregate past week payouts
-        const weekPayoutAgg = await Payout.aggregate([
-            {
-                $match: {
-                    merchantId: merchantObjectId,
-                    $or: [
-                        { createdAt: { $gte: weekStart, $lte: weekEnd } },
-                        { updatedAt: { $gte: weekStart, $lte: weekEnd } }
-                    ]
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalPaidOut: {
-                        $sum: {
-                            $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$netAmount', 0] }, 0]
-                        }
-                    },
-                    totalPending: {
-                        $sum: {
-                            $cond: [
-                                { $in: ['$status', ['requested', 'pending', 'processing']] },
-                                { $ifNull: ['$netAmount', 0] },
-                                0
-                            ]
-                        }
-                    },
-                    totalPayoutCommission: {
-                        $sum: {
-                            $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$commission', 0] }, 0]
-                        }
-                    }
-                }
-            }
-        ]);
         const weekPayouts = weekPayoutAgg[0] || { totalPaidOut: 0, totalPending: 0, totalPayoutCommission: 0 };
-
-        // Aggregate past month transactions
-        const monthTransactionAgg = await Transaction.aggregate([
-            {
-                $match: {
-                    merchantId: merchantObjectId,
-                    status: 'paid',
-                    $or: [
-                        { createdAt: { $gte: monthStart, $lte: monthEnd } },
-                        { updatedAt: { $gte: monthStart, $lte: monthEnd } }
-                    ]
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalRevenue: { $sum: '$amount' },
-                    totalCommission: { $sum: { $ifNull: ['$commission', 0] } },
-                    totalRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
-                    transactionCount: { $sum: 1 }
-                }
-            }
-        ]);
         const monthTransactions = monthTransactionAgg[0] || { totalRevenue: 0, totalCommission: 0, totalRefunded: 0, transactionCount: 0 };
-
-        // Aggregate past month payouts
-        const monthPayoutAgg = await Payout.aggregate([
-            {
-                $match: {
-                    merchantId: merchantObjectId,
-                    $or: [
-                        { createdAt: { $gte: monthStart, $lte: monthEnd } },
-                        { updatedAt: { $gte: monthStart, $lte: monthEnd } }
-                    ]
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalPaidOut: {
-                        $sum: {
-                            $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$netAmount', 0] }, 0]
-                        }
-                    },
-                    totalPending: {
-                        $sum: {
-                            $cond: [
-                                { $in: ['$status', ['requested', 'pending', 'processing']] },
-                                { $ifNull: ['$netAmount', 0] },
-                                0
-                            ]
-                        }
-                    },
-                    totalPayoutCommission: {
-                        $sum: {
-                            $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$commission', 0] }, 0]
-                        }
-                    }
-                }
-            }
-        ]);
         const monthPayouts = monthPayoutAgg[0] || { totalPaidOut: 0, totalPending: 0, totalPayoutCommission: 0 };
         
         // Calculations
@@ -339,28 +347,35 @@ exports.getMyBalance = async (req, res) => {
             }
         }
 
-        // Settlement status message
-        const nextSettlementText = nextUnsettledTransaction
-            ? await getSettlementStatusMessage(nextUnsettledTransaction.paidAt, nextUnsettledTransaction.expectedSettlementDate)
-            : 'No pending settlements';
-        const nextSettlementStatus = nextUnsettledTransaction?.settlementStatus || null;
-
-        // Get settlement job schedule info
-        let settlementJobSchedule = null;
-        try {
-            const settings = await Settings.getSettings();
-            const cronSchedule = settings.settlement?.cronSchedule || '*/15 * * * 1-6';
-            const nextJobRun = calculateNextJobRunTime(cronSchedule);
-            if (nextJobRun) {
-                settlementJobSchedule = {
-                    cronSchedule: cronSchedule,
-                    intervalMinutes: nextJobRun.intervalMinutes,
-                    nextRunTime: nextJobRun.formatted,
-                    nextRunTimestamp: nextJobRun.timestamp
-                };
+        // Settlement status message (async, but doesn't block other operations)
+        let nextSettlementText = 'No pending settlements';
+        let nextSettlementStatus = null;
+        if (nextUnsettledTransaction) {
+            try {
+                nextSettlementText = await getSettlementStatusMessage(nextUnsettledTransaction.paidAt, nextUnsettledTransaction.expectedSettlementDate);
+                nextSettlementStatus = nextUnsettledTransaction.settlementStatus || null;
+            } catch (error) {
+                console.error('Error getting settlement status message:', error);
             }
-        } catch (error) {
-            console.error('Error fetching settlement job schedule:', error);
+        }
+
+        // Get settlement job schedule info (settings already fetched in parallel)
+        let settlementJobSchedule = null;
+        if (settings) {
+            try {
+                const cronSchedule = settings.settlement?.cronSchedule || '*/15 * * * 1-6';
+                const nextJobRun = calculateNextJobRunTime(cronSchedule);
+                if (nextJobRun) {
+                    settlementJobSchedule = {
+                        cronSchedule: cronSchedule,
+                        intervalMinutes: nextJobRun.intervalMinutes,
+                        nextRunTime: nextJobRun.formatted,
+                        nextRunTimestamp: nextJobRun.timestamp
+                    };
+                }
+            } catch (error) {
+                console.error('Error calculating settlement job schedule:', error);
+            }
         }
 
         res.json({
@@ -527,49 +542,88 @@ exports.searchTransactions = async (req, res) => {
       if (endDate) query.createdAt.$lte = new Date(endDate);
     }
 
-    // Specific attribute search
-    if (description) query.description = { $regex: description, $options: 'i' };
-    if (transactionId) query.transactionId = transactionId;
-    if (orderId) query.orderId = orderId;
-    if (customerName) query.customerName = { $regex: customerName, $options: 'i' };
-    if (customerEmail) query.customerEmail = { $regex: customerEmail, $options: 'i' };
-    if (customerPhone) query.customerPhone = customerPhone; // or regex for partial match
-
-    // Global text search
-    if (search) {
-      query.$or = [
-// add the realmid to fetch only user raltive transaction 
-        { transactionId: { $regex: search, $options: 'i' } },
-        { orderId: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { customerName: { $regex: search, $options: 'i' } },
-        { customerEmail: { $regex: search, $options: 'i' } },
-        { customerPhone: { $regex: search, $options: 'i' } }
-      ];
+    // ✅ OPTIMIZATION: Specific attribute search - use exact match when possible (faster)
+    if (description) {
+      query.description = { $regex: description.trim(), $options: 'i' };
     }
+    if (transactionId) query.transactionId = transactionId; // Exact match (uses index)
+    if (orderId) query.orderId = orderId; // Exact match (uses index)
+    if (customerName) query.customerName = { $regex: customerName.trim(), $options: 'i' };
+    if (customerEmail) {
+      // Email can be exact match if it looks like a valid email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (emailRegex.test(customerEmail.trim())) {
+        query.customerEmail = customerEmail.trim(); // Exact match (uses index)
+      } else {
+        query.customerEmail = { $regex: customerEmail.trim(), $options: 'i' };
+      }
+    }
+    if (customerPhone) {
+      // Phone can be exact match if it's all digits
+      const phoneRegex = /^\d+$/;
+      if (phoneRegex.test(customerPhone.trim())) {
+        query.customerPhone = customerPhone.trim(); // Exact match (uses index)
+      } else {
+        query.customerPhone = { $regex: customerPhone.trim(), $options: 'i' };
+      }
+    }
+
+    // ✅ OPTIMIZATION: Global text search - optimized to check exact matches first (faster)
+    if (search) {
+      const searchTerm = search.trim();
+      // If search looks like an exact ID match, prioritize exact match
+      if (searchTerm.length > 10 && (searchTerm.startsWith('TXN_') || searchTerm.startsWith('ORDER_'))) {
+        query.$or = [
+          { transactionId: searchTerm }, // Exact match first (uses index)
+          { orderId: searchTerm }, // Exact match first (uses index)
+          { transactionId: { $regex: searchTerm, $options: 'i' } },
+          { orderId: { $regex: searchTerm, $options: 'i' } },
+          { description: { $regex: searchTerm, $options: 'i' } },
+          { customerName: { $regex: searchTerm, $options: 'i' } },
+          { customerEmail: { $regex: searchTerm, $options: 'i' } },
+          { customerPhone: { $regex: searchTerm, $options: 'i' } }
+        ];
+      } else {
+        query.$or = [
+          { transactionId: { $regex: searchTerm, $options: 'i' } },
+          { orderId: { $regex: searchTerm, $options: 'i' } },
+          { description: { $regex: searchTerm, $options: 'i' } },
+          { customerName: { $regex: searchTerm, $options: 'i' } },
+          { customerEmail: { $regex: searchTerm, $options: 'i' } },
+          { customerPhone: { $regex: searchTerm, $options: 'i' } }
+        ];
+      }
+    }
+
+    // ✅ OPTIMIZATION: Cap limit to prevent loading too many records (performance protection)
+    const maxLimit = 1000;
+    const actualLimit = Math.min(parseInt(limit) || 20, maxLimit);
+    const actualPage = Math.max(1, parseInt(page) || 1);
 
     // Sorting and pagination
     const sort = {};
     sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
-    const totalCount = await Transaction.countDocuments(query);
-
-    const transactions = await Transaction.find(query)
-      .sort(sort)
-      .skip((parseInt(page) - 1) * parseInt(limit))
-      .limit(parseInt(limit))
-      .lean();
+    // ✅ OPTIMIZATION: Run count and find queries in parallel
+    const [totalCount, transactions] = await Promise.all([
+      Transaction.countDocuments(query),
+      Transaction.find(query)
+        .sort(sort)
+        .skip((actualPage - 1) * actualLimit)
+        .limit(actualLimit)
+        .lean()
+    ]);
     
     res.json({
       success: true,
       transactions,
       pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(totalCount / parseInt(limit)),
+        currentPage: actualPage,
+        totalPages: Math.ceil(totalCount / actualLimit),
         totalCount,
-        limit: parseInt(limit),
-        hasNextPage: parseInt(page) < Math.ceil(totalCount / parseInt(limit)),
-        hasPrevPage: parseInt(page) > 1
+        limit: actualLimit,
+        hasNextPage: actualPage < Math.ceil(totalCount / actualLimit),
+        hasPrevPage: actualPage > 1
       }
     });
 
