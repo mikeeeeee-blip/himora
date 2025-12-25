@@ -50,12 +50,13 @@ const SettingsSchema = new mongoose.Schema({
     
     // Settlement settings
     settlement: {
-        settlementDays: { type: Number, default: 1 }, // T+N days (default T+1)
-        settlementHour: { type: Number, default: 16 }, // Hour of settlement (0-23, default 16 = 4 PM)
-        settlementMinute: { type: Number, default: 0 }, // Minute of settlement (0-59, default 0)
-        cutoffHour: { type: Number, default: 16 }, // Payment cutoff hour (0-23, default 16 = 4 PM)
-        cutoffMinute: { type: Number, default: 0 }, // Payment cutoff minute (0-59, default 0)
-        skipWeekends: { type: Boolean, default: true }, // Whether to skip weekends
+        settlementDays: { type: Number, default: 1 }, // T+N days (legacy, kept for backward compatibility)
+        settlementMinutes: { type: Number, default: 20 }, // Minutes after payment to settle (default 20 minutes)
+        settlementHour: { type: Number, default: 16 }, // Hour of settlement (0-23, default 16 = 4 PM) - legacy
+        settlementMinute: { type: Number, default: 0 }, // Minute of settlement (0-59, default 0) - legacy
+        cutoffHour: { type: Number, default: 16 }, // Payment cutoff hour (0-23, default 16 = 4 PM) - legacy
+        cutoffMinute: { type: Number, default: 0 }, // Payment cutoff minute (0-59, default 0) - legacy
+        skipWeekends: { type: Boolean, default: false }, // Whether to skip weekends (disabled for time-based settlement)
         cronSchedule: { type: String, default: '*/15 * * * 1-6' }, // Cron expression for settlement job (default: every 15 minutes, Mon-Sat)
     },
     
@@ -98,11 +99,12 @@ SettingsSchema.statics.getSettings = async function() {
             },
             settlement: {
                 settlementDays: 1,
+                settlementMinutes: 20,
                 settlementHour: 16,
                 settlementMinute: 0,
                 cutoffHour: 16,
                 cutoffMinute: 0,
-                skipWeekends: true,
+                skipWeekends: false,
                 cronSchedule: '*/15 * * * 1-6'
             }
         });

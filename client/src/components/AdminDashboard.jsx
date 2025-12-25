@@ -1477,33 +1477,6 @@ const AdminDashboard = () => {
                   ))}
                 </div>
 
-                {/* Next Settlement Job Run Time Info Card - Only show if unsettled balance > 0 */}
-                {balanceData?.settlement_info?.job_schedule && parseFloat(unsettledBalance) > 0 && (
-                  <div className="mt-4 sm:mt-6 p-4 bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-xl">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-500/30 rounded-lg">
-                          <FiClock className="text-blue-300 text-xl" />
-                        </div>
-                        <div>
-                          <p className="text-blue-300 text-xs font-medium mb-1 uppercase tracking-wide">
-                            Next Settlement Job Run
-                          </p>
-                          <p className="text-white font-semibold text-lg">
-                            {balanceData.settlement_info.job_schedule.nextRunTime}
-                          </p>
-                          <p className="text-blue-200 text-xs mt-1">
-                            Runs every {balanceData.settlement_info.job_schedule.intervalMinutes} minutes, Monday to Saturday • {getRelativeTime(balanceData.settlement_info.job_schedule.nextRunTimestamp)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-                        <span className="text-blue-300 text-xs font-medium">Active</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>

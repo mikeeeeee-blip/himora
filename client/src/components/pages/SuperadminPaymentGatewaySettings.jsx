@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FiSettings, FiRefreshCw, FiSave, FiClock } from 'react-icons/fi';
+import { FiSettings, FiRefreshCw, FiSave, FiClock, FiPlay } from 'react-icons/fi';
 import superadminSettingsService from '../../services/superadminSettingsService';
+import superadminPaymentService from '../../services/superadminPaymentService';
 
 const SuperadminPaymentGatewaySettings = () => {
   const [loading, setLoading] = useState(true);
@@ -29,8 +30,11 @@ const SuperadminPaymentGatewaySettings = () => {
   });
   const [customCounts, setCustomCounts] = useState({});
   const [settlementSettings, setSettlementSettings] = useState({
-    settlementIntervalMinutes: 15
+    settlementIntervalMinutes: 15, // Job run interval
+    settlementMinutes: 20 // Minutes after payment to settle
   });
+  const [settlementRunning, setSettlementRunning] = useState(false);
+  const [settlementResult, setSettlementResult] = useState(null);
   const intervalRef = useRef(null);
 
   // Memoized function to update only rotation data (lightweight)
@@ -150,10 +154,14 @@ const SuperadminPaymentGatewaySettings = () => {
         // Extract minutes from cron expression (e.g., "*/15 * * * 1-6" -> 15)
         const cronSchedule = response.settlement.cronSchedule || '*/15 * * * 1-6';
         const minutesMatch = cronSchedule.match(/^\*\/(\d+)/);
-        const minutes = minutesMatch ? parseInt(minutesMatch[1]) : 15;
+        const intervalMinutes = minutesMatch ? parseInt(minutesMatch[1]) : 15;
+        
+        // Get settlement minutes (time after payment to settle)
+        const settlementMinutes = response.settlement.settlementMinutes || 20;
         
         setSettlementSettings({
-          settlementIntervalMinutes: minutes
+          settlementIntervalMinutes: intervalMinutes,
+          settlementMinutes: settlementMinutes
         });
       }
     } catch (err) {
@@ -256,6 +264,41 @@ const SuperadminPaymentGatewaySettings = () => {
     }
   };
 
+  const handleManualSettlement = async () => {
+    if (!window.confirm('Are you sure you want to run manual settlement? This will process all eligible transactions.')) {
+      return;
+    }
+
+    setSettlementRunning(true);
+    setSettlementResult(null);
+    setError('');
+    setSuccess('');
+
+    try {
+      const result = await superadminPaymentService.triggerManualSettlement();
+      if (result && result.success) {
+        setSettlementResult({
+          success: true,
+          settledCount: result.result?.settledCount || 0,
+          notReadyCount: result.result?.notReadyCount || 0,
+          errorCount: result.result?.errorCount || 0
+        });
+        setSuccess(`✅ Manual settlement completed! ${result.result?.settledCount || 0} transactions settled.`);
+        setTimeout(() => {
+          setSuccess('');
+          setSettlementResult(null);
+        }, 10000);
+      } else {
+        setError(result?.error || 'Failed to run manual settlement');
+      }
+    } catch (err) {
+      console.error('Manual settlement error:', err);
+      setError(err.message || 'Failed to run manual settlement');
+    } finally {
+      setSettlementRunning(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError('');
@@ -310,7 +353,8 @@ const SuperadminPaymentGatewaySettings = () => {
       try {
         const cronSchedule = `*/${settlementSettings.settlementIntervalMinutes} * * * 1-6`;
         await superadminSettingsService.updateSettlementSettings({
-          cronSchedule: cronSchedule
+          cronSchedule: cronSchedule,
+          settlementMinutes: settlementSettings.settlementMinutes || 20
         });
         // Refresh settlement settings to get updated next settlement time
         await fetchSettlementSettings();
@@ -682,19 +726,124 @@ const SuperadminPaymentGatewaySettings = () => {
 
           {/* Settlement Settings Section */}
           <div className="mt-8 pt-8 border-t border-white/10">
-            <div className="flex items-center gap-3 mb-4">
-              <FiClock className="text-accent text-xl" />
-              <h2 className="text-xl font-bold text-white font-['Albert_Sans']">Settlement Job Schedule</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <FiClock className="text-accent text-xl" />
+                <h2 className="text-xl font-bold text-white font-['Albert_Sans']">Settlement Job Schedule</h2>
+              </div>
+              <button
+                onClick={handleManualSettlement}
+                disabled={settlementRunning}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiPlay className={settlementRunning ? 'animate-spin' : ''} />
+                {settlementRunning ? 'Running...' : 'Run Settlement Now'}
+              </button>
             </div>
             <p className="text-white/70 text-sm mb-4 font-['Albert_Sans']">
               Configure how often the automatic settlement job runs to process paid transactions. Runs Monday to Saturday.
             </p>
 
+            {/* Settlement Result */}
+            {settlementResult && (
+              <div className={`mb-4 p-4 rounded-lg border ${
+                settlementResult.success 
+                  ? 'bg-green-500/20 border-green-500/50' 
+                  : 'bg-red-500/20 border-red-500/50'
+              }`}>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className={`font-medium mb-2 ${
+                      settlementResult.success ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {settlementResult.success ? '✅ Settlement Completed' : '❌ Settlement Failed'}
+                    </p>
+                    {settlementResult.success && (
+                      <div className="text-sm space-y-2">
+                        <div className="flex items-center gap-4">
+                          <p className="text-green-300">
+                            <strong>{settlementResult.settledCount}</strong> transaction{settlementResult.settledCount !== 1 ? 's' : ''} settled
+                          </p>
+                          {settlementResult.notReadyCount > 0 && (
+                            <p className="text-yellow-300">
+                              <strong>{settlementResult.notReadyCount}</strong> transaction{settlementResult.notReadyCount !== 1 ? 's' : ''} not ready yet
+                            </p>
+                          )}
+                          {settlementResult.errorCount > 0 && (
+                            <p className="text-red-300">
+                              <strong>{settlementResult.errorCount}</strong> error{settlementResult.errorCount !== 1 ? 's' : ''} encountered
+                            </p>
+                          )}
+                        </div>
+                        {settlementResult.notReadyCount > 0 && settlementResult.nextSettlementInfo && (
+                          <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                            <p className="text-blue-300 text-xs font-medium mb-1">Next Settlement Information:</p>
+                            <div className="text-blue-200 text-xs space-y-1">
+                              {settlementResult.nextSettlementInfo.daysUntil > 0 ? (
+                                <p>Next transaction will settle in <strong>{settlementResult.nextSettlementInfo.daysUntil} day{settlementResult.nextSettlementInfo.daysUntil > 1 ? 's' : ''}</strong></p>
+                              ) : settlementResult.nextSettlementInfo.hoursUntil > 0 ? (
+                                <p>Next transaction will settle in <strong>{settlementResult.nextSettlementInfo.hoursUntil} hour{settlementResult.nextSettlementInfo.hoursUntil > 1 ? 's' : ''}</strong></p>
+                              ) : (
+                                <p>Next transaction will settle very soon</p>
+                              )}
+                              <p className="text-blue-300/70">
+                                Expected settlement date: {new Date(settlementResult.nextSettlementInfo.nextSettlementDate).toLocaleString('en-IN', { 
+                                  timeZone: 'Asia/Kolkata',
+                                  dateStyle: 'medium',
+                                  timeStyle: 'short'
+                                })}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        {settlementResult.notReadyCount > 0 && !settlementResult.nextSettlementInfo && (
+                          <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded">
+                            <p className="text-yellow-300 text-xs">
+                              Transactions are waiting for their expected settlement time to be reached. 
+                              Settlement happens automatically when the configured settlement time (T+N days) is reached.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-4">
-              {/* Settlement Interval Input */}
+              {/* Settlement Time After Payment */}
               <div>
                 <label className="block text-white font-medium mb-2 font-['Albert_Sans']">
-                  Settlement Interval (Minutes)
+                  Settlement Time After Payment (Minutes)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="1"
+                    max="1440"
+                    value={settlementSettings.settlementMinutes}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 20;
+                      if (value >= 1 && value <= 1440) {
+                        setSettlementSettings(prev => ({ ...prev, settlementMinutes: value }));
+                      }
+                    }}
+                    className="w-32 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/50"
+                  />
+                  <span className="text-white/70 text-sm">minutes</span>
+                </div>
+                <p className="text-white/60 text-xs mt-2">
+                  Transactions will be settled <strong className="text-white">{settlementSettings.settlementMinutes}</strong> minutes after payment is received.
+                  <br />
+                  <span className="text-white/50">Example: 25 = settle 25 minutes after payment, 60 = settle 1 hour after payment</span>
+                </p>
+              </div>
+
+              {/* Settlement Job Interval */}
+              <div>
+                <label className="block text-white font-medium mb-2 font-['Albert_Sans']">
+                  Settlement Job Run Interval (Minutes)
                 </label>
                 <div className="flex items-center gap-3">
                   <input
@@ -713,9 +862,9 @@ const SuperadminPaymentGatewaySettings = () => {
                   <span className="text-white/70 text-sm">minutes</span>
                 </div>
                 <p className="text-white/60 text-xs mt-2">
-                  The settlement job will run every <strong className="text-white">{settlementSettings.settlementIntervalMinutes}</strong> minutes, Monday to Saturday.
+                  The settlement job will check for ready transactions every <strong className="text-white">{settlementSettings.settlementIntervalMinutes}</strong> minutes, Monday to Saturday.
                   <br />
-                  <span className="text-white/50">Example: 15 = every 15 minutes, 60 = every hour, 1440 = once per day</span>
+                  <span className="text-white/50">Example: 15 = check every 15 minutes, 60 = check every hour</span>
                 </p>
               </div>
 

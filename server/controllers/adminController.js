@@ -96,7 +96,8 @@ exports.getMyBalance = async (req, res) => {
             });
         }
 
-        // Aggregate settled transactions (use stored commission so GST & any overrides are respected)
+        // Aggregate settled transactions (use stored netAmount for accurate calculation)
+        // When transactions are settled, they automatically move to available balance
         const settledAgg = await Transaction.aggregate([
             { $match: { merchantId: merchantObjectId, status: 'paid', settlementStatus: 'settled' } },
             {
@@ -105,11 +106,12 @@ exports.getMyBalance = async (req, res) => {
                     settledRevenue: { $sum: '$amount' },
                     settledRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
                     settledCommission: { $sum: { $ifNull: ['$commission', 0] } },
+                    settledNetAmount: { $sum: { $ifNull: ['$netAmount', { $subtract: ['$amount', { $ifNull: ['$commission', 0] }] }] } }, // Use netAmount if available, otherwise calculate
                     settledCount: { $sum: 1 }
                 }
             }
         ]);
-        const settled = settledAgg[0] || { settledRevenue: 0, settledRefunded: 0, settledCommission: 0, settledCount: 0 };
+        const settled = settledAgg[0] || { settledRevenue: 0, settledRefunded: 0, settledCommission: 0, settledNetAmount: 0, settledCount: 0 };
         const settledCommission = settled.settledCommission || 0;
 
         // Aggregate unsettled transactions (use stored commission so GST & any overrides are respected)
@@ -314,7 +316,11 @@ exports.getMyBalance = async (req, res) => {
         const monthPayouts = monthPayoutAgg[0] || { totalPaidOut: 0, totalPending: 0, totalPayoutCommission: 0 };
         
         // Calculations
-        const settledNetRevenue = settled.settledRevenue - settled.settledRefunded - settledCommission;
+        // Use settledNetAmount if available (more accurate), otherwise calculate from revenue - commission - refunds
+        // When settlement job runs, transactions marked as 'settled' automatically contribute to available balance
+        const settledNetRevenue = settled.settledNetAmount > 0 
+            ? settled.settledNetAmount - settled.settledRefunded 
+            : settled.settledRevenue - settled.settledRefunded - settledCommission;
         const blockedBalance = merchant.blockedBalance || 0;
         const availableBalance = Math.max(0, settledNetRevenue - totalPaidOut - totalPending - blockedBalance);
 

@@ -271,12 +271,76 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// ✅ Backfill missin
+// ✅ Manual settlement trigger
 app.get('/api/superadmin/manual-settlement', async (req, res) => {
     try {
-        await manualSettlement();
-        res.json({ success: true, message: 'Manual settlement completed' });
+        const result = await manualSettlement();
+        
+        // Build detailed response message
+        let message = 'Manual settlement completed. ';
+        if (result.settledCount > 0) {
+            message += `${result.settledCount} transaction${result.settledCount > 1 ? 's' : ''} settled. `;
+        }
+        if (result.notReadyCount > 0) {
+            message += `${result.notReadyCount} transaction${result.notReadyCount > 1 ? 's' : ''} not ready yet. `;
+            if (result.nextSettlementInfo) {
+                if (result.nextSettlementInfo.daysUntil > 0) {
+                    message += `Next settlement in ${result.nextSettlementInfo.daysUntil} day${result.nextSettlementInfo.daysUntil > 1 ? 's' : ''}.`;
+                } else if (result.nextSettlementInfo.hoursUntil > 0) {
+                    message += `Next settlement in ${result.nextSettlementInfo.hoursUntil} hour${result.nextSettlementInfo.hoursUntil > 1 ? 's' : ''}.`;
+                } else {
+                    message += `Next settlement very soon.`;
+                }
+            }
+        }
+        if (result.errorCount > 0) {
+            message += `${result.errorCount} error${result.errorCount > 1 ? 's' : ''} encountered.`;
+        }
+        
+        res.json({ 
+            success: true, 
+            message: message || 'Manual settlement completed',
+            result: result
+        });
     } catch (error) {
+        console.error('Manual settlement error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ✅ Settlement job status endpoint
+app.get('/api/superadmin/settlement-status', async (req, res) => {
+    try {
+        const { settlementJob } = require('./jobs/settlementJob');
+        const job = settlementJob();
+        const Settings = require('./models/Settings');
+        const Transaction = require('./models/Transaction');
+        
+        const settings = await Settings.getSettings();
+        const cronSchedule = settings.settlement?.cronSchedule || '*/15 * * * 1-6';
+        
+        // Count unsettled transactions
+        const unsettledCount = await Transaction.countDocuments({
+            status: 'paid',
+            settlementStatus: 'unsettled'
+        });
+        
+        // Count settled transactions
+        const settledCount = await Transaction.countDocuments({
+            status: 'paid',
+            settlementStatus: 'settled'
+        });
+        
+        res.json({
+            success: true,
+            jobRunning: job !== null,
+            cronSchedule: cronSchedule,
+            unsettledTransactions: unsettledCount,
+            settledTransactions: settledCount,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Settlement status error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

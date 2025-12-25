@@ -1631,15 +1631,27 @@ exports.getSettlementSettings = async (req, res) => {
         console.log(`⚙️ ${req.user.role === 'superAdmin' ? 'SuperAdmin' : 'Sub-SuperAdmin'} ${req.user.name} fetching settlement settings`);
 
         const settings = await Settings.getSettings();
-        const settlementSettings = settings.settlement || {
-            settlementDays: 1,
-            settlementHour: 16,
-            settlementMinute: 0,
-            cutoffHour: 16,
-            cutoffMinute: 0,
-            skipWeekends: true,
-            cronSchedule: '*/15 * * * 1-6'
-        };
+        // Ensure settlementMinutes is set to 20 if not present or if it's still 25 (old default)
+        if (!settings.settlement) {
+            settings.settlement = {
+                settlementDays: 1,
+                settlementMinutes: 20,
+                settlementHour: 16,
+                settlementMinute: 0,
+                cutoffHour: 16,
+                cutoffMinute: 0,
+                skipWeekends: false,
+                cronSchedule: '*/15 * * * 1-6'
+            };
+            await settings.save();
+        } else if (settings.settlement.settlementMinutes === undefined || settings.settlement.settlementMinutes === null || settings.settlement.settlementMinutes === 25) {
+            // Update to 20 if it's missing or still set to old default of 25
+            settings.settlement.settlementMinutes = 20;
+            settings.markModified('settlement');
+            await settings.save();
+        }
+        
+        const settlementSettings = settings.settlement;
 
         res.json({
             success: true,
@@ -1680,15 +1692,22 @@ exports.updateSettlementSettings = async (req, res) => {
         if (!settings.settlement) {
             settings.settlement = {
                 settlementDays: 1,
+                settlementMinutes: 20,
                 settlementHour: 16,
                 settlementMinute: 0,
                 cutoffHour: 16,
                 cutoffMinute: 0,
-                skipWeekends: true
+                skipWeekends: false
             };
         }
 
         // Validate and update settlement settings
+        // NEW: Settlement minutes (time-based settlement)
+        if (typeof settlement.settlementMinutes === 'number' && settlement.settlementMinutes >= 1 && settlement.settlementMinutes <= 1440) {
+            settings.settlement.settlementMinutes = settlement.settlementMinutes;
+        }
+        
+        // Legacy: Settlement days (for backward compatibility)
         if (typeof settlement.settlementDays === 'number' && settlement.settlementDays >= 0) {
             settings.settlement.settlementDays = settlement.settlementDays;
         }
