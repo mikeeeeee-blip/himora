@@ -19,22 +19,22 @@ async function processSettlement() {
     }
 
     try {
-        // NOTE: Removed the 24-hour paidAt restriction per request.
-        // Fetch all paid, unsettled transactions (regardless of paidAt age)
-        const unsettledTransactions = await Transaction.find({
-            status: 'paid',
-            settlementStatus: 'unsettled'
+    // NOTE: Removed the 24-hour paidAt restriction per request.
+    // Fetch all paid, unsettled transactions (regardless of paidAt age)
+    const unsettledTransactions = await Transaction.find({
+        status: 'paid',
+        settlementStatus: 'unsettled'
         }).populate('merchantId', 'name email');
 
-        console.log(`📦 Found ${unsettledTransactions.length} transactions to check`);
+    console.log(`📦 Found ${unsettledTransactions.length} transactions to check`);
 
         if (unsettledTransactions.length === 0) {
             console.log('✅ No transactions to settle');
             return { success: true, settledCount: 0, notReadyCount: 0 };
         }
 
-        let settledCount = 0;
-        let notReadyCount = 0;
+    let settledCount = 0;
+    let notReadyCount = 0;
         let errorCount = 0;
 
         // Get current settlement settings once for all transactions
@@ -42,7 +42,7 @@ async function processSettlement() {
         const settings = await Settings.getSettings();
         const currentSettlementMinutes = settings.settlement?.settlementMinutes || 20;
 
-        for (const transaction of unsettledTransactions) {
+    for (const transaction of unsettledTransactions) {
             try {
                 // Recalculate expected settlement date to ensure it matches current settings
                 // This handles cases where settings were changed after transaction was created
@@ -52,7 +52,7 @@ async function processSettlement() {
                     if (!transaction.expectedSettlementDate || 
                         Math.abs(transaction.expectedSettlementDate.getTime() - newExpectedDate.getTime()) > 60000) { // More than 1 minute difference
                         transaction.expectedSettlementDate = newExpectedDate;
-                        await transaction.save();
+            await transaction.save();
                     }
                 }
 
@@ -67,9 +67,9 @@ async function processSettlement() {
                     console.warn(`⚠️ Transaction ${transaction.transactionId} has no expectedSettlementDate, skipping`);
                     notReadyCount++;
                     continue;
-                }
+        }
 
-                // Use your existing readiness logic
+        // Use your existing readiness logic
                 const isReady = await isReadyForSettlement(transaction.paidAt, transaction.expectedSettlementDate);
                 
                 // Calculate time until settlement for logging
@@ -80,20 +80,20 @@ async function processSettlement() {
                 if (isReady) {
                     // Mark transaction as settled - this automatically moves it to Available Wallet Balance
                     // The balance API calculates available balance from all transactions with settlementStatus: 'settled'
-                    transaction.settlementStatus = 'settled';
-                    transaction.settlementDate = now;
+            transaction.settlementStatus = 'settled';
+            transaction.settlementDate = now;
                     
                     // Ensure netAmount is set (should already be set when transaction was marked as paid)
                     if (!transaction.netAmount && transaction.amount && transaction.commission !== undefined) {
                         transaction.netAmount = parseFloat((transaction.amount - transaction.commission).toFixed(2));
                     }
                     
-                    await transaction.save();
-                    settledCount++;
+            await transaction.save();
+            settledCount++;
                     const netAmount = transaction.netAmount || (transaction.amount - (transaction.commission || 0));
                     console.log(`✅ Settled: ${transaction.transactionId} (Amount: ₹${transaction.amount}, Net: ₹${netAmount.toFixed(2)}) - Now available in wallet balance`);
-                } else {
-                    notReadyCount++;
+        } else {
+            notReadyCount++;
                     // Log detailed information about why transaction is not ready
                     const paymentDate = new Date(transaction.paidAt);
                     const timeSincePayment = now.getTime() - paymentDate.getTime();
@@ -220,12 +220,12 @@ async function initializeSettlementJob() {
         // Create new job with dynamic schedule
         settlementJob = cron.schedule(
             cronSchedule,
-            async () => {
-                try {
-                    const now = new Date();
-                    const day = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short' });
-                    const hour = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false });
-                    const minute = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', minute: '2-digit' });
+  async () => {
+    try {
+      const now = new Date();
+      const day = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short' });
+      const hour = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false });
+      const minute = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', minute: '2-digit' });
 
                     console.log(`🤖 Settlement job triggered on ${day} at ${hour}:${minute} IST`);
 
@@ -238,25 +238,25 @@ async function initializeSettlementJob() {
                         }
                     } else if (cronSchedule.includes('1-5') || cronSchedule.includes('MON-FRI')) {
                         // Legacy support for Mon-Fri schedules
-                        if (['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(day)) {
-                            await processSettlement();
-                        } else {
-                            console.log(`⏸ Skipping auto settlement on ${day} (weekend)`);
+      if (['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(day)) {
+        await processSettlement();
+      } else {
+        console.log(`⏸ Skipping auto settlement on ${day} (weekend)`);
                         }
                     } else {
                         // If schedule doesn't restrict weekdays, run anyway
                         await processSettlement();
-                    }
-                } catch (error) {
-                    console.error('❌ Auto settlement error:', error);
+      }
+    } catch (error) {
+      console.error('❌ Auto settlement error:', error);
                     console.error('Stack trace:', error.stack);
-                }
-            },
-            {
-                scheduled: true,
-                timezone: "Asia/Kolkata",
-            }
-        );
+    }
+  },
+  {
+    scheduled: true,
+    timezone: "Asia/Kolkata",
+  }
+);
 
         if (!settlementJob) {
             throw new Error('Failed to create settlement job');
