@@ -94,6 +94,7 @@ export const API_ENDPOINTS = {
   
   // ============ SUPERADMIN - TRANSACTIONS ============
   ADMIN_TRANSACTIONS: `${BASE_URL}/payments/admin/transactions`,
+  ADMIN_MERCHANT_ANALYTICS: (merchantId) => `${BASE_URL}/payments/admin/merchants/${merchantId}/analytics`,
   ADMIN_SETTLE_TRANSACTION: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}/settle`,
   ADMIN_UPDATE_TRANSACTION_STATUS: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}/status`,
   ADMIN_DELETE_TRANSACTION: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}`,
