@@ -1504,10 +1504,11 @@ const AdminDashboard = () => {
                   <div className="flex flex-col gap-3 mb-4 sm:mb-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <h2 className="text-lg sm:text-xl font-medium text-white font-['Albert_Sans']">
-                        Last 24 Hours{" "}
+                        Top Transactions{" ("}
                         {todayTransactions.loading
                           ? "..."
                           : filteredTransactions.length || 0}
+                          {")"}
                       </h2>
                       <div className="relative flex-1 sm:flex-initial max-w-xs">
                         <input
