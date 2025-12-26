@@ -143,48 +143,88 @@ exports.createCashfreePaymentLink = async (req, res) => {
         const nextjsBaseUrl = (process.env.NEXTJS_API_URL || 'https://www.shaktisewafoudation.in').replace(/\/$/, '');
         const createSessionUrl = `${nextjsBaseUrl}/api/payments/create-session`;
         
+        let finalOrderId = orderId;
+        let sessionResponse;
+        const maxRetries = 2;
+        
         try {
-            const sessionResponse = await axios.post(
-                createSessionUrl,
-                {
-                    orderId: orderId,
-                    orderAmount: amountValue,
-                    customerDetails: {
-                        customerId: `CUST_${cleanPhone}_${Date.now()}`,
-                        customerName: customer_name,
-                        customerEmail: customer_email,
-                        customerPhone: cleanPhone,
-                    },
-                    shippingAddress: {
-                        fullName: customer_name,
-                        phone: cleanPhone,
-                        addressLine1: 'N/A',
-                        city: 'N/A',
-                        state: 'N/A',
-                        pincode: '000000',
-                        country: 'India'
-                    },
-                    billingAddress: {
-                        fullName: customer_name,
-                        phone: cleanPhone,
-                        addressLine1: 'N/A',
-                        city: 'N/A',
-                        state: 'N/A',
-                        pincode: '000000',
-                        country: 'India'
-                    },
-                    items: [], // Empty items for payment link
-                },
-                {
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    timeout: 30000, // 30 second timeout
-                }
-            );
+            // Retry logic for order ID conflicts
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                try {
+                    sessionResponse = await axios.post(
+                        createSessionUrl,
+                        {
+                            orderId: finalOrderId,
+                            orderAmount: amountValue,
+                            transactionId: transactionId,
+                            customerDetails: {
+                                customerId: `CUST_${cleanPhone}_${Date.now()}`,
+                                customerName: customer_name,
+                                customerEmail: customer_email,
+                                customerPhone: cleanPhone,
+                            },
+                            shippingAddress: {
+                                fullName: customer_name,
+                                phone: cleanPhone,
+                                addressLine1: 'N/A',
+                                city: 'N/A',
+                                state: 'N/A',
+                                pincode: '000000',
+                                country: 'India'
+                            },
+                            billingAddress: {
+                                fullName: customer_name,
+                                phone: cleanPhone,
+                                addressLine1: 'N/A',
+                                city: 'N/A',
+                                state: 'N/A',
+                                pincode: '000000',
+                                country: 'India'
+                            },
+                            items: [], // Empty items for payment link
+                        },
+                        {
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            timeout: 30000, // 30 second timeout
+                        }
+                    );
 
-            if (!sessionResponse.data.success) {
-                throw new Error(sessionResponse.data.message || 'Failed to create payment session');
+                    // If successful, break out of retry loop
+                    if (sessionResponse.data.success) {
+                        break;
+                    }
+                    
+                    // If not successful and not 409, throw error
+                    if (sessionResponse.status !== 409) {
+                        throw new Error(sessionResponse.data.message || 'Failed to create payment session');
+                    }
+                } catch (apiError) {
+                    // Handle 409 Conflict - Order already exists
+                    if (apiError.response?.status === 409 && attempt < maxRetries) {
+                        // Generate a new unique order ID
+                        const newTimestamp = Date.now();
+                        const newRandomSuffix = Math.random().toString(36).substring(2, 8);
+                        finalOrderId = `ORDER_${newTimestamp}_${newRandomSuffix}`;
+                        
+                        // Update transaction with new order ID
+                        await Transaction.findOneAndUpdate(
+                            { transactionId: transactionId },
+                            { orderId: finalOrderId }
+                        );
+                        
+                        // Continue to retry with new order ID
+                        continue;
+                    }
+                    
+                    // If it's not a 409 or we're out of retries, throw the error
+                    throw apiError;
+                }
+            }
+
+            if (!sessionResponse || !sessionResponse.data.success) {
+                throw new Error(sessionResponse?.data?.message || 'Failed to create payment session');
             }
 
             const paymentSessionId = sessionResponse.data.data?.paymentSessionId;
@@ -202,9 +242,9 @@ exports.createCashfreePaymentLink = async (req, res) => {
                 );
             }
 
-            // Construct Next.js checkout page URL
-            // The checkout page will create the Cashfree session and handle payment using SDK
-            const checkoutUrl = new URL(`${nextjsBaseUrl}/checkout`);
+            // Construct Next.js checkout page URL (using iframe version for better UPI auto-click)
+            // The checkout-iframe page will embed the checkout page in an iframe and auto-click UPI button
+            const checkoutUrl = new URL(`${nextjsBaseUrl}/checkout-iframe`);
             checkoutUrl.searchParams.set('amount', amountValue.toString());
             checkoutUrl.searchParams.set('customer_name', customer_name);
             checkoutUrl.searchParams.set('customer_email', customer_email);
@@ -212,7 +252,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
             if (description) {
                 checkoutUrl.searchParams.set('description', description);
             }
-            checkoutUrl.searchParams.set('order_id', orderId);
+            checkoutUrl.searchParams.set('order_id', finalOrderId); // Use finalOrderId (may have been regenerated)
             checkoutUrl.searchParams.set('transaction_id', transactionId);
             if (merchantId) {
                 checkoutUrl.searchParams.set('merchant_id', merchantId.toString());
@@ -227,8 +267,8 @@ exports.createCashfreePaymentLink = async (req, res) => {
         const responseData = {
             success: true,
             transaction_id: transactionId,
-            order_id: orderId,
-                cf_order_id: cfOrderId,
+            order_id: finalOrderId, // Use finalOrderId (may have been regenerated)
+            cf_order_id: cfOrderId,
             order_amount: amountValue,
             order_currency: 'INR',
             merchant_id: merchantId.toString(),
@@ -239,7 +279,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
             environment: responseEnvironment,
             gateway_used: 'cashfree',
             gateway_name: 'Cashfree',
-                payment_session_id: paymentSessionId,
+            payment_session_id: paymentSessionId,
             payment_data: {
                 amount: amountValue,
                 currency: 'INR',
@@ -247,14 +287,14 @@ exports.createCashfreePaymentLink = async (req, res) => {
                 customer_email: customer_email,
                 customer_phone: cleanPhone,
                 description: description || 'Product purchase',
-                order_id: orderId,
+                order_id: finalOrderId, // Use finalOrderId (may have been regenerated)
                 transaction_id: transactionId,
                 merchant_id: merchantId.toString(),
                 merchant_name: merchantName
             },
-                message: 'Payment link created successfully. Redirect to payment_url to proceed with payment. Gateway: Cashfree.',
-                payment_url: paymentUrl,
-                paymentLink: paymentUrl
+            message: 'Payment link created successfully. Redirect to payment_url to proceed with payment. Gateway: Cashfree.',
+            payment_url: paymentUrl,
+            paymentLink: paymentUrl
         };
 
         res.json(responseData);
