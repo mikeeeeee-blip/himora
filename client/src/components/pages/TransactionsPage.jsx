@@ -1,22 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { HiOutlineClipboardDocumentList } from "react-icons/hi2";
 import { motion } from "framer-motion";
-import {
-  ComposedChart,
-  Area,
-  Line,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
 import paymentService from "../../services/paymentService";
 import Navbar from "../Navbar";
-import ExportCSV from "../ExportCSV";
-import { FiRefreshCw, FiDownload, FiTrendingUp } from "react-icons/fi";
+import { FiRefreshCw, FiDownload, FiChevronLeft, FiChevronRight, FiCalendar, FiX, FiTrendingUp } from "react-icons/fi";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 const TransactionsPage = () => {
@@ -29,10 +16,15 @@ const TransactionsPage = () => {
   const [downloading, setDownloading] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showPayoutDownloadModal, setShowPayoutDownloadModal] = useState(false);
-  const [chartData, setChartData] = useState([]);
-  const [chartLoading, setChartLoading] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  
+  // Date filter states (similar to MerchantDetailPage)
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showDateRangePicker, setShowDateRangePicker] = useState(false);
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [useDateRange, setUseDateRange] = useState(false);
+  const [showAllTime, setShowAllTime] = useState(true); // Default to "All Time" to show all transactions
 
   // Set active tab from URL query parameter on mount
   useEffect(() => {
@@ -75,7 +67,7 @@ const TransactionsPage = () => {
   // Filter states
   const [filters, setFilters] = useState({
     page: 1,
-    limit: 999999, // Show all transactions (no pagination)
+    limit: 50, // Reasonable default limit with pagination
     status: "",
     payment_gateway: "",
     payment_method: "",
@@ -86,80 +78,159 @@ const TransactionsPage = () => {
     sort_order: "desc",
   });
 
+  // Auto-apply filters when they change (debounced for search, immediate for others)
   useEffect(() => {
-    fetchTransactions();
-    fetchChartData();
-  }, [filters.page, activeTab, filters.start_date, filters.end_date]);
+    const timeoutId = setTimeout(() => {
+      fetchTransactions();
+    }, filters.search ? 500 : 0); // Debounce search, immediate for other filters
 
-  // Fetch chart data for analytics
-  const fetchChartData = async () => {
-    setChartLoading(true);
-    try {
-      const endDate =
-        filters.end_date || new Date().toISOString().split("T")[0];
-      const startDate =
-        filters.start_date ||
-        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .split("T")[0];
+    return () => clearTimeout(timeoutId);
+  }, [filters.page, activeTab, filters.start_date, filters.end_date, selectedDate, useDateRange, dateRange, showAllTime, filters.status, filters.search, filters.payment_method, filters.payment_gateway, filters.sort_by, filters.sort_order]);
 
-      let data = [];
-      if (activeTab === "payin" || activeTab === "settlement") {
-        const result = await paymentService.searchTransactions({
-          startDate,
-          endDate,
-          limit: 1000,
-          sortBy: "createdAt",
-          sortOrder: "asc",
-        });
-        data = result.transactions || [];
-      } else if (activeTab === "payout") {
-        const result = await paymentService.searchPayouts({
-          startDate,
-          endDate,
-          limit: 1000,
-          sortBy: "createdAt",
-          sortOrder: "asc",
-        });
-        data = result.payouts || [];
+  // Date filter helper functions
+  const formatDateDisplay = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dateOnly = new Date(date);
+    dateOnly.setHours(0, 0, 0, 0);
+    
+    if (dateOnly.getTime() === today.getTime()) {
+      return 'Today';
+    }
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (dateOnly.getTime() === yesterday.getTime()) {
+      return 'Yesterday';
+    }
+    
+    return date.toLocaleDateString('en-IN', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  const navigateDate = (direction) => {
+    const currentDate = new Date(selectedDate);
+    if (direction === 'left') {
+      currentDate.setDate(currentDate.getDate() - 1);
+    } else {
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    const newDate = currentDate.toISOString().split('T')[0];
+    setSelectedDate(newDate);
+    setUseDateRange(false);
+    setShowAllTime(false);
+    setDateRange({ start: '', end: '' });
+    // Update filters immediately
+    setFilters(prev => ({
+      ...prev,
+      start_date: newDate,
+      end_date: newDate,
+      page: 1
+    }));
+  };
+
+  const handleDateRangeApply = () => {
+    if (dateRange.start && dateRange.end) {
+      if (new Date(dateRange.start) > new Date(dateRange.end)) {
+        setError('Start date cannot be after end date');
+        return;
       }
-
-      // Group by date
-      const grouped = {};
-      data.forEach((item) => {
-        const date = new Date(
-          item.createdAt || item.created_at || item.requestedAt
-        )
-          .toISOString()
-          .split("T")[0];
-        if (!grouped[date]) {
-          grouped[date] = { date, amount: 0, count: 0, success: 0, failed: 0 };
-        }
-        const amount = parseFloat(item.amount || item.netAmount || 0);
-        grouped[date].amount += amount;
-        grouped[date].count += 1;
-        if (
-          item.status === "paid" ||
-          item.status === "completed" ||
-          item.status === "success"
-        ) {
-          grouped[date].success += 1;
-        } else if (item.status === "failed" || item.status === "cancelled") {
-          grouped[date].failed += 1;
-        }
-      });
-
-      const chartDataArray = Object.values(grouped).sort(
-        (a, b) => new Date(a.date) - new Date(b.date)
-      );
-      setChartData(chartDataArray);
-    } catch (error) {
-      console.error("Chart data fetch error:", error);
-      setChartData([]);
-    } finally {
-      setChartLoading(false);
+      setUseDateRange(true);
+      setShowAllTime(false);
+      setShowDateRangePicker(false);
+      // Update filters immediately
+      setFilters(prev => ({
+        ...prev,
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+        page: 1
+      }));
+    } else {
+      setError('Please select both start and end dates');
     }
   };
+
+  const handleClearDateRange = () => {
+    setUseDateRange(false);
+    setShowAllTime(true); // Clear means show all time
+    setDateRange({ start: '', end: '' });
+    setSelectedDate(new Date().toISOString().split('T')[0]);
+    // Update filters immediately
+    setFilters(prev => ({
+      ...prev,
+      start_date: '',
+      end_date: '',
+      page: 1
+    }));
+  };
+
+  const handleAllTime = () => {
+    const newShowAllTime = !showAllTime;
+    setShowAllTime(newShowAllTime);
+    setUseDateRange(false);
+    setDateRange({ start: '', end: '' });
+    
+    if (newShowAllTime) {
+      // Switching to "All Time" - clear date filters
+      setSelectedDate(new Date().toISOString().split('T')[0]);
+      setFilters(prev => ({
+        ...prev,
+        start_date: '',
+        end_date: '',
+        page: 1
+      }));
+    } else {
+      // Switching to "Today" - set today's date
+      const today = new Date().toISOString().split('T')[0];
+      setSelectedDate(today);
+      setFilters(prev => ({
+        ...prev,
+        start_date: today,
+        end_date: today,
+        page: 1
+      }));
+    }
+  };
+
+  const updateFiltersFromDate = () => {
+    let startDate = '';
+    let endDate = '';
+    
+    if (showAllTime) {
+      startDate = '';
+      endDate = '';
+    } else if (useDateRange && dateRange.start && dateRange.end) {
+      startDate = dateRange.start;
+      endDate = dateRange.end;
+    } else if (!useDateRange && selectedDate) {
+      startDate = selectedDate;
+      endDate = selectedDate;
+    }
+    
+    setFilters(prev => ({
+      ...prev,
+      start_date: startDate,
+      end_date: endDate,
+      page: 1
+    }));
+  };
+
+  // Close date range picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showDateRangePicker && !event.target.closest('[data-date-range-picker]')) {
+        setShowDateRangePicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDateRangePicker]);
 
   // Animation variants
   const containerVariants = {
@@ -190,6 +261,34 @@ const TransactionsPage = () => {
     setError("");
 
     try {
+      // Determine date range based on current state
+      let startDate = undefined;
+      let endDate = undefined;
+      
+      // Priority: 1. Date range picker, 2. Filters (from handleAllTime or other actions), 3. Selected date, 4. All Time
+      if (useDateRange && dateRange.start && dateRange.end) {
+        // Use date range picker values
+        startDate = dateRange.start;
+        endDate = dateRange.end;
+      } else if (showAllTime) {
+        // Show all transactions - no date filter
+        startDate = undefined;
+        endDate = undefined;
+      } else if (filters.start_date && filters.end_date) {
+        // Use filters if explicitly set (from handleAllTime "Today" button or other actions)
+        startDate = filters.start_date;
+        endDate = filters.end_date;
+      } else if (filters.start_date) {
+        // Single date filter
+        startDate = filters.start_date;
+        endDate = filters.end_date || filters.start_date;
+      } else if (selectedDate) {
+        // Fallback to selectedDate if filters not set
+        startDate = selectedDate;
+        endDate = selectedDate;
+      }
+      // If showAllTime is true and no explicit dates, startDate and endDate remain undefined (show all)
+
       if (activeTab === "payin" || activeTab === "settlement") {
         // For settlement tab, force status=paid and settlementStatus=settled
         const extra =
@@ -200,11 +299,11 @@ const TransactionsPage = () => {
         const data = await paymentService.searchTransactions({
           page: filters.page,
           limit: filters.limit,
-          status: filters.status, // user-controlled for payin, will be overridden for settlement by ...extra
+          status: filters.status || (activeTab === "settlement" ? "paid" : undefined),
           paymentGateway: filters.payment_gateway,
           paymentMethod: filters.payment_method,
-          startDate: filters.start_date,
-          endDate: filters.end_date,
+          startDate: startDate,
+          endDate: endDate,
           search: filters.search,
           sortBy: filters.sort_by,
           sortOrder: filters.sort_order,
@@ -218,8 +317,8 @@ const TransactionsPage = () => {
           page: filters.page,
           limit: filters.limit,
           status: filters.status,
-          startDate: filters.start_date,
-          endDate: filters.end_date,
+          startDate: startDate,
+          endDate: endDate,
           search: filters.search,
           sortBy: filters.sort_by,
           sortOrder: filters.sort_order,
@@ -268,6 +367,36 @@ const TransactionsPage = () => {
         }, 0);
     }
     return 0;
+  };
+
+  // Calculate transaction statistics
+  const calculateTransactionStats = () => {
+    if (activeTab === "payin" || activeTab === "settlement") {
+      const totalTransactions = pagination.totalCount || 0;
+      const successfulTransactionsInPage = transactions.filter(
+        (txn) => txn.status === "paid" || txn.status === "success"
+      ).length;
+      const totalPaidAmount = calculateTotalPaidAmount();
+      
+      // Calculate success rate based on current page transactions
+      // Note: This is an approximation based on the current page view
+      const successRate = transactions.length > 0 
+        ? ((successfulTransactionsInPage / transactions.length) * 100).toFixed(2)
+        : '0.00';
+      
+      return {
+        totalTransactions,
+        successfulTransactions: successfulTransactionsInPage,
+        totalPaidAmount,
+        successRate: parseFloat(successRate)
+      };
+    }
+    return {
+      totalTransactions: 0,
+      successfulTransactions: 0,
+      totalPaidAmount: 0,
+      successRate: 0
+    };
   };
 
   // Open download modal
@@ -507,91 +636,7 @@ const TransactionsPage = () => {
     }
   };
 
-  const formatForExport = () => {
-    if (activeTab === "payin" || activeTab === "settlement") {
-      return transactions.map((txn) => ({
-        "Transaction ID": txn.transactionId || txn.transaction_id || "-",
-        "Order ID": txn.orderId || txn.order_id || "-",
-        UTR: txn.acquirerData?.utr || txn.utr || "N/A",
-        "Bank Transaction ID": txn.acquirerData?.bank_transaction_id || "N/A",
-        Amount: `₹${txn.amount}`,
-        Commission: `₹${txn.commission ?? 0}`,
-        "Net Amount": `₹${txn.netAmount ?? txn.net_amount ?? 0}`,
-        Status: txn.status,
-        "Payment Method": txn.paymentMethod || txn.payment_method || "N/A",
-        "Customer Name":
-          txn.customerName ||
-          txn.customer_name ||
-          (txn.customer && txn.customer.name) ||
-          "-",
-        "Customer Email":
-          txn.customerEmail ||
-          txn.customer_email ||
-          (txn.customer && txn.customer.email) ||
-          "-",
-        "Customer Phone":
-          txn.customerPhone ||
-          txn.customer_phone ||
-          (txn.customer && txn.customer.phone) ||
-          "-",
-        Description: txn.description || "N/A",
-        Gateway: txn.paymentGateway || txn.payment_gateway || "-",
-        "Settlement Status":
-          txn.settlementStatus || txn.settlement_status || "-",
-        "Paid At": txn.paidAt || txn.paid_at || "-",
-        "Settled At":
-          txn.settlementDate ||
-          txn.settlement_date ||
-          txn.updatedAt ||
-          txn.updated_at ||
-          "-",
-      }));
-    } else {
-      return payouts.map((payout) => ({
-        "Payout ID": payout.payoutId,
-        Amount: `₹${payout.amount}`,
-        "Net Amount": `₹${payout.netAmount}`,
-        Commission: `₹${payout.commission}`,
-        Status: payout.status,
-        "Transfer Mode": payout.transferMode,
-        Description: payout.description || "N/A",
-        "Requested At": payout.requestedAt,
-        "Completed At": payout.completedAt || "Not completed",
-        UTR: payout.utr || "N/A",
-      }));
-    }
-  };
 
-  const formatCurrencyChart = (amount) => {
-    if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
-    if (amount >= 1000) return `₹${(amount / 1000).toFixed(1)}K`;
-    return `₹${amount.toFixed(0)}`;
-  };
-
-  const CustomTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-[#122D32] border border-white/20 rounded-lg p-3 shadow-lg">
-          <p className="text-white font-medium text-sm font-['Albert_Sans'] mb-2">
-            {payload[0].payload.date}
-          </p>
-          {payload.map((entry, index) => (
-            <p
-              key={index}
-              className="text-xs font-['Albert_Sans']"
-              style={{ color: entry.color }}
-            >
-              {entry.name}:{" "}
-              {entry.name === "Amount"
-                ? formatCurrencyChart(entry.value)
-                : entry.value}
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="min-h-screen bg-[#1F383D]">
@@ -652,204 +697,156 @@ const TransactionsPage = () => {
                       </p>
                     </div>
 
-                    <div className="flex gap-3 flex-wrap">
-                      <button
-                        onClick={fetchTransactions}
-                        disabled={loading}
-                        className="bg-accent hover:bg-bg-tertiary text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    <div className="flex items-center gap-2 relative" data-date-range-picker>
+                      {/* Date Navigation */}
+                      <div className="flex items-center gap-1 bg-[#263F43] border border-white/10 rounded-lg p-1">
+                        <button
+                          onClick={() => navigateDate('left')}
+                          className="p-1.5 hover:bg-white/10 rounded transition-colors text-white/70 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Previous day"
+                          disabled={useDateRange || showAllTime}
+                        >
+                          <FiChevronLeft size={16} />
+                        </button>
+                        <button
+                          onClick={() => setShowDateRangePicker(!showDateRangePicker)}
+                          className="px-3 py-1.5 text-white text-sm font-medium font-['Albert_Sans'] min-w-[160px] text-center hover:bg-white/10 rounded transition-colors flex items-center justify-center gap-2"
+                          title="Click to select date or range"
+                        >
+                          <FiCalendar size={14} />
+                          {showAllTime ? (
+                            <span className="text-xs">All Time</span>
+                          ) : useDateRange && dateRange.start && dateRange.end ? (
+                            <span className="text-xs">
+                              {new Date(dateRange.start).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - {new Date(dateRange.end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                            </span>
+                          ) : (
+                            formatDateDisplay(selectedDate)
+                          )}
+                        </button>
+                        <button
+                          onClick={() => navigateDate('right')}
+                          className="p-1.5 hover:bg-white/10 rounded transition-colors text-white/70 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Next day"
+                          disabled={useDateRange || showAllTime}
+                        >
+                          <FiChevronRight size={16} />
+                        </button>
+                      </div>
+                      {/* Date Range Picker Dropdown */}
+                      {showDateRangePicker && (
+                        <div className="absolute top-full right-0 mt-2 bg-[#122D32] border border-white/10 rounded-xl shadow-2xl p-4 z-50 min-w-[340px]">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-white font-medium font-['Albert_Sans'] flex items-center gap-2">
+                              <FiCalendar />
+                              Select Date Range
+                            </h3>
+                            <button
+                              onClick={() => setShowDateRangePicker(false)}
+                              className="text-white/60 hover:text-white transition-colors"
+                            >
+                              <FiX size={20} />
+                            </button>
+                          </div>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-white/70 text-sm font-['Albert_Sans'] mb-2 flex items-center gap-2">
+                                <FiCalendar size={14} />
+                                Start Date
+                              </label>
+                              <input
+                                type="date"
+                                value={dateRange.start}
+                                onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                                max={dateRange.end || new Date().toISOString().split('T')[0]}
+                                className="w-full bg-[#001D22] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-white/70 text-sm font-['Albert_Sans'] mb-2 flex items-center gap-2">
+                                <FiCalendar size={14} />
+                                End Date
+                              </label>
+                              <input
+                                type="date"
+                                value={dateRange.end}
+                                onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                                min={dateRange.start}
+                                max={new Date().toISOString().split('T')[0]}
+                                className="w-full bg-[#001D22] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-['Albert_Sans']"
+                              />
+                            </div>
+                            <div className="flex gap-2 pt-2">
+                              <button
+                                onClick={handleDateRangeApply}
+                                disabled={!dateRange.start || !dateRange.end}
+                                className="flex-1 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Apply Range
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleClearDateRange();
+                                  setShowDateRangePicker(false);
+                                }}
+                                className="px-4 py-2 bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-colors"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                            <div className="pt-2 border-t border-white/10">
+                              <button
+                                onClick={() => {
+                                  handleAllTime();
+                                  setShowDateRangePicker(false);
+                                }}
+                                className="w-full bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white px-4 py-2 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-colors"
+                              >
+                                All Time
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                       <button
+                        onClick={handleAllTime}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all duration-200 ${
+                          showAllTime
+                            ? 'bg-gradient-to-r from-accent to-bg-tertiary text-white'
+                            : 'bg-[#263F43] border border-white/10 hover:border-accent text-white'
+                        }`}
+                        title={showAllTime ? "Click to show Today" : "Click to show All Time"}
                       >
-                        <FiRefreshCw
-                          className={loading ? "animate-spin" : ""}
-                        />
+                        {showAllTime ? 'Today' : 'All Time'}
+                      </button>
+                      <button
+                        onClick={() => fetchTransactions()}
+                        disabled={loading}
+                        className="bg-[#263F43] hover:bg-[#2a4a4f] border border-white/10 text-white px-4 py-2 rounded-lg text-sm font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Refresh data"
+                      >
+                        <FiRefreshCw className={loading ? "animate-spin" : ""} size={16} />
                         {loading ? "Loading..." : "Refresh"}
                       </button>
-                      {activeTab === "payin" || activeTab === "settlement" ? (
-                        <button
-                          onClick={handleOpenDownloadModal}
-                          disabled={downloading || loading}
-                          className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                        >
-                          <FiDownload />
-                          {downloading
-                            ? "Downloading..."
-                            : "Download Excel Report"}
-                        </button>
-                      ) : activeTab === "payout" ? (
-                        <button
-                          onClick={handleOpenPayoutDownloadModal}
-                          disabled={downloading || loading}
-                          className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                        >
-                          <FiDownload />
-                          {downloading
-                            ? "Downloading..."
-                            : "Download Filtered Excel Report"}
-                        </button>
-                      ) : null}
-                      <ExportCSV
-                        data={formatForExport()}
-                        filename={`${activeTab}_${
-                          new Date().toISOString().split("T")[0]
-                        }.csv`}
-                        className="bg-bg-secondary text-white border border-accent px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:bg-bg-tertiary hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary"
-                      />
+                      <button
+                        onClick={() => {
+                          if (activeTab === "payin" || activeTab === "settlement") {
+                            handleOpenDownloadModal();
+                          } else if (activeTab === "payout") {
+                            handleOpenPayoutDownloadModal();
+                          }
+                        }}
+                        disabled={downloading || loading}
+                        className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2 rounded-lg text-sm font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Download report"
+                      >
+                        <FiDownload size={16} />
+                        {downloading ? "Downloading..." : "Download"}
+                      </button>
                     </div>
                   </div>
-                </motion.div>
-                <div className="flex flex-col gap-6 sm:gap-8">
-                  {/* Tabs */}
-                  <div className="flex items-center gap-2 bg-bg-tertiary border border-white/10 rounded-lg p-1 self-start">
-                    {[
-                      { value: "payin", label: "Payin" },
-                      { value: "payout", label: "Payout" },
-                      { value: "settlement", label: "Settlements" },
-                    ].map((tab) => (
-                      <button
-                        key={tab.value}
-                        onClick={() => handleTabChange(tab.value)}
-                        className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium font-['Albert_Sans'] transition-all duration-200 ${
-                          activeTab === tab.value
-                            ? "bg-accent text-white shadow-sm"
-                            : "text-white/60 hover:text-white hover:bg-white/5"
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Analytics Chart */}
-                  {chartData.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 30 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, ease: "easeOut" }}
-                      className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6"
-                    >
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
-                          <FiTrendingUp className="text-accent text-xl" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg sm:text-xl font-medium text-white font-['Albert_Sans']">
-                            Transaction Analytics
-                          </h3>
-                          <p className="text-white/60 text-xs sm:text-sm font-['Albert_Sans']">
-                            {activeTab === "payin"
-                              ? "Payin"
-                              : activeTab === "payout"
-                              ? "Payout"
-                              : "Settlement"}{" "}
-                            trends over time
-                          </p>
-                        </div>
-                      </div>
-                      {chartLoading ? (
-                        <div className="flex items-center justify-center h-64">
-                          <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
-                        </div>
-                      ) : (
-                        <ResponsiveContainer width="100%" height={300}>
-                          <ComposedChart data={chartData}>
-                            <defs>
-                              <linearGradient
-                                id="amountGradient"
-                                x1="0"
-                                y1="0"
-                                x2="0"
-                                y2="1"
-                              >
-                                <stop
-                                  offset="5%"
-                                  stopColor="#475C5F"
-                                  stopOpacity={0.3}
-                                />
-                                <stop
-                                  offset="95%"
-                                  stopColor="#475C5F"
-                                  stopOpacity={0}
-                                />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid
-                              strokeDasharray="3 3"
-                              stroke="#ffffff10"
-                            />
-                            <XAxis
-                              dataKey="date"
-                              tick={{ fill: "#ffffff60", fontSize: 12 }}
-                              tickFormatter={(value) =>
-                                new Date(value).toLocaleDateString("en-IN", {
-                                  month: "short",
-                                  day: "numeric",
-                                })
-                              }
-                              stroke="#ffffff20"
-                            />
-                            <YAxis
-                              yAxisId="amount"
-                              tick={{ fill: "#ffffff60", fontSize: 12 }}
-                              tickFormatter={formatCurrencyChart}
-                              stroke="#ffffff20"
-                            />
-                            <YAxis
-                              yAxisId="count"
-                              orientation="right"
-                              tick={{ fill: "#ffffff60", fontSize: 12 }}
-                              stroke="#ffffff20"
-                            />
-                            <Tooltip content={<CustomTooltip />} />
-                            <Legend
-                              wrapperStyle={{ paddingTop: "20px" }}
-                              iconType="circle"
-                              formatter={(value) => (
-                                <span className="text-white/80 text-xs font-['Albert_Sans']">
-                                  {value}
-                                </span>
-                              )}
-                            />
-                            <Area
-                              yAxisId="amount"
-                              type="monotone"
-                              dataKey="amount"
-                              fill="url(#amountGradient)"
-                              stroke="#475C5F"
-                              strokeWidth={2}
-                              name="Amount"
-                            />
-                            <Line
-                              yAxisId="count"
-                              type="monotone"
-                              dataKey="count"
-                              stroke="#5EEAD4"
-                              strokeWidth={2}
-                              dot={{ fill: "#5EEAD4", r: 3 }}
-                              name="Count"
-                            />
-                            <Bar
-                              yAxisId="count"
-                              dataKey="success"
-                              fill="#10b981"
-                              name="Success"
-                            />
-                            <Bar
-                              yAxisId="count"
-                              dataKey="failed"
-                              fill="#ef4444"
-                              name="Failed"
-                            />
-                          </ComposedChart>
-                        </ResponsiveContainer>
-                      )}
-                    </motion.div>
-                  )}
-
-                  {/* Filter bar */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
-                    className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6"
+                                    {/* Filter bar */}
+                  <div  className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6"
                   >
                     <div
                       className={`grid grid-cols-1 sm:grid-cols-2 ${
@@ -867,24 +864,6 @@ const TransactionsPage = () => {
                         placeholder={`Search ${
                           activeTab === "payin" ? "transactions" : "payouts"
                         }...`}
-                      />
-                      <input
-                        className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans'] text-sm"
-                        type="date"
-                        value={filters.start_date}
-                        onChange={(e) =>
-                          handleFilterChange("start_date", e.target.value)
-                        }
-                        placeholder="Start Date"
-                      />
-                      <input
-                        className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans'] text-sm"
-                        type="date"
-                        value={filters.end_date}
-                        onChange={(e) =>
-                          handleFilterChange("end_date", e.target.value)
-                        }
-                        placeholder="End Date"
                       />
                       <select
                         className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans'] text-sm"
@@ -951,89 +930,30 @@ const TransactionsPage = () => {
                         <option value="desc">Descending</option>
                         <option value="asc">Ascending</option>
                       </select>
+                    </div>
+                  </div>
+                </motion.div>
+                <div className="flex flex-col gap-6 sm:gap-8">
+                  {/* Tabs */}
+                  <div className="flex items-center gap-2 bg-bg-tertiary border border-white/10 rounded-lg p-1 self-start">
+                    {[
+                      { value: "payin", label: "Payin" },
+                      { value: "payout", label: "Payout" },
+                      { value: "settlement", label: "Settlements" },
+                    ].map((tab) => (
                       <button
-                        className={`w-full sm:w-auto bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed ${
-                          activeTab === "payin"
-                            ? "col-span-1 sm:col-span-2 lg:col-span-5"
-                            : "col-span-1 sm:col-span-2 lg:col-span-4"
+                        key={tab.value}
+                        onClick={() => handleTabChange(tab.value)}
+                        className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium font-['Albert_Sans'] transition-all duration-200 ${
+                          activeTab === tab.value
+                            ? "bg-accent text-white shadow-sm"
+                            : "text-white/60 hover:text-white hover:bg-white/5"
                         }`}
-                        onClick={fetchTransactions}
-                        disabled={loading}
                       >
-                        {loading ? "Loading..." : "Apply Filters"}
+                        {tab.label}
                       </button>
-                    </div>
-                  </motion.div>
-
-                  {/* Total Paid Amount Summary */}
-                  {(activeTab === "payin" || activeTab === "settlement") && transactions.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.25 }}
-                      className="bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30 rounded-xl p-4 sm:p-6"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-white/70 text-sm font-medium font-['Albert_Sans'] mb-1">
-                            Total Paid Amount (Filtered Results)
-                          </h3>
-                          <p className="text-2xl sm:text-3xl font-bold text-green-400 font-['Albert_Sans']">
-                            ₹{calculateTotalPaidAmount().toLocaleString("en-IN", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </p>
-                          <p className="text-white/60 text-xs font-['Albert_Sans'] mt-1">
-                            Based on {transactions.filter(txn => txn.status === "paid" || txn.status === "success").length} paid transaction(s)
-                          </p>
-                        </div>
-                        <FiTrendingUp className="text-green-400 text-4xl sm:text-5xl opacity-50" />
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Reports section */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    className="bg-[#122D32] border border-white/10 rounded-xl p-4 sm:p-6"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                      <span className="text-white/80 font-semibold text-sm sm:text-base font-['Albert_Sans'] whitespace-nowrap">
-                        Reports:
-                      </span>
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          onClick={handleOpenDownloadModal}
-                          disabled={downloading || loading}
-                          className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center gap-2"
-                        >
-                          <FiDownload className="text-sm" />
-                          Download Transactions
-                        </button>
-                        <button
-                          onClick={handleOpenPayoutDownloadModal}
-                          disabled={downloading || loading}
-                          className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center gap-2"
-                        >
-                          <FiDownload className="text-sm" />
-                          Download Payouts
-                        </button>
-                        <button
-                          onClick={handleDownloadCombinedReport}
-                          disabled={downloading || loading}
-                          className="bg-[#263F43] hover:bg-[#2a4549] border border-accent/30 hover:border-accent/50 text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center gap-2"
-                        >
-                          <FiDownload className="text-sm" />
-                          {downloading
-                            ? "Preparing…"
-                            : "Download Combined (2 sheets)"}
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
+                    ))}
+                  </div>
 
                   {error && <div className="error-message">{error}</div>}
                   {loading ? (
@@ -1152,8 +1072,35 @@ const TransactionsPage = () => {
                             </tbody>
                           </table>
                           </div>
+                          {/* Pagination Controls */}
+                          {pagination.totalPages > 1 && (
+                            <div className="flex items-center justify-between px-4 py-3 bg-[#001D22] border-t border-white/10">
+                              <div className="text-sm text-white/70 font-['Albert_Sans']">
+                                Showing {((pagination.currentPage - 1) * pagination.limit) + 1} to {Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)} of {pagination.totalCount} transactions
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handlePageChange(pagination.currentPage - 1)}
+                                  disabled={pagination.currentPage === 1 || loading}
+                                  className="px-3 py-1.5 bg-[#263F43] border border-white/10 hover:border-accent text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <FiChevronLeft />
+                                </button>
+                                <span className="text-white text-sm font-['Albert_Sans']">
+                                  Page {pagination.currentPage} of {pagination.totalPages}
+                                </span>
+                                <button
+                                  onClick={() => handlePageChange(pagination.currentPage + 1)}
+                                  disabled={pagination.currentPage >= pagination.totalPages || loading}
+                                  className="px-3 py-1.5 bg-[#263F43] border border-white/10 hover:border-accent text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <FiChevronRight />
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      ) : activeTab === "payin" && transactions.length === 0 ? (
+                      ) : activeTab === "payin" && !loading && transactions.length === 0 ? (
                         <div className="empty-state">
                           <div className="empty-icon">
                             <HiOutlineClipboardDocumentList />
@@ -1249,8 +1196,35 @@ const TransactionsPage = () => {
                               ))}
                             </tbody>
                           </table>
+                          {/* Pagination Controls */}
+                          {pagination.totalPages > 1 && (
+                            <div className="flex items-center justify-between px-4 py-3 bg-[#001D22] border-t border-white/10">
+                              <div className="text-sm text-white/70 font-['Albert_Sans']">
+                                Showing {((pagination.currentPage - 1) * pagination.limit) + 1} to {Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)} of {pagination.totalCount} payouts
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handlePageChange(pagination.currentPage - 1)}
+                                  disabled={pagination.currentPage === 1 || loading}
+                                  className="px-3 py-1.5 bg-[#263F43] border border-white/10 hover:border-accent text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <FiChevronLeft />
+                                </button>
+                                <span className="text-white text-sm font-['Albert_Sans']">
+                                  Page {pagination.currentPage} of {pagination.totalPages}
+                                </span>
+                                <button
+                                  onClick={() => handlePageChange(pagination.currentPage + 1)}
+                                  disabled={pagination.currentPage >= pagination.totalPages || loading}
+                                  className="px-3 py-1.5 bg-[#263F43] border border-white/10 hover:border-accent text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <FiChevronRight />
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      ) : activeTab === "payout" && payouts.length === 0 ? (
+                      ) : activeTab === "payout" && !loading && payouts.length === 0 ? (
                         <div className="empty-state">
                           <div className="empty-icon">
                             <HiOutlineClipboardDocumentList />
@@ -1396,9 +1370,36 @@ const TransactionsPage = () => {
                               })}
                             </tbody>
                           </table>
+                          {/* Pagination Controls */}
+                          {pagination.totalPages > 1 && (
+                            <div className="flex items-center justify-between px-4 py-3 bg-[#001D22] border-t border-white/10">
+                              <div className="text-sm text-white/70 font-['Albert_Sans']">
+                                Showing {((pagination.currentPage - 1) * pagination.limit) + 1} to {Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)} of {pagination.totalCount} transactions
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handlePageChange(pagination.currentPage - 1)}
+                                  disabled={pagination.currentPage === 1 || loading}
+                                  className="px-3 py-1.5 bg-[#263F43] border border-white/10 hover:border-accent text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <FiChevronLeft />
+                                </button>
+                                <span className="text-white text-sm font-['Albert_Sans']">
+                                  Page {pagination.currentPage} of {pagination.totalPages}
+                                </span>
+                                <button
+                                  onClick={() => handlePageChange(pagination.currentPage + 1)}
+                                  disabled={pagination.currentPage >= pagination.totalPages || loading}
+                                  className="px-3 py-1.5 bg-[#263F43] border border-white/10 hover:border-accent text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <FiChevronRight />
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ) : activeTab === "settlement" &&
-                        transactions.length === 0 ? (
+                        !loading && transactions.length === 0 ? (
                         <div className="empty-state">
                           <div className="empty-icon">
                             <HiOutlineClipboardDocumentList />
