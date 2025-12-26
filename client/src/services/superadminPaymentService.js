@@ -223,36 +223,6 @@ async triggerManualSettlement() {
     }
   }
 
-  // ============ MERCHANT ANALYTICS ============
-  async getMerchantAnalytics(merchantId, filters = {}) {
-    try {
-      const token = authService.getToken();
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      const response = await axios.get(API_ENDPOINTS.ADMIN_MERCHANT_ANALYTICS(merchantId), {
-        headers: {
-          'x-auth-token': token,
-          'Content-Type': 'application/json',
-        },
-        params: {
-          status: filters.status || undefined,
-          startDate: filters.startDate || undefined,
-          endDate: filters.endDate || undefined,
-          minAmount: filters.minAmount || undefined,
-          maxAmount: filters.maxAmount || undefined,
-          search: filters.search || undefined
-        }
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('Merchant analytics error:', error);
-      this.handleError(error, 'Failed to fetch merchant analytics');
-    }
-  }
-
   async settleTransaction(transactionId) {
     try {
       const token = authService.getToken();
