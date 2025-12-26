@@ -474,34 +474,34 @@ const PayinsPage = () => {
                   <div className="bg-[#122D32] border border-white/10 rounded-xl shadow-lg w-full overflow-hidden">
                     <div className="overflow-x-auto w-full">
                       <table className="w-full border-collapse" style={{ tableLayout: 'fixed', width: '100%' }}>
-                        <thead className="bg-green-600/20 sticky top-0 z-10">
-                          <tr>
+                      <thead className="bg-green-600/20 sticky top-0 z-10">
+                        <tr>
                             <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '15%' }}>
-                              Transaction ID
-                            </th>
+                            Transaction ID
+                          </th>
                             <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '12%' }}>
-                              Order ID
-                            </th>
+                            Order ID
+                          </th>
                             <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '18%' }}>
-                              Customer
-                            </th>
+                            Customer
+                          </th>
                             <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '10%' }}>
-                              Amount
-                            </th>
+                            Amount
+                          </th>
                             <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '10%' }}>
-                              Status
-                            </th>
+                            Status
+                          </th>
                             <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '12%' }}>
-                              Payment Method
-                            </th>
+                            Payment Method
+                          </th>
                             <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '10%' }}>
-                              Gateway
-                            </th>
+                            Gateway
+                          </th>
                             <th className="px-3 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider border-b border-white/10 font-['Albert_Sans']" style={{ width: '13%' }}>
-                              Created At
-                            </th>
-                          </tr>
-                        </thead>
+                            Created At
+                          </th>
+                        </tr>
+                      </thead>
                       <tbody className="bg-[#263F43]">
                         {transactions.map((transaction, index) => (
                           <tr

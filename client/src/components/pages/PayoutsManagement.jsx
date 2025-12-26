@@ -15,7 +15,8 @@ import {
   FiUser,
   FiCreditCard,
   FiInfo,
-  FiCopy
+  FiCopy,
+  FiTrash2
 } from 'react-icons/fi';
 import { RiMoneyDollarCircleLine } from 'react-icons/ri';
 import superadminPaymentService from '../../services/superadminPaymentService';
@@ -48,6 +49,7 @@ const PayoutsManagement = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [processUtr, setProcessUtr] = useState('');
   const [processNotes, setProcessNotes] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
 
   useEffect(() => {
     fetchPayouts();
@@ -178,6 +180,27 @@ const PayoutsManagement = () => {
     setRejectReason('');
     setProcessUtr('');
     setProcessNotes('');
+    setDeleteReason('');
+  };
+
+  const handleDeletePayout = async () => {
+    if (!deleteReason.trim()) {
+      setToast({ message: 'Delete reason is required', type: 'error' });
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      await superadminPaymentService.deletePayout(selectedPayout.payoutId, deleteReason);
+      setToast({ message: 'Payout deleted successfully', type: 'success' });
+      setShowModal(false);
+      setDeleteReason('');
+      fetchPayouts();
+    } catch (error) {
+      setToast({ message: error.message, type: 'error' });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -571,6 +594,18 @@ const PayoutsManagement = () => {
                             </button>
                             </>
                           )}
+
+                          {/* Delete button - show for non-completed payouts */}
+                          {payout.status !== 'completed' && (
+                            <button
+                              onClick={() => openModal('delete', payout)}
+                              className="flex items-center gap-1 px-2 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-500 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-colors"
+                              title="Delete Payout"
+                            >
+                              <FiTrash2 size={12} />
+                              <span className="hidden sm:inline">Delete</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -627,6 +662,7 @@ const PayoutsManagement = () => {
                 {modalType === 'approve' && '✅ Approve Payout'}
                 {modalType === 'reject' && '❌ Reject Payout'}
                 {modalType === 'process' && '🚀 Process Payout'}
+                {modalType === 'delete' && '🗑️ Delete Payout'}
               </h3>
               <button onClick={closeModal} className="modal-close-btn">
                 <FiX />
@@ -875,6 +911,12 @@ const PayoutsManagement = () => {
                           <>
                             <FiSend style={{ color: '#3b82f6' }} />
                             Process Payout
+                          </>
+                        )}
+                        {modalType === 'delete' && (
+                          <>
+                            <FiTrash2 style={{ color: '#ef4444' }} />
+                            Delete Payout
                           </>
                         )}
                       </h3>
@@ -1165,6 +1207,55 @@ const PayoutsManagement = () => {
                           </div>
                         </div>
                       )}
+
+                      {/* DELETE FORM */}
+                      {modalType === 'delete' && (
+                        <div>
+                          <div className="confirmation-box">
+                            <div className="confirmation-icon error">
+                              <FiTrash2 size={32} />
+                            </div>
+                            <p className="confirmation-message">
+                              ⚠️ Warning: This action cannot be undone. Deleting this payout will permanently remove it and release the associated transactions for new payout requests.
+                            </p>
+                          </div>
+
+                          <div className="info-box">
+                            <div className="info-row">
+                              <span className="info-label">Payout ID</span>
+                              <span className="info-value" style={{ fontFamily: 'monospace' }}>
+                                {selectedPayout.payoutId}
+                              </span>
+                            </div>
+                            <div className="info-row">
+                              <span className="info-label">Merchant</span>
+                              <span className="info-value">{selectedPayout.merchantName}</span>
+                            </div>
+                            <div className="info-row">
+                              <span className="info-label">Amount</span>
+                              <span className="info-value highlight">{formatCurrency(selectedPayout.netAmount)}</span>
+                            </div>
+                            <div className="info-row">
+                              <span className="info-label">Status</span>
+                              <span className={`status-badge ${getStatusBadgeClass(selectedPayout.status)}`}>
+                                {getStatusIcon(selectedPayout.status)}
+                                {selectedPayout.status}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="form-group">
+                            <label>Delete Reason *</label>
+                            <textarea
+                              value={deleteReason}
+                              onChange={(e) => setDeleteReason(e.target.value)}
+                              placeholder="Enter reason for deleting this payout..."
+                              required
+                              rows={4}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* FOOTER */}
@@ -1204,6 +1295,17 @@ const PayoutsManagement = () => {
                         >
                           <FiSend />
                           {actionLoading ? 'Processing...' : 'Complete Payout'}
+                        </button>
+                      )}
+
+                      {modalType === 'delete' && (
+                        <button
+                          onClick={handleDeletePayout}
+                          disabled={actionLoading || !deleteReason.trim()}
+                          className="btn btn-reject"
+                        >
+                          <FiTrash2 />
+                          {actionLoading ? 'Deleting...' : 'Delete Payout'}
                         </button>
                       )}
                     </div>
@@ -1249,6 +1351,17 @@ const PayoutsManagement = () => {
                 >
                   <FiSend />
                   {actionLoading ? 'Processing...' : 'Complete Payout'}
+                </button>
+              )}
+
+              {modalType === 'delete' && (
+                <button
+                  onClick={handleDeletePayout}
+                  disabled={actionLoading || !deleteReason.trim()}
+                  className="primary-btn reject-btn"
+                >
+                  <FiTrash2 />
+                  {actionLoading ? 'Deleting...' : 'Delete Payout'}
                 </button>
               )}
             </div>

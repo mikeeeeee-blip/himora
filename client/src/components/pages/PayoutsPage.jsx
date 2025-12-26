@@ -232,6 +232,13 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
     fetchPayouts();
     loadEligibility();
     fetchChartData();
+    
+    // Refresh balance every 30 seconds to prevent stale data
+    const balanceInterval = setInterval(() => {
+      loadEligibility();
+    }, 30000);
+    
+    return () => clearInterval(balanceInterval);
   }, [filters.page, filters.start_date, filters.end_date]);
 
   const loadEligibility = async () => {
@@ -490,11 +497,23 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
         setShowRequestForm(false);
         setToast({ message: 'Payout request submitted successfully!', type: 'success' });
         resetForm();
-        fetchPayouts();
-        loadEligibility();
+        // Refresh data immediately to get updated balance
+        await Promise.all([
+          fetchPayouts(),
+          loadEligibility()
+        ]);
     } catch (error) {
-        setError(error.message);
-        setToast({ message: error.message, type: 'error' });
+        const errorMessage = error.response?.data?.error || error.message || 'Failed to request payout';
+        setError(errorMessage);
+        setToast({ message: errorMessage, type: 'error' });
+        
+        // If balance mismatch error, refresh balance to show correct value
+        if (error.response?.data?.availableBalance !== undefined) {
+          console.log('Balance mismatch detected, refreshing balance...');
+          setTimeout(() => {
+            loadEligibility();
+          }, 500);
+        }
     } finally {
         setRequestLoading(false);
     }

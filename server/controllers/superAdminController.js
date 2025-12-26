@@ -214,6 +214,80 @@ exports.approvePayout = async (req, res) => {
     }
 };
 
+// ============ DELETE PAYOUT ============
+exports.deletePayout = async (req, res) => {
+    try {
+        const { payoutId } = req.params;
+        const { reason } = req.query; // Get reason from query params since DELETE doesn't support body
+
+        console.log(`🗑️ SuperAdmin ${req.user.name} deleting payout: ${payoutId}`);
+
+        const payout = await Payout.findOne({ payoutId });
+
+        if (!payout) {
+            return res.status(404).json({
+                success: false,
+                error: 'Payout request not found'
+            });
+        }
+
+        // ✅ Can only delete payouts that are not completed
+        // Allow deletion of: requested, pending, processing, rejected, failed, cancelled
+        if (payout.status === 'completed') {
+            return res.status(400).json({
+                success: false,
+                error: 'Cannot delete a completed payout. Completed payouts cannot be deleted.',
+                currentStatus: payout.status
+            });
+        }
+
+        // ✅ Rollback Free Payout if applicable
+        if (payout.commissionType === 'free') {
+            const merchant = await User.findById(payout.merchantId);
+            if (merchant) {
+                merchant.freePayoutsUnder500 += 1;
+                await merchant.save();
+                console.log(`✅ Restored 1 free payout to merchant ${merchant.name}`);
+            }
+        }
+
+        // ✅ Rollback associated transactions
+        await Transaction.updateMany(
+            { payoutId: payout._id },
+            {
+                $set: {
+                    payoutStatus: 'unpaid',
+                    payoutId: null
+                }
+            }
+        );
+
+        // ✅ Delete the payout
+        await Payout.deleteOne({ payoutId });
+
+        console.log(`✅ Payout ${payoutId} deleted successfully by ${req.user.name}`);
+
+        res.json({
+            success: true,
+            message: 'Payout deleted successfully',
+            payout: {
+                payoutId: payout.payoutId,
+                deletedAt: new Date(),
+                deletedBy: req.user.name,
+                reason: reason || 'Deleted by superadmin'
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Delete Payout Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete payout',
+            detail: error.message
+        });
+    }
+};
+
 // ============ REJECT PAYOUT ============
 exports.rejectPayout = async (req, res) => {
     try {

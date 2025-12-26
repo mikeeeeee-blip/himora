@@ -152,44 +152,44 @@ exports.createCashfreePaymentLink = async (req, res) => {
             for (let attempt = 0; attempt <= maxRetries; attempt++) {
                 try {
                     sessionResponse = await axios.post(
-                        createSessionUrl,
-                        {
+                createSessionUrl,
+                {
                             orderId: finalOrderId,
-                            orderAmount: amountValue,
+                    orderAmount: amountValue,
                             transactionId: transactionId,
-                            customerDetails: {
-                                customerId: `CUST_${cleanPhone}_${Date.now()}`,
-                                customerName: customer_name,
-                                customerEmail: customer_email,
-                                customerPhone: cleanPhone,
-                            },
-                            shippingAddress: {
-                                fullName: customer_name,
-                                phone: cleanPhone,
-                                addressLine1: 'N/A',
-                                city: 'N/A',
-                                state: 'N/A',
-                                pincode: '000000',
-                                country: 'India'
-                            },
-                            billingAddress: {
-                                fullName: customer_name,
-                                phone: cleanPhone,
-                                addressLine1: 'N/A',
-                                city: 'N/A',
-                                state: 'N/A',
-                                pincode: '000000',
-                                country: 'India'
-                            },
-                            items: [], // Empty items for payment link
-                        },
-                        {
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            timeout: 30000, // 30 second timeout
-                        }
-                    );
+                    customerDetails: {
+                        customerId: `CUST_${cleanPhone}_${Date.now()}`,
+                        customerName: customer_name,
+                        customerEmail: customer_email,
+                        customerPhone: cleanPhone,
+                    },
+                    shippingAddress: {
+                        fullName: customer_name,
+                        phone: cleanPhone,
+                        addressLine1: 'N/A',
+                        city: 'N/A',
+                        state: 'N/A',
+                        pincode: '000000',
+                        country: 'India'
+                    },
+                    billingAddress: {
+                        fullName: customer_name,
+                        phone: cleanPhone,
+                        addressLine1: 'N/A',
+                        city: 'N/A',
+                        state: 'N/A',
+                        pincode: '000000',
+                        country: 'India'
+                    },
+                    items: [], // Empty items for payment link
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    timeout: 30000, // 30 second timeout
+                }
+            );
 
                     // If successful, break out of retry loop
                     if (sessionResponse.data.success) {
@@ -198,7 +198,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
                     
                     // If not successful and not 409, throw error
                     if (sessionResponse.status !== 409) {
-                        throw new Error(sessionResponse.data.message || 'Failed to create payment session');
+                throw new Error(sessionResponse.data.message || 'Failed to create payment session');
                     }
                 } catch (apiError) {
                     // Handle 409 Conflict - Order already exists
@@ -268,7 +268,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
             success: true,
             transaction_id: transactionId,
             order_id: finalOrderId, // Use finalOrderId (may have been regenerated)
-            cf_order_id: cfOrderId,
+                cf_order_id: cfOrderId,
             order_amount: amountValue,
             order_currency: 'INR',
             merchant_id: merchantId.toString(),
@@ -279,7 +279,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
             environment: responseEnvironment,
             gateway_used: 'cashfree',
             gateway_name: 'Cashfree',
-            payment_session_id: paymentSessionId,
+                payment_session_id: paymentSessionId,
             payment_data: {
                 amount: amountValue,
                 currency: 'INR',
@@ -292,9 +292,9 @@ exports.createCashfreePaymentLink = async (req, res) => {
                 merchant_id: merchantId.toString(),
                 merchant_name: merchantName
             },
-            message: 'Payment link created successfully. Redirect to payment_url to proceed with payment. Gateway: Cashfree.',
-            payment_url: paymentUrl,
-            paymentLink: paymentUrl
+                message: 'Payment link created successfully. Redirect to payment_url to proceed with payment. Gateway: Cashfree.',
+                payment_url: paymentUrl,
+                paymentLink: paymentUrl
         };
 
         res.json(responseData);
@@ -830,18 +830,18 @@ exports.handleCashfreeCallback = async (req, res) => {
                 console.error('Error verifying with Cashfree API:', apiError.message);
                 
                 // Fallback to URL-based detection if API verification fails
-                const requestUrl = req.url || '';
-                const referer = req.headers.referer || '';
-                const fullUrl = referer || requestUrl;
-                
-                const isFromSuccessUrl = 
-                    fullUrl.includes('/payment-success') || 
-                    fullUrl.includes('success') ||
+        const requestUrl = req.url || '';
+        const referer = req.headers.referer || '';
+        const fullUrl = referer || requestUrl;
+        
+        const isFromSuccessUrl = 
+            fullUrl.includes('/payment-success') || 
+            fullUrl.includes('success') ||
                     fullUrl.includes('/payment-callback');
-                    
-                const isFromFailureUrl = 
-                    fullUrl.includes('/payment-failed') || 
-                    fullUrl.includes('failed') || 
+            
+        const isFromFailureUrl = 
+            fullUrl.includes('/payment-failed') || 
+            fullUrl.includes('failed') || 
                     fullUrl.includes('failure');
                 
                 // Default to success if callback is from payment-callback (Cashfree redirects there after payment)
@@ -1039,38 +1039,38 @@ exports.handleCashfreeCallback = async (req, res) => {
                 } else if (!normalizedStatus) {
                     // No status from API and URL is ambiguous - default to success for payment-callback
                     // Cashfree redirects to callback URL after payment, so this is likely a success
-                    const paidAt = new Date();
+                const paidAt = new Date();
                     const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
-                    const commissionData = calculatePayinCommission(transaction.amount);
-                    
-                    const update = {
-                        status: 'paid',
-                        paidAt: paidAt,
-                        paymentMethod: payload.payment_method || 'unknown',
-                        cashfreeOrderId: cfOrderId,
-                        updatedAt: new Date(),
-                        settlementStatus: 'unsettled',
-                        expectedSettlementDate: expectedSettlement,
-                        commission: commissionData.commission,
-                        netAmount: parseFloat((transaction.amount - commissionData.commission).toFixed(2)),
-                        webhookData: {
-                            ...payload,
-                            callback_source: 'ambiguous_url_default_success',
-                            callback_timestamp: new Date().toISOString()
-                        }
-                    };
-                    
-                    await Transaction.findOneAndUpdate(
-                        { _id: transaction._id },
-                        update
-                    );
-                    
-                    return res.status(200).json({ 
-                        success: true, 
-                        message: 'Payment confirmed (optimistic update)',
-                        transaction_id: transactionIdForLogging,
-                        status: 'paid'
-                    });
+                const commissionData = calculatePayinCommission(transaction.amount);
+                
+                const update = {
+                    status: 'paid',
+                    paidAt: paidAt,
+                    paymentMethod: payload.payment_method || 'unknown',
+                    cashfreeOrderId: cfOrderId,
+                    updatedAt: new Date(),
+                    settlementStatus: 'unsettled',
+                    expectedSettlementDate: expectedSettlement,
+                    commission: commissionData.commission,
+                    netAmount: parseFloat((transaction.amount - commissionData.commission).toFixed(2)),
+                    webhookData: {
+                        ...payload,
+                        callback_source: 'ambiguous_url_default_success',
+                        callback_timestamp: new Date().toISOString()
+                    }
+                };
+                
+                await Transaction.findOneAndUpdate(
+                    { _id: transaction._id },
+                    update
+                );
+                
+                return res.status(200).json({ 
+                    success: true, 
+                    message: 'Payment confirmed (optimistic update)',
+                    transaction_id: transactionIdForLogging,
+                    status: 'paid'
+                });
                 } else {
                     // Status is not PAID - return current status
                     return res.status(200).json({ 

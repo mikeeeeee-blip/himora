@@ -1539,41 +1539,8 @@ exports.requestPayout = async (req, res) => {
     const amountIsValidNumber = typeof parsedAmount === 'number' && !isNaN(parsedAmount) && parsedAmount > 0;
     console.log('Parsed amount:', parsedAmount, 'Valid number:', amountIsValidNumber);
 
-    // fetch settled transactions to compute available balance
-    const settledTransactions = await Transaction.find({
-      merchantId: req.merchantId,
-      status: 'paid',
-      settlementStatus: 'settled'
-    });
-    console.log('Settled transactions count:', Array.isArray(settledTransactions) ? settledTransactions.length : 0);
-
-    if (!settledTransactions || settledTransactions.length === 0) {
-      console.log('No settled transactions found');
-      return res.status(400).json({ success: false, error: 'No settled balance available for payout' });
-    }
-
-    const totalSettledAmount = settledTransactions.reduce((sum, t) => sum + t.amount, 0);
-    console.log('Total settled amount:', totalSettledAmount);
-
-    // include previously reserved payouts (gross amounts) to compute available
-    const completedPayouts = await Payout.find({
-      merchantId: req.merchantId,
-      status: { $in: ['requested', 'processing', 'completed'] }
-    });
-    console.log('Completed/reserved payouts count:', Array.isArray(completedPayouts) ? completedPayouts.length : 0);
-
-    const totalReservedGross = completedPayouts.reduce((sum, p) => sum + (p.grossAmount || p.amount || 0), 0);
-    console.log('Total reserved (gross) from payouts:', totalReservedGross);
-
-    // fetch merchant to get blocked balance
+    // fetch merchant to get blocked balance first
     const merchant = await User.findById(req.merchantId);
-    console.log('Merchant fetched:', merchant ? {
-      id: merchant._id,
-      name: merchant.name,
-      freePayoutsUnder500: merchant.freePayoutsUnder500,
-      blockedBalance: merchant.blockedBalance || 0
-    } : 'merchant not found');
-
     if (!merchant) {
       console.log('Merchant not found in DB');
       return res.status(404).json({ success: false, error: 'Merchant not found' });
@@ -1582,15 +1549,55 @@ exports.requestPayout = async (req, res) => {
     const blockedBalance = merchant.blockedBalance || 0;
     console.log('Blocked balance:', blockedBalance);
 
-    // Calculate settled net revenue (amount - commission - refunds)
-    const settledNetRevenue = settledTransactions.reduce((sum, t) => {
-      const commission = t.commission || 0;
-      const refundAmount = t.refundAmount || 0;
-      return sum + t.amount - commission - refundAmount;
-    }, 0);
+    // Use the SAME calculation logic as getMyBalance for consistency
+    // Aggregate settled transactions (use stored netAmount for accurate calculation)
+    const merchantObjectId = new mongoose.Types.ObjectId(req.merchantId);
+    const [settledAgg, completedPayoutAgg, pendingPayoutAgg] = await Promise.all([
+      Transaction.aggregate([
+        { $match: { merchantId: merchantObjectId, status: 'paid', settlementStatus: 'settled' } },
+        {
+          $group: {
+            _id: null,
+            settledRevenue: { $sum: '$amount' },
+            settledRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
+            settledCommission: { $sum: { $ifNull: ['$commission', 0] } },
+            settledNetAmount: { $sum: { $ifNull: ['$netAmount', { $subtract: ['$amount', { $ifNull: ['$commission', 0] }] }] } },
+            settledCount: { $sum: 1 }
+          }
+        }
+      ]),
+      // Aggregate completed payouts (use netAmount like getMyBalance)
+      Payout.aggregate([
+        { $match: { merchantId: merchantObjectId, status: 'completed' } },
+        { $group: { _id: null, totalPaidOut: { $sum: '$netAmount' }, count: { $sum: 1 } } }
+      ]),
+      // Aggregate pending payouts (use netAmount like getMyBalance)
+      Payout.aggregate([
+        { $match: { merchantId: merchantObjectId, status: { $in: ['requested', 'pending', 'processing'] } } },
+        { $group: { _id: null, totalPending: { $sum: '$netAmount' }, count: { $sum: 1 } } }
+      ])
+    ]);
 
-    const availableBalance = Math.max(0, parseFloat((settledNetRevenue - totalReservedGross - blockedBalance).toFixed(2)));
-    console.log('Computed availableBalance (after blocked):', availableBalance);
+    const settled = settledAgg[0] || { settledRevenue: 0, settledRefunded: 0, settledCommission: 0, settledNetAmount: 0, settledCount: 0 };
+    const settledCommission = settled.settledCommission || 0;
+    const totalPaidOut = completedPayoutAgg[0]?.totalPaidOut || 0;
+    const totalPending = pendingPayoutAgg[0]?.totalPending || 0;
+
+    console.log('Settled transactions count:', settled.settledCount);
+    console.log('Total paid out (netAmount):', totalPaidOut);
+    console.log('Total pending (netAmount):', totalPending);
+
+    // Use the SAME calculation as getMyBalance
+    // Use settledNetAmount if available (more accurate), otherwise calculate from revenue - commission - refunds
+    const settledNetRevenue = settled.settledNetAmount > 0 
+      ? settled.settledNetAmount - settled.settledRefunded 
+      : settled.settledRevenue - settled.settledRefunded - settledCommission;
+
+    console.log('Settled net revenue:', settledNetRevenue);
+
+    // Calculate available balance using the SAME formula as getMyBalance
+    const availableBalance = Math.max(0, parseFloat((settledNetRevenue - totalPaidOut - totalPending - blockedBalance).toFixed(2)));
+    console.log('Computed availableBalance (consistent with getMyBalance):', availableBalance);
     if (availableBalance <= 0) {
       console.log('Available balance <= 0');
       const reason = blockedBalance > 0 
