@@ -50,12 +50,15 @@ const MerchantDetailPage = () => {
     minAmount: '',
     maxAmount: '',
     page: 1,
-    limit: 50
+    limit: 20
   });
 
-  const [analytics, setAnalytics] = useState({
-    transactions: null,
-    payouts: null
+  const [analytics, setAnalytics] = useState(null);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalCount: 0,
+    limit: 20
   });
 
   // Fetch merchant data only once when merchantId changes
@@ -64,6 +67,7 @@ const MerchantDetailPage = () => {
       fetchMerchantDetails();
       // Initial fetch without debounce
       fetchFilteredData();
+      fetchAnalytics();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [merchantId]);
@@ -214,6 +218,41 @@ const MerchantDetailPage = () => {
     }
   }, [merchantId]);
 
+  // Fetch analytics separately (summary stats only)
+  const fetchAnalytics = useCallback(async () => {
+    if (!merchantId) return;
+    
+    try {
+      // Get date range from selected date, date range picker, or manual filters
+      let startDate = filters.startDate;
+      let endDate = filters.endDate;
+      
+      if (showAllTime) {
+        startDate = undefined;
+        endDate = undefined;
+      } else if (useDateRange && dateRange.start && dateRange.end) {
+        startDate = dateRange.start;
+        endDate = dateRange.end;
+      } else if (!useDateRange && selectedDate) {
+        startDate = selectedDate;
+        endDate = selectedDate;
+      }
+
+      const analyticsFilters = {
+        status: filters.transactionStatus || undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        minAmount: filters.minAmount || undefined,
+        maxAmount: filters.maxAmount || undefined
+      };
+
+      const analyticsData = await superadminPaymentService.getMerchantAnalytics(merchantId, analyticsFilters);
+      setAnalytics(analyticsData?.analytics || null);
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+    }
+  }, [merchantId, filters, selectedDate, useDateRange, dateRange, showAllTime]);
+
   // Fetch filtered transactions and payouts in parallel
   const fetchFilteredData = useCallback(async () => {
     if (!merchantId) return;
@@ -261,23 +300,30 @@ const MerchantDetailPage = () => {
         endDate: endDate || undefined
       };
 
-      // Fetch transactions and payouts in parallel for better performance
+      // Fetch transactions, payouts, and analytics in parallel
       const [transactionsData, payoutsData] = await Promise.all([
         superadminPaymentService.getAdminTransactions(transactionFilters),
         superadminPaymentService.getAllPayouts(payoutFilters)
       ]);
 
       setTransactions(transactionsData.transactions || []);
-      setAnalytics(prev => ({ ...prev, transactions: transactionsData }));
+      setPagination(transactionsData.pagination || {
+        currentPage: 1,
+        totalPages: 1,
+        totalCount: 0,
+        limit: filters.limit
+      });
       setPayouts(payoutsData.payouts || []);
-      setAnalytics(prev => ({ ...prev, payouts: payoutsData }));
+      
+      // Fetch analytics separately
+      await fetchAnalytics();
     } catch (error) {
       setError(error.message);
       setToast({ message: error.message, type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [merchantId, filters, selectedDate, useDateRange, dateRange]);
+  }, [merchantId, filters, selectedDate, useDateRange, dateRange, showAllTime, fetchAnalytics]);
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value, page: 1 }));
@@ -299,52 +345,13 @@ const MerchantDetailPage = () => {
     setUseDateRange(false);
     setShowAllTime(false);
     setDateRange({ start: '', end: '' });
+    setAnalytics(null);
   };
 
-  // Calculate filtered stats from transactions and payouts
-  const calculateFilteredStats = useCallback(() => {
-    const filteredTransactions = transactions || [];
-    const filteredPayouts = payouts || [];
-
-    // Calculate transaction stats
-    const totalTransactions = filteredTransactions.length;
-    const paidTransactions = filteredTransactions.filter(t => t.status === 'paid').length;
-    const totalRevenue = filteredTransactions
-      .filter(t => t.status === 'paid')
-      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
-    const totalCommission = filteredTransactions
-      .filter(t => t.status === 'paid')
-      .reduce((sum, t) => sum + parseFloat(t.commission || 0), 0);
-    const successRate = totalTransactions > 0 
-      ? ((paidTransactions / totalTransactions) * 100).toFixed(1) 
-      : 0;
-
-    // Calculate payout stats
-    const totalPayouts = filteredPayouts.length;
-    const completedPayouts = filteredPayouts.filter(p => p.status === 'completed').length;
-    const totalPayoutAmount = filteredPayouts
-      .filter(p => p.status === 'completed')
-      .reduce((sum, p) => sum + parseFloat(p.netAmount || p.amount || 0), 0);
-    const pendingPayoutAmount = filteredPayouts
-      .filter(p => ['requested', 'pending', 'processing'].includes(p.status))
-      .reduce((sum, p) => sum + parseFloat(p.netAmount || p.amount || 0), 0);
-
-    return {
-      transactions: {
-        total: totalTransactions,
-        paid: paidTransactions,
-        revenue: totalRevenue,
-        commission: totalCommission,
-        successRate: parseFloat(successRate)
-      },
-      payouts: {
-        total: totalPayouts,
-        completed: completedPayouts,
-        amount: totalPayoutAmount,
-        pending: pendingPayoutAmount
-      }
-    };
-  }, [transactions, payouts]);
+  // Handle pagination
+  const handlePageChange = (newPage) => {
+    setFilters(prev => ({ ...prev, page: newPage }));
+  };
 
   const formatCurrency = (amount) => {
     return `₹${parseFloat(amount || 0).toLocaleString('en-IN', {
@@ -417,11 +424,22 @@ const MerchantDetailPage = () => {
   const payout = merchant.payout_summary || {};
   const bal = merchant.balance_information || {};
 
-  // Calculate filtered stats
-  const filteredStats = calculateFilteredStats();
-  
-  // Use filtered stats if date filter is applied, otherwise use merchant summary
-  const displayStats = showAllTime || useDateRange || selectedDate ? filteredStats : {
+  // Use analytics if available (from API), otherwise fall back to merchant summary
+  const displayStats = analytics ? {
+    transactions: {
+      total: analytics.total_transactions || 0,
+      paid: analytics.successful_transactions || 0,
+      revenue: analytics.total_revenue || 0,
+      commission: analytics.total_commission || 0,
+      successRate: analytics.success_rate || 0
+    },
+    payouts: {
+      total: analytics.total_payouts || 0,
+      completed: analytics.completed_payouts || 0,
+      amount: analytics.total_completed_amount || 0,
+      pending: analytics.total_pending_amount || 0
+    }
+  } : {
     transactions: {
       total: txn.total_transactions || 0,
       paid: txn.by_status?.paid || 0,
@@ -855,10 +873,20 @@ const MerchantDetailPage = () => {
 
               {/* Transactions Section */}
               <div className="mb-6">
-                <h2 className="text-xl font-medium text-white mb-4 font-['Albert_Sans'] flex items-center gap-2">
-                  <HiOutlineChartBar className="text-accent" />
-                  Transactions
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-medium text-white font-['Albert_Sans'] flex items-center gap-2">
+                    <HiOutlineChartBar className="text-accent" />
+                    Transactions
+                  </h2>
+                  {pagination.totalCount > pagination.limit && (
+                    <button
+                      onClick={() => navigate(`/superadmin/transactions?merchantId=${merchantId}`)}
+                      className="flex items-center gap-2 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2 rounded-full text-sm font-medium font-['Albert_Sans'] transition-all duration-200"
+                    >
+                      View All ({pagination.totalCount})
+                    </button>
+                  )}
+                </div>
                 {loading ? (
                   <div className="flex flex-col items-center justify-center py-20 px-5">
                     <div className="w-10 h-10 border-4 border-white/30 border-t-accent rounded-full animate-spin mb-5"></div>
@@ -906,6 +934,33 @@ const MerchantDetailPage = () => {
                         </tbody>
                       </table>
                     </div>
+                    {/* Pagination Controls */}
+                    {pagination.totalPages > 1 && (
+                      <div className="flex items-center justify-between px-4 py-3 bg-[#001D22] border-t border-white/10">
+                        <div className="text-sm text-white/70 font-['Albert_Sans']">
+                          Showing {((pagination.currentPage - 1) * pagination.limit) + 1} to {Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)} of {pagination.totalCount} transactions
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handlePageChange(pagination.currentPage - 1)}
+                            disabled={pagination.currentPage === 1 || loading}
+                            className="px-3 py-1.5 bg-[#263F43] border border-white/10 hover:border-accent text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <FiChevronLeft />
+                          </button>
+                          <span className="text-white text-sm font-['Albert_Sans']">
+                            Page {pagination.currentPage} of {pagination.totalPages}
+                          </span>
+                          <button
+                            onClick={() => handlePageChange(pagination.currentPage + 1)}
+                            disabled={pagination.currentPage >= pagination.totalPages || loading}
+                            className="px-3 py-1.5 bg-[#263F43] border border-white/10 hover:border-accent text-white rounded-lg text-sm font-medium font-['Albert_Sans'] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <FiChevronRight />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-20 px-5 bg-[#263F43] border border-white/10 rounded-xl">
