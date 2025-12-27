@@ -44,12 +44,24 @@ if (requiredRole === USER_ROLES.ADMIN && (userRole === USER_ROLES.SUPERADMIN || 
   return children; // SuperAdmin and SubSuperAdmin can access admin routes
 }
 
-// ✅ Allow SubSuperAdmin to access SuperAdmin routes (with backend access control)
-if (requiredRole === USER_ROLES.SUPERADMIN && userRole === USER_ROLES.SUB_SUPERADMIN) {
-  return children; // SubSuperAdmin can access superadmin routes (backend will check permissions)
+// ✅ Handle array of required roles
+if (Array.isArray(requiredRole)) {
+  if (requiredRole.includes(userRole)) {
+    return children;
+  }
+} else {
+  // ✅ Allow SubSuperAdmin to access SuperAdmin routes (with backend access control)
+  if (requiredRole === USER_ROLES.SUPERADMIN && userRole === USER_ROLES.SUB_SUPERADMIN) {
+    return children; // SubSuperAdmin can access superadmin routes (backend will check permissions)
+  }
 }
 
-if (requiredRole && userRole !== requiredRole) {
+  // Check if role matches (handle both single role and array of roles)
+  const roleMatches = Array.isArray(requiredRole) 
+    ? requiredRole.includes(userRole)
+    : userRole === requiredRole;
+    
+  if (requiredRole && !roleMatches) {
   // Redirect to appropriate dashboard based on user's actual role
   if (userRole === USER_ROLES.SUPERADMIN) {
     return <Navigate to="/superadmin" replace />;

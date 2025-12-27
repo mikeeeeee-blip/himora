@@ -67,6 +67,8 @@ export const API_ENDPOINTS = {
   // ============ SUPERADMIN - SETTINGS ============
   GET_PAYMENT_GATEWAY_SETTINGS: `${BASE_URL}/superadmin/settings/payment-gateways`,
   UPDATE_PAYMENT_GATEWAY_SETTINGS: `${BASE_URL}/superadmin/settings/payment-gateways`,
+  GET_SETTLEMENT_SETTINGS: `${BASE_URL}/superadmin/settings/settlement`,
+  UPDATE_SETTLEMENT_SETTINGS: `${BASE_URL}/superadmin/settings/settlement`,
   // ============ SUPERADMIN - MERCHANTS ============
   SUPERADMIN_MERCHANTS_COMPREHENSIVE: `${BASE_URL}/superadmin/merchants/comprehensive`,
   
@@ -88,10 +90,12 @@ export const API_ENDPOINTS = {
   ADMIN_PAYOUT_APPROVE: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}/approve`,
   ADMIN_PAYOUT_REJECT: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}/reject`,
   ADMIN_PAYOUT_PROCESS: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}/process`,
+  ADMIN_PAYOUT_DELETE: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}`,
   ADMIN_PAYOUT_DETAILS: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}/details`,
   
   // ============ SUPERADMIN - TRANSACTIONS ============
   ADMIN_TRANSACTIONS: `${BASE_URL}/payments/admin/transactions`,
+  ADMIN_MERCHANT_ANALYTICS: (merchantId) => `${BASE_URL}/payments/admin/merchants/${merchantId}/analytics`,
   ADMIN_SETTLE_TRANSACTION: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}/settle`,
   ADMIN_UPDATE_TRANSACTION_STATUS: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}/status`,
   ADMIN_DELETE_TRANSACTION: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}`,

@@ -15,7 +15,25 @@ const MetricCard = ({
   showProgressBar = false,
   progressValue = 0,
   progressLabel = null,
+  loading = false,
 }) => {
+  // Loading skeleton state
+  if (loading) {
+    return (
+      <div className="bg-[#263F43] border border-white/10 rounded-xl p-3 animate-pulse">
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex items-center gap-2 flex-1">
+            <div className="w-8 h-8 rounded-lg bg-white/10 flex-shrink-0"></div>
+            <div className="flex-1 min-w-0">
+              <div className="h-3 bg-white/10 rounded w-20 mb-2"></div>
+              <div className="h-6 bg-white/20 rounded w-24"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Special card variant (for Payout card with image background)
   if (isSpecialCard && backgroundImage) {
     return (

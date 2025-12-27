@@ -883,7 +883,7 @@ exports.handleSabpaisaCallback = async (req, res) => {
                 if (transaction.status !== 'paid') {
                     console.log('   📝 Updating transaction status to "paid"...');
                     const paidAt = new Date();
-                    const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+                    const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
                     const commissionData = calculatePayinCommission(amount);
 
                     const update = {

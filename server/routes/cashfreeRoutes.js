@@ -4,6 +4,7 @@ const apiKeyAuth = require('../middleware/apiKeyAuth.js');
 
 const {
     createCashfreePaymentLink,
+    createCashfreePaymentLinkAPI,
     handleCashfreeCallback,
     handleCashfreeWebhook
 } = require('../controllers/cashfreeController.js');
@@ -18,6 +19,11 @@ router.post('/create-payment-link', apiKeyAuth, (req, res, next) => {
     res.set('X-API-Deprecation-Warning', 'This endpoint is deprecated. Please use /api/payments/create-payment-link which automatically selects the configured payment gateway.');
     next();
 }, createCashfreePaymentLink);
+
+// ============ CREATE PAYMENT LINK (Payment Links API) ============
+// Uses Cashfree Payment Links API: POST /pg/links
+// Reference: https://www.cashfree.com/docs/api-reference/payments/previous/v2023-08-01/payment-links/create
+router.post('/create-payment-link-api', apiKeyAuth, createCashfreePaymentLinkAPI);
 
 // ============ CALLBACK (No Auth - POST/GET from Cashfree) ============
 router.post('/callback', handleCashfreeCallback);

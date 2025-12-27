@@ -137,39 +137,114 @@ exports.getTransactions = async (req, res) => {
             ];
         }
 
-        // Get total count
-        const totalCount = await Transaction.countDocuments(query);
+        // ✅ OPTIMIZATION: Run queries in parallel
+        const [totalCount, transactions, summaryAgg] = await Promise.all([
+            // Get total count
+            Transaction.countDocuments(query),
+            
+            // Get paginated transactions
+            (async () => {
+                const sort = {};
+                sort[sort_by] = sort_order === 'asc' ? 1 : -1;
+                return await Transaction.find(query)
+                    .sort(sort)
+                    .limit(parseInt(limit))
+                    .skip((parseInt(page) - 1) * parseInt(limit))
+                    .lean();
+            })(),
+            
+            // ✅ OPTIMIZATION: Calculate summary using aggregation (much faster than loading all transactions)
+            Transaction.aggregate([
+                { $match: { merchantId: merchantId } },
+                {
+                    $facet: {
+                        // Total counts by status
+                        statusCounts: [
+                            {
+                                $group: {
+                                    _id: '$status',
+                                    count: { $sum: 1 }
+                                }
+                            }
+                        ],
+                        // Revenue calculations
+                        revenue: [
+                            {
+                                $group: {
+                                    _id: null,
+                                    totalRevenue: {
+                                        $sum: {
+                                            $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0]
+                                        }
+                                    },
+                                    totalRefunded: {
+                                        $sum: { $ifNull: ['$refundAmount', 0] }
+                                    },
+                                    pendingAmount: {
+                                        $sum: {
+                                            $cond: [
+                                                { $in: ['$status', ['created', 'pending']] },
+                                                '$amount',
+                                                0
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        ],
+                        // Gateway breakdown
+                        gatewayBreakdown: [
+                            {
+                                $group: {
+                                    _id: '$paymentGateway',
+                                    count: { $sum: 1 },
+                                    revenue: {
+                                        $sum: {
+                                            $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0]
+                                        }
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            ])
+        ]);
 
-        // Build sort
-        const sort = {};
-        sort[sort_by] = sort_order === 'asc' ? 1 : -1;
-
-        // Get transactions
-        const transactions = await Transaction.find(query)
-            .sort(sort)
-            .limit(parseInt(limit))
-            .skip((parseInt(page) - 1) * parseInt(limit))
-            .lean();
-
-        // Calculate summary for this merchant
-        const allTransactions = await Transaction.find({ merchantId: merchantId });
+        // Extract summary data from aggregation
+        const summaryData = summaryAgg[0] || { statusCounts: [], revenue: [], gatewayBreakdown: [] };
         
-        const totalRevenue = allTransactions
-            .filter(t => t.status === 'paid')
-            .reduce((sum, t) => sum + t.amount, 0);
+        // Build status counts object
+        const statusCounts = {};
+        summaryData.statusCounts.forEach(item => {
+            statusCounts[item._id] = item.count;
+        });
         
-        const totalRefunded = allTransactions
-            .reduce((sum, t) => sum + (t.refundAmount || 0), 0);
+        // Extract revenue data
+        const revenueData = summaryData.revenue[0] || { totalRevenue: 0, totalRefunded: 0, pendingAmount: 0 };
+        const totalRevenue = revenueData.totalRevenue || 0;
+        const totalRefunded = revenueData.totalRefunded || 0;
+        const pendingAmount = revenueData.pendingAmount || 0;
         
-        const pendingAmount = allTransactions
-            .filter(t => t.status === 'created' || t.status === 'pending')
-            .reduce((sum, t) => sum + t.amount, 0);
+        // Extract gateway data
+        const gatewayData = {};
+        summaryData.gatewayBreakdown.forEach(item => {
+            gatewayData[item._id] = {
+                count: item.count,
+                revenue: item.revenue || 0
+            };
+        });
         
-        const failedTransactions = allTransactions.filter(t => t.status === 'failed').length;
-
-        // Group by payment gateway
-        const razorpayTransactions = allTransactions.filter(t => t.paymentGateway === 'razorpay');
-        const cashfreeTransactions = allTransactions.filter(t => t.paymentGateway === 'cashfree');
+        const razorpayData = gatewayData['razorpay'] || { count: 0, revenue: 0 };
+        const cashfreeData = gatewayData['cashfree'] || { count: 0, revenue: 0 };
+        
+        // Calculate totals
+        const totalTransactions = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
+        const successfulTransactions = statusCounts['paid'] || 0;
+        const pendingTransactions = (statusCounts['created'] || 0) + (statusCounts['pending'] || 0);
+        const failedTransactions = statusCounts['failed'] || 0;
+        const cancelledTransactions = statusCounts['cancelled'] || 0;
+        const expiredTransactions = statusCounts['expired'] || 0;
 
         res.json({
             success: true,
@@ -220,12 +295,12 @@ exports.getTransactions = async (req, res) => {
                 has_prev_page: parseInt(page) > 1
             },
             summary: {
-                total_transactions: allTransactions.length,
-                successful_transactions: allTransactions.filter(t => t.status === 'paid').length,
-                pending_transactions: allTransactions.filter(t => t.status === 'created' || t.status === 'pending').length,
+                total_transactions: totalTransactions,
+                successful_transactions: successfulTransactions,
+                pending_transactions: pendingTransactions,
                 failed_transactions: failedTransactions,
-                cancelled_transactions: allTransactions.filter(t => t.status === 'cancelled').length,
-                expired_transactions: allTransactions.filter(t => t.status === 'expired').length,
+                cancelled_transactions: cancelledTransactions,
+                expired_transactions: expiredTransactions,
                 
                 total_revenue: totalRevenue.toFixed(2),
                 total_refunded: totalRefunded.toFixed(2),
@@ -233,17 +308,11 @@ exports.getTransactions = async (req, res) => {
                 net_revenue: (totalRevenue - totalRefunded).toFixed(2),
                 
                 // Gateway breakdown
-                razorpay_transactions: razorpayTransactions.length,
-                razorpay_revenue: razorpayTransactions
-                    .filter(t => t.status === 'paid')
-                    .reduce((sum, t) => sum + t.amount, 0)
-                    .toFixed(2),
+                razorpay_transactions: razorpayData.count,
+                razorpay_revenue: razorpayData.revenue.toFixed(2),
                 
-                cashfree_transactions: cashfreeTransactions.length,
-                cashfree_revenue: cashfreeTransactions
-                    .filter(t => t.status === 'paid')
-                    .reduce((sum, t) => sum + t.amount, 0)
-                    .toFixed(2)
+                cashfree_transactions: cashfreeData.count,
+                cashfree_revenue: cashfreeData.revenue.toFixed(2)
             },
             merchant: {
                 merchant_id: merchantId.toString(),

@@ -8,6 +8,32 @@ const { sendMerchantWebhook, sendPayoutWebhook } = require('./merchantWebhookCon
 const mongoose = require('mongoose');
 const COMMISSION_RATE = 0.038; // 3.8%
 
+// Helper function to validate cron expression (simple validation)
+function validateCronExpression(cronExpression) {
+    if (!cronExpression || typeof cronExpression !== 'string') {
+        return false;
+    }
+    
+    // Basic validation: should have 5 parts separated by spaces
+    const parts = cronExpression.trim().split(/\s+/);
+    if (parts.length !== 5) {
+        return false;
+    }
+    
+    // Check if it matches the expected pattern: */{number} * * * 1-6
+    const minutePattern = /^\*\/(\d+)$/;
+    if (!minutePattern.test(parts[0])) {
+        return false;
+    }
+    
+    // Check weekday is 1-6 (Monday to Saturday)
+    if (parts[4] !== '1-6') {
+        return false;
+    }
+    
+    return true;
+}
+
 // ============ GET ALL PAYOUTS (SuperAdmin) ============
 exports.getAllPayouts = async (req, res) => {
     try {
@@ -184,6 +210,80 @@ exports.approvePayout = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to approve payout'
+        });
+    }
+};
+
+// ============ DELETE PAYOUT ============
+exports.deletePayout = async (req, res) => {
+    try {
+        const { payoutId } = req.params;
+        const { reason } = req.query; // Get reason from query params since DELETE doesn't support body
+
+        console.log(`🗑️ SuperAdmin ${req.user.name} deleting payout: ${payoutId}`);
+
+        const payout = await Payout.findOne({ payoutId });
+
+        if (!payout) {
+            return res.status(404).json({
+                success: false,
+                error: 'Payout request not found'
+            });
+        }
+
+        // ✅ Can only delete payouts that are not completed
+        // Allow deletion of: requested, pending, processing, rejected, failed, cancelled
+        if (payout.status === 'completed') {
+            return res.status(400).json({
+                success: false,
+                error: 'Cannot delete a completed payout. Completed payouts cannot be deleted.',
+                currentStatus: payout.status
+            });
+        }
+
+        // ✅ Rollback Free Payout if applicable
+        if (payout.commissionType === 'free') {
+            const merchant = await User.findById(payout.merchantId);
+            if (merchant) {
+                merchant.freePayoutsUnder500 += 1;
+                await merchant.save();
+                console.log(`✅ Restored 1 free payout to merchant ${merchant.name}`);
+            }
+        }
+
+        // ✅ Rollback associated transactions
+        await Transaction.updateMany(
+            { payoutId: payout._id },
+            {
+                $set: {
+                    payoutStatus: 'unpaid',
+                    payoutId: null
+                }
+            }
+        );
+
+        // ✅ Delete the payout
+        await Payout.deleteOne({ payoutId });
+
+        console.log(`✅ Payout ${payoutId} deleted successfully by ${req.user.name}`);
+
+        res.json({
+            success: true,
+            message: 'Payout deleted successfully',
+            payout: {
+                payoutId: payout.payoutId,
+                deletedAt: new Date(),
+                deletedBy: req.user.name,
+                reason: reason || 'Deleted by superadmin'
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Delete Payout Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete payout',
+            detail: error.message
         });
     }
 };
@@ -517,41 +617,6 @@ exports.getAllTransactions = async (req, res) => {
             .select('-webhookData')
             .lean();
 
-        // Calculate platform-wide statistics
-        const allTransactions = await Transaction.find({});
-        const successfulTransactions = allTransactions.filter(t => t.status === 'paid');
-        const totalRevenue = successfulTransactions.reduce((sum, t) => sum + t.amount, 0);
-        const totalRefunded = allTransactions.reduce((sum, t) => sum + (t.refundAmount || 0), 0);
-        
-        // Calculate commission (default 2.5%)
-        const totalCommission = totalRevenue * 0.025;
-        const netRevenue = totalRevenue - totalRefunded;
-
-        // Merchant-wise breakdown
-        const merchantStats = {};
-        allTransactions.forEach(t => {
-            if (!merchantStats[t.merchantId]) {
-                merchantStats[t.merchantId] = {
-                    merchantId: t.merchantId,
-                    merchantName: t.merchantName,
-                    totalTransactions: 0,
-                    successfulTransactions: 0,
-                    totalVolume: 0,
-                    commission: 0
-                };
-            }
-            merchantStats[t.merchantId].totalTransactions++;
-            if (t.status === 'paid') {
-                merchantStats[t.merchantId].successfulTransactions++;
-                merchantStats[t.merchantId].totalVolume += t.amount;
-                merchantStats[t.merchantId].commission += t.amount * 0.025;
-            }
-        });
-
-        const topMerchants = Object.values(merchantStats)
-            .sort((a, b) => b.totalVolume - a.totalVolume)
-            .slice(0, 10);
-
         res.json({
             success: true,
             transactions,
@@ -562,31 +627,6 @@ exports.getAllTransactions = async (req, res) => {
                 limit: parseInt(limit),
                 hasNextPage: parseInt(page) < Math.ceil(totalCount / parseInt(limit)),
                 hasPrevPage: parseInt(page) > 1
-            },
-            summary: {
-                total_transactions: allTransactions.length,
-                successful_transactions: successfulTransactions.length,
-                failed_transactions: allTransactions.filter(t => t.status === 'failed').length,
-                pending_transactions: allTransactions.filter(t => t.status === 'pending' || t.status === 'created').length,
-                total_revenue: totalRevenue.toFixed(2),
-                total_refunded: totalRefunded.toFixed(2),
-                net_revenue: netRevenue.toFixed(2),
-                total_commission_earned: totalCommission.toFixed(2),
-                success_rate: allTransactions.length > 0 ? 
-                    ((successfulTransactions.length / allTransactions.length) * 100).toFixed(2) : 0,
-                average_transaction_value: allTransactions.length > 0 ? 
-                    (totalRevenue / allTransactions.length).toFixed(2) : 0
-            },
-            merchant_stats: {
-                total_merchants: Object.keys(merchantStats).length,
-                top_merchants: topMerchants
-            },
-            filters_applied: {
-                merchantId: merchantId || null,
-                status: status || null,
-                dateRange: startDate && endDate ? `${startDate} to ${endDate}` : null,
-                amountRange: minAmount || maxAmount ? `${minAmount || 0} to ${maxAmount || '∞'}` : null,
-                search: search || null
             }
         });
 
@@ -597,6 +637,208 @@ exports.getAllTransactions = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to fetch transactions'
+        });
+    }
+};
+
+// ============ GET MERCHANT ANALYTICS (Summary Stats Only) ============
+exports.getMerchantAnalytics = async (req, res) => {
+    try {
+        const { merchantId } = req.params;
+        const {
+            status,
+            startDate,
+            endDate,
+            minAmount,
+            maxAmount,
+            search
+        } = req.query;
+
+        console.log(`📊 SuperAdmin fetching merchant analytics for merchant: ${merchantId || 'all'}`);
+
+        // Build query (same as getAllTransactions)
+        let query = {};
+        let payoutQuery = {};
+
+        if (merchantId) {
+            // Convert to ObjectId if it's a valid ObjectId string
+            try {
+                query.merchantId = mongoose.Types.ObjectId.isValid(merchantId) 
+                    ? new mongoose.Types.ObjectId(merchantId) 
+                    : merchantId;
+                payoutQuery.merchantId = query.merchantId;
+            } catch (error) {
+                query.merchantId = merchantId;
+                payoutQuery.merchantId = merchantId;
+            }
+        }
+
+        if (status) {
+            if (status.includes(',')) {
+                query.status = { $in: status.split(',') };
+            } else {
+                query.status = status;
+            }
+        }
+
+        if (startDate || endDate) {
+            query.createdAt = {};
+            payoutQuery.requestedAt = {};
+            if (startDate) {
+                const sd = new Date(startDate);
+                sd.setHours(0, 0, 0, 0);
+                query.createdAt.$gte = sd;
+                payoutQuery.requestedAt.$gte = sd;
+            }
+            if (endDate) {
+                const ed = new Date(endDate);
+                ed.setHours(23, 59, 59, 999);
+                query.createdAt.$lte = ed;
+                payoutQuery.requestedAt.$lte = ed;
+            }
+        }
+
+        if (minAmount || maxAmount) {
+            query.amount = {};
+            if (minAmount) query.amount.$gte = parseFloat(minAmount);
+            if (maxAmount) query.amount.$lte = parseFloat(maxAmount);
+        }
+
+        if (search) {
+            query.$or = [
+                { orderId: { $regex: search, $options: 'i' } },
+                { transactionId: { $regex: search, $options: 'i' } },
+                { customerName: { $regex: search, $options: 'i' } },
+                { customerEmail: { $regex: search, $options: 'i' } },
+                { customerPhone: { $regex: search, $options: 'i' } },
+                { merchantName: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        // Use aggregation for efficient summary calculation
+        const analytics = await Transaction.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: null,
+                    total_transactions: { $sum: 1 },
+                    successful_transactions: {
+                        $sum: { $cond: [{ $eq: ['$status', 'paid'] }, 1, 0] }
+                    },
+                    failed_transactions: {
+                        $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] }
+                    },
+                    pending_transactions: {
+                        $sum: { $cond: [{ $in: ['$status', ['pending', 'created']] }, 1, 0] }
+                    },
+                    total_revenue: {
+                        $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] }
+                    },
+                    total_refunded: {
+                        $sum: { $ifNull: ['$refundAmount', 0] }
+                    },
+                    total_commission: {
+                        $sum: { $ifNull: ['$commission', 0] }
+                    },
+                    net_revenue: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ['$status', 'paid'] },
+                                { $subtract: ['$amount', { $ifNull: ['$refundAmount', 0] }] },
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        const stats = analytics[0] || {
+            total_transactions: 0,
+            successful_transactions: 0,
+            failed_transactions: 0,
+            pending_transactions: 0,
+            total_revenue: 0,
+            total_refunded: 0,
+            total_commission: 0,
+            net_revenue: 0
+        };
+
+        // Calculate success rate and average
+        const successRate = stats.total_transactions > 0
+            ? ((stats.successful_transactions / stats.total_transactions) * 100).toFixed(2)
+            : '0.00';
+        
+        const averageTransactionValue = stats.total_transactions > 0
+            ? (stats.total_revenue / stats.total_transactions).toFixed(2)
+            : '0.00';
+
+        // Get payout analytics
+        const payoutAnalytics = await Payout.aggregate([
+            { $match: payoutQuery },
+            {
+                $group: {
+                    _id: null,
+                    total_payouts: { $sum: 1 },
+                    completed_payouts: {
+                        $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+                    },
+                    pending_payouts: {
+                        $sum: { $cond: [{ $in: ['$status', ['requested', 'pending', 'processing']] }, 1, 0] }
+                    },
+                    total_completed_amount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$netAmount', '$amount'] }, 0] }
+                    },
+                    total_pending_amount: {
+                        $sum: {
+                            $cond: [
+                                { $in: ['$status', ['requested', 'pending', 'processing']] },
+                                { $ifNull: ['$netAmount', '$amount'] },
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        const payoutStats = payoutAnalytics[0] || {
+            total_payouts: 0,
+            completed_payouts: 0,
+            pending_payouts: 0,
+            total_completed_amount: 0,
+            total_pending_amount: 0
+        };
+
+        res.json({
+            success: true,
+            analytics: {
+                total_transactions: stats.total_transactions,
+                successful_transactions: stats.successful_transactions,
+                failed_transactions: stats.failed_transactions,
+                pending_transactions: stats.pending_transactions,
+                total_revenue: parseFloat(stats.total_revenue.toFixed(2)),
+                total_refunded: parseFloat(stats.total_refunded.toFixed(2)),
+                net_revenue: parseFloat(stats.net_revenue.toFixed(2)),
+                total_commission: parseFloat(stats.total_commission.toFixed(2)),
+                success_rate: parseFloat(successRate),
+                average_transaction_value: parseFloat(averageTransactionValue),
+                // Payout analytics
+                total_payouts: payoutStats.total_payouts,
+                completed_payouts: payoutStats.completed_payouts,
+                pending_payouts: payoutStats.pending_payouts,
+                total_completed_amount: parseFloat(payoutStats.total_completed_amount.toFixed(2)),
+                total_pending_amount: parseFloat(payoutStats.total_pending_amount.toFixed(2))
+            }
+        });
+
+        console.log(`✅ Returned analytics for merchant: ${merchantId || 'all'}`);
+
+    } catch (error) {
+        console.error('❌ Get Merchant Analytics Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch merchant analytics'
         });
     }
 };
@@ -682,7 +924,7 @@ exports.updateTransactionStatus = async (req, res) => {
             const commissionData = calculatePayinCommission(transaction.amount);
             
             // Calculate expected settlement date
-            const expectedSettlement = calculateExpectedSettlementDate(paidAt);
+            const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
             
             // Update all relevant fields
             updateOperation.$set.paidAt = paidAt;
@@ -830,188 +1072,306 @@ exports.getDashboardStats = async (req, res) => {
             }
         }
 
-        // Get all merchants
-        const merchants = await User.find({ role: 'admin' });
-        const activeMerchants = merchants.filter(m => m.status === 'active');
-        const inactiveMerchants = merchants.filter(m => m.status === 'inactive');
+        // Get merchants count (optimized)
+        const [merchantsCount, activeMerchantsCount, inactiveMerchantsCount] = await Promise.all([
+            User.countDocuments({ role: 'admin' }),
+            User.countDocuments({ role: 'admin', status: 'active' }),
+            User.countDocuments({ role: 'admin', status: 'inactive' })
+        ]);
 
-        // Get transactions with date filter
-        const allTransactions = await Transaction.find(transactionDateFilter);
-        const paidTransactions = allTransactions.filter(t => t.status === 'paid');
-        const settledTransactions = allTransactions.filter(t => t.settlementStatus === 'settled');
-        const unsettledTransactions = allTransactions.filter(t => t.settlementStatus === 'unsettled');
-        const failedTransactions = allTransactions.filter(t => t.status === 'failed');
-        const pendingTransactions = allTransactions.filter(t => t.status === 'pending' || t.status === 'created');
-
-        // Calculate revenue
-        const totalRevenue = paidTransactions.reduce((sum, t) => sum + t.amount, 0);
-        const totalRefunded = allTransactions.reduce((sum, t) => sum + (t.refundAmount || 0), 0);
-        
-        // Calculate commission for filtered period
-        let totalPayinCommission = 0;
-        paidTransactions.forEach(t => {
-            const commissionInfo = calculatePayinCommission(t.amount);
-            totalPayinCommission += commissionInfo.commission;
+        // Get merchants for new_this_week calculation
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        const newMerchantsThisWeek = await User.countDocuments({
+            role: 'admin',
+            createdAt: { $gte: oneWeekAgo }
         });
 
-        // Get payouts with date filter
-        const allPayouts = await Payout.find(payoutDateFilter);
-        const requestedPayouts = allPayouts.filter(p => p.status === 'requested');
-        const pendingPayouts = allPayouts.filter(p => p.status === 'pending' || p.status === 'processing');
-        const completedPayouts = allPayouts.filter(p => p.status === 'completed');
-        const rejectedPayouts = allPayouts.filter(p => p.status === 'rejected');
-        const failedPayouts = allPayouts.filter(p => p.status === 'failed');
+        // Use aggregation for efficient transaction stats
+        const transactionStats = await Transaction.aggregate([
+            { $match: transactionDateFilter },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: 1 },
+                    paid: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, 1, 0] } },
+                    failed: { $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] } },
+                    pending: { $sum: { $cond: [{ $in: ['$status', ['pending', 'created']] }, 1, 0] } },
+                    settled: { $sum: { $cond: [{ $eq: ['$settlementStatus', 'settled'] }, 1, 0] } },
+                    unsettled: { $sum: { $cond: [{ $eq: ['$settlementStatus', 'unsettled'] }, 1, 0] } },
+                    total_revenue: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } },
+                    total_refunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
+                    total_commission: { $sum: { $ifNull: ['$commission', 0] } },
+                    available_for_payout: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $eq: ['$status', 'paid'] },
+                                        { $eq: ['$settlementStatus', 'settled'] },
+                                        { $ifNull: ['$availableForPayout', false] },
+                                        { $ne: [{ $ifNull: ['$settledInPayout', false] }, true] }
+                                    ]
+                                },
+                                1,
+                                0
+                            ]
+                        }
+                    },
+                    in_payouts: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $eq: ['$status', 'paid'] },
+                                        { $eq: ['$settlementStatus', 'settled'] },
+                                        { $ifNull: ['$settledInPayout', false] }
+                                    ]
+                                },
+                                1,
+                                0
+                            ]
+                        }
+                    },
+                    available_balance: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $eq: ['$status', 'paid'] },
+                                        { $eq: ['$settlementStatus', 'settled'] },
+                                        { $ifNull: ['$availableForPayout', false] },
+                                        { $ne: [{ $ifNull: ['$settledInPayout', false] }, true] }
+                                    ]
+                                },
+                                { $ifNull: ['$netAmount', { $subtract: ['$amount', { $ifNull: ['$commission', 0] }] }] },
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
 
-        // Calculate payout amounts for filtered period
-        const totalPayoutRequested = allPayouts.reduce((sum, p) => sum + p.amount, 0);
-        const totalPayoutCompleted = completedPayouts.reduce((sum, p) => sum + p.netAmount, 0);
-        const totalPayoutPending = pendingPayouts.reduce((sum, p) => sum + p.netAmount, 0);
-        const totalPayoutCommission = allPayouts.reduce((sum, p) => sum + p.commission, 0);
+        const txStats = transactionStats[0] || {
+            total: 0, paid: 0, failed: 0, pending: 0, settled: 0, unsettled: 0,
+            total_revenue: 0, total_refunded: 0, total_commission: 0,
+            available_for_payout: 0, in_payouts: 0, available_balance: 0
+        };
 
-        // Calculate ALL-TIME commission totals (without date filters) - always fetch these
-        const allTimePaidTransactions = await Transaction.find({ status: 'paid' });
-        let allTimePayinCommission = 0;
-        allTimePaidTransactions.forEach(t => {
-            const commissionInfo = calculatePayinCommission(t.amount);
-            allTimePayinCommission += commissionInfo.commission;
-        });
+        // Use aggregation for payout stats
+        const payoutStats = await Payout.aggregate([
+            { $match: payoutDateFilter },
+            {
+                $group: {
+                    _id: null,
+                    total_requests: { $sum: 1 },
+                    requested: { $sum: { $cond: [{ $eq: ['$status', 'requested'] }, 1, 0] } },
+                    pending: { $sum: { $cond: [{ $in: ['$status', ['pending', 'processing']] }, 1, 0] } },
+                    completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+                    rejected: { $sum: { $cond: [{ $eq: ['$status', 'rejected'] }, 1, 0] } },
+                    failed: { $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] } },
+                    total_amount_requested: { $sum: { $ifNull: ['$amount', 0] } },
+                    total_completed: {
+                        $sum: { $cond: [{ $eq: ['$status', 'completed'] }, { $ifNull: ['$netAmount', '$amount'] }, 0] }
+                    },
+                    total_pending: {
+                        $sum: {
+                            $cond: [
+                                { $in: ['$status', ['requested', 'pending', 'processing']] },
+                                { $ifNull: ['$netAmount', '$amount'] },
+                                0
+                            ]
+                        }
+                    },
+                    total_commission: { $sum: { $ifNull: ['$commission', 0] } }
+                }
+            }
+        ]);
 
-        const allTimePayouts = await Payout.find({});
-        const allTimePayoutCommission = allTimePayouts.reduce((sum, p) => sum + (p.commission || 0), 0);
+        const pStats = payoutStats[0] || {
+            total_requests: 0, requested: 0, pending: 0, completed: 0, rejected: 0, failed: 0,
+            total_amount_requested: 0, total_completed: 0, total_pending: 0, total_commission: 0
+        };
 
-        // Settlement info
-        const availableForPayout = settledTransactions.filter(t => t.availableForPayout && !t.settledInPayout);
-        const inPayouts = settledTransactions.filter(t => t.settledInPayout);
+        // Calculate ALL-TIME commission totals using aggregation (without date filters)
+        const allTimePayinStats = await Transaction.aggregate([
+            { $match: { status: 'paid' } },
+            {
+                $group: {
+                    _id: null,
+                    total_commission: { $sum: { $ifNull: ['$commission', 0] } }
+                }
+            }
+        ]);
+        const allTimePayinCommission = allTimePayinStats[0]?.total_commission || 0;
 
-        let totalAvailableBalance = 0;
-        availableForPayout.forEach(t => {
-            const commissionInfo = calculatePayinCommission(t.amount);
-            totalAvailableBalance += (t.amount - commissionInfo.commission);
-        });
+        const allTimePayoutStats = await Payout.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    total_commission: { $sum: { $ifNull: ['$commission', 0] } }
+                }
+            }
+        ]);
+        const allTimePayoutCommission = allTimePayoutStats[0]?.total_commission || 0;
 
-        // Today's stats (using IST) - only calculate if no date filter is applied
+        // Today's stats (using IST) - use aggregation
         const { getIstDayRange } = require('../utils/getIstDayRange');
         const { start: todayStart, end: todayEnd } = getIstDayRange();
         
-        // If date filter is applied, use filtered data for "today" calculations
-        // Otherwise, use actual today's data
-        const todayTransactions = (startDate || endDate) 
-            ? allTransactions.filter(t => {
-                const tDate = new Date(t.createdAt);
-                return tDate >= todayStart && tDate <= todayEnd;
-            })
-            : allTransactions.filter(t => {
-                const tDate = new Date(t.createdAt);
-                return tDate >= todayStart && tDate <= todayEnd;
-            });
-        const todayPaidTransactions = todayTransactions.filter(t => t.status === 'paid');
-        const todayRevenue = todayPaidTransactions.reduce((sum, t) => sum + t.amount, 0);
-        
-        // Calculate today's payin commission
-        let todayPayinCommission = 0;
-        todayPaidTransactions.forEach(t => {
-            const commissionInfo = calculatePayinCommission(t.amount);
-            todayPayinCommission += commissionInfo.commission;
-        });
-        
-        const todayPayouts = (startDate || endDate)
-            ? allPayouts.filter(p => {
-                const pDate = new Date(p.createdAt);
-                return pDate >= todayStart && pDate <= todayEnd;
-            })
-            : allPayouts.filter(p => {
-                const pDate = new Date(p.createdAt);
-                return pDate >= todayStart && pDate <= todayEnd;
-            });
-        
-        // Calculate today's payout commission
-        const todayPayoutCommission = todayPayouts.reduce((sum, p) => sum + (p.commission || 0), 0);
-        const todayPayoutAmount = todayPayouts.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const todayTransactionFilter = { ...transactionDateFilter };
+        if (todayTransactionFilter.createdAt) {
+            todayTransactionFilter.createdAt.$gte = new Date(Math.max(
+                todayTransactionFilter.createdAt.$gte?.getTime() || 0,
+                todayStart.getTime()
+            ));
+            todayTransactionFilter.createdAt.$lte = new Date(Math.min(
+                todayTransactionFilter.createdAt.$lte?.getTime() || Infinity,
+                todayEnd.getTime()
+            ));
+        } else {
+            todayTransactionFilter.createdAt = { $gte: todayStart, $lte: todayEnd };
+        }
 
-        // This week stats
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        
-        const weekTransactions = allTransactions.filter(t => new Date(t.createdAt) >= oneWeekAgo);
-        const weekRevenue = weekTransactions.filter(t => t.status === 'paid').reduce((sum, t) => sum + t.amount, 0);
+        const todayStats = await Transaction.aggregate([
+            { $match: todayTransactionFilter },
+            {
+                $group: {
+                    _id: null,
+                    count: { $sum: 1 },
+                    revenue: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } },
+                    commission: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, { $ifNull: ['$commission', 0] }, 0] } }
+                }
+            }
+        ]);
+        const todayTx = todayStats[0] || { count: 0, revenue: 0, commission: 0 };
+
+        const todayPayoutFilter = { ...payoutDateFilter };
+        if (todayPayoutFilter.createdAt) {
+            todayPayoutFilter.createdAt.$gte = new Date(Math.max(
+                todayPayoutFilter.createdAt.$gte?.getTime() || 0,
+                todayStart.getTime()
+            ));
+            todayPayoutFilter.createdAt.$lte = new Date(Math.min(
+                todayPayoutFilter.createdAt.$lte?.getTime() || Infinity,
+                todayEnd.getTime()
+            ));
+        } else {
+            todayPayoutFilter.createdAt = { $gte: todayStart, $lte: todayEnd };
+        }
+
+        const todayPayoutStats = await Payout.aggregate([
+            { $match: todayPayoutFilter },
+            {
+                $group: {
+                    _id: null,
+                    count: { $sum: 1 },
+                    commission: { $sum: { $ifNull: ['$commission', 0] } },
+                    amount: { $sum: { $ifNull: ['$amount', 0] } }
+                }
+            }
+        ]);
+        const todayP = todayPayoutStats[0] || { count: 0, commission: 0, amount: 0 };
+
+        // This week stats - use aggregation
+        const weekStart = new Date(Math.max(oneWeekAgo.getTime(), transactionDateFilter.createdAt?.$gte?.getTime() || oneWeekAgo.getTime()));
+        const weekFilter = { ...transactionDateFilter };
+        if (weekFilter.createdAt) {
+            weekFilter.createdAt.$gte = weekStart;
+        } else {
+            weekFilter.createdAt = { $gte: weekStart };
+        }
+
+        const weekStats = await Transaction.aggregate([
+            { $match: weekFilter },
+            {
+                $group: {
+                    _id: null,
+                    count: { $sum: 1 },
+                    revenue: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } }
+                }
+            }
+        ]);
+        const weekTx = weekStats[0] || { count: 0, revenue: 0 };
 
         // Response
         res.json({
             success: true,
             stats: {
                 merchants: {
-                    total: merchants.length,
-                    active: activeMerchants.length,
-                    inactive: inactiveMerchants.length,
-                    new_this_week: merchants.filter(m => new Date(m.createdAt) >= oneWeekAgo).length
+                    total: merchantsCount,
+                    active: activeMerchantsCount,
+                    inactive: inactiveMerchantsCount,
+                    new_this_week: newMerchantsThisWeek
                 },
                 
                 transactions: {
-                    total: allTransactions.length,
-                    paid: paidTransactions.length,
-                    pending: pendingTransactions.length,
-                    failed: failedTransactions.length,
-                    settled: settledTransactions.length,
-                    unsettled: unsettledTransactions.length,
-                    today: todayTransactions.length,
-                    this_week: weekTransactions.length,
-                    success_rate: allTransactions.length > 0 
-                        ? ((paidTransactions.length / allTransactions.length) * 100).toFixed(2) 
+                    total: txStats.total,
+                    paid: txStats.paid,
+                    pending: txStats.pending,
+                    failed: txStats.failed,
+                    settled: txStats.settled,
+                    unsettled: txStats.unsettled,
+                    today: todayTx.count,
+                    this_week: weekTx.count,
+                    success_rate: txStats.total > 0 
+                        ? ((txStats.paid / txStats.total) * 100).toFixed(2) 
                         : 0
                 },
                 
                 revenue: {
-                    total: totalRevenue.toFixed(2),
-                    commission_earned: totalPayinCommission.toFixed(2),
-                    net_revenue: (totalRevenue - totalPayinCommission).toFixed(2),
-                    refunded: totalRefunded.toFixed(2),
-                    today: todayRevenue.toFixed(2),
-                    this_week: weekRevenue.toFixed(2),
-                    average_transaction: paidTransactions.length > 0 
-                        ? (totalRevenue / paidTransactions.length).toFixed(2) 
+                    total: txStats.total_revenue.toFixed(2),
+                    commission_earned: txStats.total_commission.toFixed(2),
+                    net_revenue: (txStats.total_revenue - txStats.total_commission).toFixed(2),
+                    refunded: txStats.total_refunded.toFixed(2),
+                    today: todayTx.revenue.toFixed(2),
+                    this_week: weekTx.revenue.toFixed(2),
+                    average_transaction: txStats.paid > 0 
+                        ? (txStats.total_revenue / txStats.paid).toFixed(2) 
                         : 0
                 },
                 
                 payouts: {
-                    total_requests: allPayouts.length,
-                    requested: requestedPayouts.length,
-                    pending: pendingPayouts.length,
-                    completed: completedPayouts.length,
-                    rejected: rejectedPayouts.length,
-                    failed: failedPayouts.length,
-                    total_amount_requested: totalPayoutRequested.toFixed(2),
-                    total_completed: totalPayoutCompleted.toFixed(2),
-                    total_pending: totalPayoutPending.toFixed(2),
-                    commission_earned: totalPayoutCommission.toFixed(2),
-                    today: todayPayouts.length
+                    total_requests: pStats.total_requests,
+                    requested: pStats.requested,
+                    pending: pStats.pending,
+                    completed: pStats.completed,
+                    rejected: pStats.rejected,
+                    failed: pStats.failed,
+                    total_amount_requested: pStats.total_amount_requested.toFixed(2),
+                    total_completed: pStats.total_completed.toFixed(2),
+                    total_pending: pStats.total_pending.toFixed(2),
+                    commission_earned: pStats.total_commission.toFixed(2),
+                    today: todayP.count
                 },
                 
                 settlement: {
-                    settled_transactions: settledTransactions.length,
-                    unsettled_transactions: unsettledTransactions.length,
-                    available_for_payout: availableForPayout.length,
-                    in_payouts: inPayouts.length,
-                    available_balance: totalAvailableBalance.toFixed(2)
+                    settled_transactions: txStats.settled,
+                    unsettled_transactions: txStats.unsettled,
+                    available_for_payout: txStats.available_for_payout,
+                    in_payouts: txStats.in_payouts,
+                    available_balance: txStats.available_balance.toFixed(2)
                 },
                 
                 platform: {
-                    total_commission_earned: (totalPayinCommission + totalPayoutCommission).toFixed(2),
-                    payin_commission: totalPayinCommission.toFixed(2),
-                    payout_commission: totalPayoutCommission.toFixed(2),
-                    net_platform_revenue: (totalPayinCommission + totalPayoutCommission - totalPayoutCompleted).toFixed(2),
-                    today_payin_commission: todayPayinCommission.toFixed(2),
-                    today_payout_commission: todayPayoutCommission.toFixed(2),
-                    today_total_commission: (todayPayinCommission + todayPayoutCommission).toFixed(2)
+                    total_commission_earned: (txStats.total_commission + pStats.total_commission).toFixed(2),
+                    payin_commission: txStats.total_commission.toFixed(2),
+                    payout_commission: pStats.total_commission.toFixed(2),
+                    net_platform_revenue: (txStats.total_commission + pStats.total_commission - pStats.total_completed).toFixed(2),
+                    today_payin_commission: todayTx.commission.toFixed(2),
+                    today_payout_commission: todayP.commission.toFixed(2),
+                    today_total_commission: (todayTx.commission + todayP.commission).toFixed(2)
                 },
                 
                 commission: {
-                    today_payin: todayPayinCommission.toFixed(2),
-                    today_payout: todayPayoutCommission.toFixed(2),
-                    today_total: (todayPayinCommission + todayPayoutCommission).toFixed(2),
+                    today_payin: todayTx.commission.toFixed(2),
+                    today_payout: todayP.commission.toFixed(2),
+                    today_total: (todayTx.commission + todayP.commission).toFixed(2),
                     // Filtered period commission
-                    filtered_payin: totalPayinCommission.toFixed(2),
-                    filtered_payout: totalPayoutCommission.toFixed(2),
-                    filtered_total: (totalPayinCommission + totalPayoutCommission).toFixed(2),
+                    filtered_payin: txStats.total_commission.toFixed(2),
+                    filtered_payout: pStats.total_commission.toFixed(2),
+                    filtered_total: (txStats.total_commission + pStats.total_commission).toFixed(2),
                     // All-time commission (always calculated without date filters)
                     total_payin: allTimePayinCommission.toFixed(2),
                     total_payout: allTimePayoutCommission.toFixed(2),
@@ -1594,6 +1954,165 @@ exports.getAllMerchantsData = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to fetch merchants comprehensive data',
+            detail: error.message
+        });
+    }
+};
+
+// ============ GET SETTLEMENT SETTINGS ============
+exports.getSettlementSettings = async (req, res) => {
+    try {
+        console.log(`⚙️ ${req.user.role === 'superAdmin' ? 'SuperAdmin' : 'Sub-SuperAdmin'} ${req.user.name} fetching settlement settings`);
+
+        const settings = await Settings.getSettings();
+        // Ensure settlementMinutes is set to 20 if not present or if it's still 25 (old default)
+        if (!settings.settlement) {
+            settings.settlement = {
+                settlementDays: 1,
+                settlementMinutes: 20,
+                settlementHour: 16,
+                settlementMinute: 0,
+                cutoffHour: 16,
+                cutoffMinute: 0,
+                skipWeekends: false,
+                cronSchedule: '*/15 * * * 1-6'
+            };
+            await settings.save();
+        } else if (settings.settlement.settlementMinutes === undefined || settings.settlement.settlementMinutes === null || settings.settlement.settlementMinutes === 25) {
+            // Update to 20 if it's missing or still set to old default of 25
+            settings.settlement.settlementMinutes = 20;
+            settings.markModified('settlement');
+            await settings.save();
+        }
+        
+        const settlementSettings = settings.settlement;
+
+        res.json({
+            success: true,
+            settlement: settlementSettings,
+            updated_at: settings.updatedAt,
+            updated_by: settings.updatedBy
+        });
+
+    } catch (error) {
+        console.error('❌ Get Settlement Settings Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch settlement settings',
+            detail: error.message
+        });
+    }
+};
+
+// ============ UPDATE SETTLEMENT SETTINGS ============
+exports.updateSettlementSettings = async (req, res) => {
+    try {
+        const { settlement } = req.body;
+
+        console.log(`⚙️ ${req.user.role === 'superAdmin' ? 'SuperAdmin' : 'Sub-SuperAdmin'} ${req.user.name} updating settlement settings`);
+        console.log('   Settlement settings:', settlement);
+
+        if (!settlement || typeof settlement !== 'object') {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid settlement data. Must be an object.'
+            });
+        }
+
+        // Get current settings
+        const settings = await Settings.getSettings();
+
+        // Initialize settlement if not exists
+        if (!settings.settlement) {
+            settings.settlement = {
+                settlementDays: 1,
+                settlementMinutes: 20,
+                settlementHour: 16,
+                settlementMinute: 0,
+                cutoffHour: 16,
+                cutoffMinute: 0,
+                skipWeekends: false
+            };
+        }
+
+        // Validate and update settlement settings
+        // NEW: Settlement minutes (time-based settlement)
+        if (typeof settlement.settlementMinutes === 'number' && settlement.settlementMinutes >= 1 && settlement.settlementMinutes <= 1440) {
+            settings.settlement.settlementMinutes = settlement.settlementMinutes;
+        }
+        
+        // Legacy: Settlement days (for backward compatibility)
+        if (typeof settlement.settlementDays === 'number' && settlement.settlementDays >= 0) {
+            settings.settlement.settlementDays = settlement.settlementDays;
+        }
+
+        if (typeof settlement.settlementHour === 'number' && settlement.settlementHour >= 0 && settlement.settlementHour <= 23) {
+            settings.settlement.settlementHour = settlement.settlementHour;
+        }
+
+        if (typeof settlement.settlementMinute === 'number' && settlement.settlementMinute >= 0 && settlement.settlementMinute <= 59) {
+            settings.settlement.settlementMinute = settlement.settlementMinute;
+        }
+
+        if (typeof settlement.cutoffHour === 'number' && settlement.cutoffHour >= 0 && settlement.cutoffHour <= 23) {
+            settings.settlement.cutoffHour = settlement.cutoffHour;
+        }
+
+        if (typeof settlement.cutoffMinute === 'number' && settlement.cutoffMinute >= 0 && settlement.cutoffMinute <= 59) {
+            settings.settlement.cutoffMinute = settlement.cutoffMinute;
+        }
+
+        if (typeof settlement.skipWeekends === 'boolean') {
+            settings.settlement.skipWeekends = settlement.skipWeekends;
+        }
+
+        if (typeof settlement.cronSchedule === 'string' && settlement.cronSchedule.trim()) {
+            // Validate cron expression (simple validation)
+            const cronSchedule = settlement.cronSchedule.trim();
+            if (!validateCronExpression(cronSchedule)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid cron expression. Expected format: "*/{minutes} * * * 1-6" (e.g., "*/15 * * * 1-6")',
+                    detail: 'Cron expression must match pattern: */{number} * * * 1-6'
+                });
+            }
+            settings.settlement.cronSchedule = cronSchedule;
+        }
+
+        // Update metadata
+        settings.updatedBy = req.user._id;
+        settings.updatedAt = new Date();
+
+        // Mark settlement as modified
+        settings.markModified('settlement');
+
+        await settings.save();
+
+        // Restart settlement job if cron schedule changed
+        const { restartSettlementJob } = require('../jobs/settlementJob');
+        try {
+            await restartSettlementJob();
+            console.log('✅ Settlement job restarted with new schedule');
+        } catch (jobError) {
+            console.error('⚠️ Warning: Failed to restart settlement job:', jobError.message);
+            // Don't fail the request if job restart fails
+        }
+
+        console.log('✅ Settlement settings updated successfully');
+
+        res.json({
+            success: true,
+            message: 'Settlement settings updated successfully',
+            settlement: settings.settlement,
+            updated_at: settings.updatedAt,
+            updated_by: settings.updatedBy
+        });
+
+    } catch (error) {
+        console.error('❌ Update Settlement Settings Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update settlement settings',
             detail: error.message
         });
     }

@@ -26,6 +26,7 @@
     "bcryptjs": "^3.0.2",
     "cashfree-pg": "^5.0.8",
     "cors": "^2.8.5",
+    "cron-parser": "^5.4.0",
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",

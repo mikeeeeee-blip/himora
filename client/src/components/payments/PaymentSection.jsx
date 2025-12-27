@@ -306,12 +306,12 @@ const PaymentSection = () => {
               <div className="link-container">
                 <input 
                   type="text" 
-                  value={createdLink.checkout_page || createdLink.paymentLink || createdLink.payment_url || createdLink.link || 'Link generated'} 
+                  value={createdLink.checkout_page || createdLink.paymentLink || createdLink.payment_url || createdLink.raw?.link_url || createdLink.link || 'Link generated'} 
                   readOnly 
                   className="link-input"
                 />
                 <button 
-                  onClick={() => copyToClipboard(createdLink.checkout_page || createdLink.paymentLink || createdLink.payment_url || createdLink.link)}
+                  onClick={() => copyToClipboard(createdLink.checkout_page || createdLink.paymentLink || createdLink.payment_url || createdLink.raw?.link_url || createdLink.link)}
                   className="action-btn copy"
                   title="Copy checkout link"
                 >
@@ -319,7 +319,7 @@ const PaymentSection = () => {
                 </button>
                 <button 
                   onClick={() => {
-                    const url = createdLink.checkout_page || createdLink.paymentLink || createdLink.payment_url;
+                    const url = createdLink.checkout_page || createdLink.paymentLink || createdLink.payment_url || createdLink.raw?.link_url;
                     if (url) {
                       window.open(url, '_blank', 'noopener,noreferrer');
                     }

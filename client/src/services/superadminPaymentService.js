@@ -464,6 +464,37 @@ async triggerManualSettlement() {
     }
   }
 
+  async deletePayout(payoutId, reason = '') {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      console.log('Deleting payout:', payoutId);
+
+      // Use POST with _method=DELETE or send reason as query param
+      // Since axios.delete doesn't support body, we'll use POST with a special endpoint
+      // Or send reason as query parameter
+      const response = await axios.delete(
+        API_ENDPOINTS.ADMIN_PAYOUT_DELETE(payoutId),
+        {
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json',
+          },
+          params: { reason }
+        }
+      );
+
+      console.log('Delete payout response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Delete payout error:', error);
+      this.handleError(error, 'Failed to delete payout');
+    }
+  }
+
   // ============ ERROR HANDLER ============
   handleError(error, defaultMessage) {
     console.error('Error details:', {

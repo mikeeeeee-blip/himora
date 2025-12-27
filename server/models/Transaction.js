@@ -208,4 +208,24 @@ TransactionSchema.index({ cashfreeOrderToken: 1 });
 TransactionSchema.index({ customerEmail: 1 });
 TransactionSchema.index({ customerPhone: 1 });
 
+// ✅ Compound indexes for balance API optimization
+TransactionSchema.index({ merchantId: 1, status: 1, settlementStatus: 1 }); // For balance aggregations
+TransactionSchema.index({ merchantId: 1, status: 1, settlementStatus: 1, expectedSettlementDate: 1 }); // For next settlement query
+TransactionSchema.index({ merchantId: 1, updatedAt: 1 }); // For date range queries
+TransactionSchema.index({ merchantId: 1, status: 1, createdAt: 1, updatedAt: 1 }); // For week/month aggregations
+
+// ✅ Indexes for transactions API optimization
+TransactionSchema.index({ merchantId: 1, createdAt: -1 }); // For default sorting (already exists, but ensure it's there)
+TransactionSchema.index({ merchantId: 1, status: 1, createdAt: -1 }); // For status-filtered queries with sorting
+TransactionSchema.index({ merchantId: 1, paymentGateway: 1, createdAt: -1 }); // For gateway-filtered queries
+TransactionSchema.index({ merchantId: 1, paymentMethod: 1, createdAt: -1 }); // For payment method-filtered queries
+TransactionSchema.index({ merchantId: 1, status: 1, paymentGateway: 1, createdAt: -1 }); // For combined filters
+
+// ✅ Indexes for search transactions API optimization
+TransactionSchema.index({ merchantId: 1, settlementStatus: 1, createdAt: -1 }); // For settlement status filter
+TransactionSchema.index({ merchantId: 1, payoutStatus: 1, createdAt: -1 }); // For payout status filter
+TransactionSchema.index({ merchantId: 1, amount: 1, createdAt: -1 }); // For amount range queries
+TransactionSchema.index({ merchantId: 1, transactionId: 1 }); // For transactionId search (exact match)
+TransactionSchema.index({ merchantId: 1, orderId: 1 }); // For orderId search (exact match)
+
 module.exports = mongoose.model('Transaction', TransactionSchema);

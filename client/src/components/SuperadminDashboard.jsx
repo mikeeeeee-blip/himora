@@ -43,8 +43,14 @@ const SuperadminDashboard = () => {
   const [showAllTime, setShowAllTime] = useState(false);
 
   useEffect(() => {
-    fetchStats();
-    fetchMerchantsData();
+    // Fetch both in parallel for better performance
+    Promise.all([
+      fetchStats(),
+      fetchMerchantsData()
+    ]).catch(err => {
+      console.error('Error fetching dashboard data:', err);
+      setError('Failed to load dashboard data');
+    });
   }, [selectedDate, useDateRange, dateRange, showAllTime]);
 
   const fetchMerchantsData = async () => {
@@ -67,11 +73,12 @@ const SuperadminDashboard = () => {
 
       const data = await superadminPaymentService.getAllMerchantsData({
         startDate,
-        endDate
+        endDate,
+        limit: 10 // Only fetch top 10 merchants for dashboard preview
       });
       
       if (data && data.merchants) {
-        setMerchantsData(data.merchants);
+        setMerchantsData(data.merchants.slice(0, 10)); // Limit to 10 for dashboard
       }
     } catch (err) {
       console.error('Error fetching merchants data:', err);

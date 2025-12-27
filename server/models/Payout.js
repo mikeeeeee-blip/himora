@@ -68,4 +68,9 @@ const PayoutSchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now }
 });
 
+// ✅ Add indexes for faster queries (especially for balance API)
+PayoutSchema.index({ merchantId: 1, status: 1 }); // For payout aggregations
+PayoutSchema.index({ merchantId: 1, createdAt: 1, updatedAt: 1 }); // For date range queries
+PayoutSchema.index({ merchantId: 1, status: 1, createdAt: 1, updatedAt: 1 }); // For week/month aggregations
+
 module.exports = mongoose.model('Payout', PayoutSchema);

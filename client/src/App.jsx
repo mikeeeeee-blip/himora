@@ -100,7 +100,7 @@ function App() {
         <Route
           path="/superadmin/settings/payment-gateways"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+            <AuthWrapper requiredRole={[USER_ROLES.SUPERADMIN, USER_ROLES.SUB_SUPERADMIN]}>
               <SuperadminLayout>
                 <SuperadminPaymentGatewaySettings />
               </SuperadminLayout>

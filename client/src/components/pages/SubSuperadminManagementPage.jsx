@@ -1,8 +1,9 @@
 // components/pages/SubSuperadminManagementPage.jsx
 
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiKey, FiX, FiSave, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiKey, FiX, FiSave, FiEye, FiEyeOff, FiClock } from 'react-icons/fi';
 import subSuperAdminService from '../../services/subSuperAdminService';
+import superadminSettingsService from '../../services/superadminSettingsService';
 
 const SubSuperadminManagementPage = () => {
   const [subSuperAdmins, setSubSuperAdmins] = useState([]);
@@ -52,10 +53,122 @@ const SubSuperadminManagementPage = () => {
     confirmPassword: ''
   });
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Settlement job schedule state
+  const [settlementJobInfo, setSettlementJobInfo] = useState({
+    intervalMinutes: null,
+    nextRunTime: null,
+    loading: true,
+  });
 
   useEffect(() => {
     loadSubSuperAdmins();
+    fetchSettlementJobSchedule();
   }, []);
+
+  // Fetch settlement job schedule
+  const fetchSettlementJobSchedule = async () => {
+    try {
+      setSettlementJobInfo(prev => ({ ...prev, loading: true }));
+      const response = await superadminSettingsService.getSettlementSettings();
+      if (response.success && response.settlement?.cronSchedule) {
+        const cronSchedule = response.settlement.cronSchedule;
+        const nextRunInfo = calculateNextJobRunTime(cronSchedule);
+        
+        if (nextRunInfo) {
+          setSettlementJobInfo({
+            intervalMinutes: nextRunInfo.intervalMinutes,
+            nextRunTime: nextRunInfo,
+            loading: false,
+          });
+        } else {
+          setSettlementJobInfo(prev => ({ ...prev, loading: false }));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching settlement job schedule:', err);
+      setSettlementJobInfo(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  // Helper to get relative time from timestamp
+  const getRelativeTime = (timestamp) => {
+    if (!timestamp) return '';
+    const now = new Date();
+    const date = new Date(timestamp);
+    const diff = date - now;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    
+    if (minutes < 1) {
+      return 'now';
+    } else if (minutes < 60) {
+      return `in ${minutes} minute${minutes > 1 ? 's' : ''}`;
+    } else if (hours < 24) {
+      return `in ${hours} hour${hours > 1 ? 's' : ''} ${minutes % 60} minute${(minutes % 60) > 1 ? 's' : ''}`;
+    } else {
+      const days = Math.floor(hours / 24);
+      return `in ${days} day${days > 1 ? 's' : ''}`;
+    }
+  };
+
+  // Calculate next settlement job run time from cron expression
+  const calculateNextJobRunTime = (cronSchedule) => {
+    try {
+      // Parse cron expression: */{minutes} * * * 1-6
+      const match = cronSchedule.match(/^\*\/(\d+)/);
+      if (!match) return null;
+      
+      const minutes = parseInt(match[1]);
+      if (!minutes || minutes < 1) return null;
+
+      const now = new Date();
+      const currentMinute = now.getMinutes();
+      const currentSecond = now.getSeconds();
+      const currentMillisecond = now.getMilliseconds();
+      
+      // Calculate minutes until next run
+      const minutesUntilNext = minutes - (currentMinute % minutes);
+      
+      // Create next run time
+      const nextRun = new Date(now);
+      nextRun.setMinutes(currentMinute + minutesUntilNext);
+      nextRun.setSeconds(0);
+      nextRun.setMilliseconds(0);
+      
+      // If we're exactly on a run time, add the interval
+      if (minutesUntilNext === minutes && currentSecond === 0 && currentMillisecond === 0) {
+        nextRun.setMinutes(nextRun.getMinutes() + minutes);
+      }
+      
+      // Check if it's Sunday (day 0) - skip to Monday
+      const dayOfWeek = nextRun.getDay();
+      if (dayOfWeek === 0) {
+        // Sunday - move to Monday at 00:00
+        nextRun.setDate(nextRun.getDate() + 1);
+        nextRun.setHours(0, 0, 0, 0);
+      }
+      
+      return {
+        date: nextRun,
+        formatted: nextRun.toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }),
+        timestamp: nextRun.toISOString(),
+        relative: getRelativeTime(nextRun.toISOString()),
+        intervalMinutes: minutes
+      };
+    } catch (error) {
+      console.error('Error calculating next job run time:', error);
+      return null;
+    }
+  };
 
   const loadSubSuperAdmins = async () => {
     setLoading(true);
@@ -321,6 +434,7 @@ const SubSuperadminManagementPage = () => {
                   <FiPlus /> Create Sub-SuperAdmin
                 </button>
               </div>
+
 
               {/* Messages */}
               {error && (
