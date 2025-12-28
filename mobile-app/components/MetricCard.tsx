@@ -116,6 +116,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: Colors.textLight,
+    minHeight: 28, // Ensure numbers are always visible
+    lineHeight: 28,
   },
   cardSubtitle: {
     fontSize: 12,

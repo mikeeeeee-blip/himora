@@ -91,6 +91,10 @@ export const API_ENDPOINTS = {
   PAYTM_WEBHOOK: `${BASE_URL}/paytm/webhook`,
   EASEBUZZ_WEBHOOK: `${BASE_URL}/easebuzz/webhook`,
   RAZORPAY_WEBHOOK: `${BASE_URL}/razorpay/webhook`,
+  
+  // ============ DEVICE REGISTRATION (Push Notifications) ============
+  DEVICE_REGISTER: `${BASE_URL}/device/register`,
+  DEVICE_UNREGISTER: `${BASE_URL}/device/unregister`,
 };
 
 export const USER_ROLES = {

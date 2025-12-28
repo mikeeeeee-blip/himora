@@ -56,6 +56,7 @@ export default function Navbar() {
       { path: '/(admin)/payments', label: 'Payin', icon: 'cash-outline' },
       { path: '/(admin)/payouts', label: 'Payout', icon: 'arrow-down-outline' },
       { path: '/(admin)/transactions', label: 'Transactions', icon: 'receipt-outline' },
+      { path: '/(admin)/api', label: 'API', icon: 'key-outline' },
       { path: '/(admin)/webhooks', label: 'Webhooks', icon: 'link-outline' },
     ];
   };
@@ -88,7 +89,7 @@ export default function Navbar() {
         </View>
 
         {/* Center Section - Search (Hidden on mobile) */}
-        <View style={styles.searchContainer}>
+        {/* <View style={styles.searchContainer}>
           <Ionicons name="search" size={18} color="rgba(255, 255, 255, 0.5)" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
@@ -98,7 +99,7 @@ export default function Navbar() {
             onChangeText={setSearchQuery}
           />
           <Text style={styles.searchHint}>/</Text>
-        </View>
+        </View> */}
 
         {/* Right Section - Actions */}
         <View style={styles.rightSection}>

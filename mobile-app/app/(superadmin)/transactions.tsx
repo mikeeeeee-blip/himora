@@ -8,7 +8,7 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/theme';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import apiClient from '@/services/apiService';
@@ -56,13 +56,13 @@ export default function SuperadminTransactionsScreen() {
     switch (status?.toLowerCase()) {
       case 'paid':
       case 'success':
-        return '#10b981';
+        return Colors.success;
       case 'failed':
-        return '#ef4444';
+        return Colors.danger;
       case 'pending':
-        return '#f59e0b';
+        return Colors.warning;
       default:
-        return '#666';
+        return Colors.textSubtleLight;
     }
   };
 
@@ -92,10 +92,10 @@ export default function SuperadminTransactionsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          <Ionicons name="arrow-back" size={24} color={Colors.textLight} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>All Transactions</Text>
         <View style={{ width: 24 }} />
@@ -122,28 +122,29 @@ export default function SuperadminTransactionsScreen() {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: Colors.bgPrimary,
+    paddingTop: 64, // Account for Navbar height
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.bgSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
+    borderBottomColor: Colors.border,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: Colors.textLight,
   },
   loadingContainer: {
     flex: 1,
@@ -154,15 +155,12 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   transactionCard: {
-    backgroundColor: '#fff',
+    backgroundColor: Colors.bgSecondary,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   transactionHeader: {
     flexDirection: 'row',
@@ -173,7 +171,7 @@ const styles = StyleSheet.create({
   transactionId: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: Colors.textLight,
     flex: 1,
   },
   statusBadge: {
@@ -191,15 +189,15 @@ const styles = StyleSheet.create({
   amount: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: Colors.textLight,
   },
   merchantName: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.textSubtleLight,
   },
   date: {
     fontSize: 12,
-    color: '#999',
+    color: Colors.textSubtleLight,
   },
   emptyContainer: {
     flex: 1,
@@ -209,7 +207,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#999',
+    color: Colors.textSubtleLight,
     marginTop: 16,
   },
 });

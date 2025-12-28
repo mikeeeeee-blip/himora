@@ -9,23 +9,27 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  FlatList,
+  TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import apiClient from '@/services/apiService';
-import { API_ENDPOINTS } from '@/constants/api';
 import authService from '@/services/authService';
+import paymentService from '@/services/paymentService';
 import Navbar from '@/components/Navbar';
 import MetricCard from '@/components/MetricCard';
 import { Colors } from '@/constants/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface DashboardStats {
-  totalTransactions: number;
-  totalRevenue: number;
-  pendingPayouts: number;
-  availableBalance: number;
+  balance: any;
+  transactions: any;
+  payouts: any;
+  todayTransactions: {
+    payin: any[];
+    payout: any[];
+    settlement: any[];
+  };
 }
 
 export default function AdminDashboard() {
@@ -35,83 +39,86 @@ export default function AdminDashboard() {
   const [authChecked, setAuthChecked] = useState(false);
   const [merchantName, setMerchantName] = useState('');
   const [dateRange, setDateRange] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
+  const [todayPayinFilter, setTodayPayinFilter] = useState<'all' | 'payin' | 'payout' | 'settlement'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const router = useRouter();
 
   useEffect(() => {
     const initializeDashboard = async () => {
-      // Small delay to ensure token is available after login redirect
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // First verify authentication
       await authService.ensureAuthLoaded();
       const authenticated = await authService.isAuthenticated();
       const token = await authService.getToken();
       
-      console.log('Dashboard init - authenticated:', authenticated, 'hasToken:', !!token);
-      
       if (!authenticated || !token) {
-        console.log('Dashboard: Not authenticated, redirecting to login');
         await authService.logout();
         router.replace('/login');
         return;
       }
       
       setAuthChecked(true);
-      // Only load data after auth is confirmed
       loadDashboardData();
     };
     
     initializeDashboard();
   }, []);
 
+  useEffect(() => {
+    if (authChecked) {
+      loadDashboardData();
+    }
+  }, [dateRange]);
+
+  // Refresh today's transactions periodically
+  useEffect(() => {
+    if (!authChecked) return;
+    
+    const interval = setInterval(() => {
+      fetchTodayTransactions();
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [authChecked]);
+
   const loadDashboardData = async () => {
     try {
       setLoading(true);
       
-      // Ensure auth is loaded and verify authentication before making API calls
       await authService.ensureAuthLoaded();
       const authenticated = await authService.isAuthenticated();
       
       if (!authenticated) {
-        console.log('Not authenticated, redirecting to login');
         await authService.logout();
         router.replace('/login');
         return;
       }
       
-      const token = await authService.getToken();
-      if (!token) {
-        console.log('No token found, redirecting to login');
-        await authService.logout();
-        router.replace('/login');
-        return;
-      }
-      
-      console.log('Loading dashboard data with token:', token.substring(0, 20) + '...');
-      
-      // Fetch balance
-      const balanceResponse = await apiClient.get(API_ENDPOINTS.BALANCE);
-      
-      // Fetch transactions count (you might need to adjust this based on your API)
-      const transactionsResponse = await apiClient.get(API_ENDPOINTS.TRANSACTIONS, {
-        params: { limit: 1 },
-      });
+      // Fetch all dashboard data in parallel
+      const [balanceData, transactionsData, payoutsData] = await Promise.allSettled([
+        paymentService.getBalance(),
+        paymentService.getTransactions().catch(() => ({ transactions: [], summary: { total_transactions: 0 } })),
+        paymentService.getPayouts().catch(() => ({ payouts: [], summary: { total_payout_requests: 0 } })),
+      ]);
 
-      const balanceData = balanceResponse.data?.balance || {};
-      const balance = balanceData?.available_balance || balanceData?.balance || 0;
-      const transactions = transactionsResponse.data?.transactions || [];
-      
+      const balance = balanceData.status === 'fulfilled' ? balanceData.value : null;
+      const transactions = transactionsData.status === 'fulfilled' ? transactionsData.value : { transactions: [], summary: { total_transactions: 0 } };
+      const payouts = payoutsData.status === 'fulfilled' ? payoutsData.value : { payouts: [], summary: { total_payout_requests: 0 } };
+
       // Extract merchant name
-      if (balanceResponse.data?.merchant?.merchantName) {
-        setMerchantName(balanceResponse.data.merchant.merchantName);
-        await AsyncStorage.setItem('businessName', balanceResponse.data.merchant.merchantName);
+      if (balance?.merchant?.merchantName) {
+        setMerchantName(balance.merchant.merchantName);
+        await AsyncStorage.setItem('businessName', balance.merchant.merchantName);
       }
-      
+
+      // Fetch today's transactions
+      const todayTransactions = await fetchTodayTransactions();
+
       setStats({
-        totalTransactions: transactionsResponse.data?.total || transactions.length || 0,
-        totalRevenue: balanceData?.total_revenue || balanceData?.settled_revenue || 0,
-        pendingPayouts: 0, // You'll need to fetch this separately
-        availableBalance: balance,
+        balance,
+        transactions,
+        payouts,
+        todayTransactions,
       });
     } catch (error: any) {
       console.error('Error loading dashboard:', error);
@@ -125,12 +132,54 @@ export default function AdminDashboard() {
             },
           },
         ]);
-      } else {
-        Alert.alert('Error', error.response?.data?.message || 'Failed to load dashboard data');
       }
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const fetchTodayTransactions = async () => {
+    try {
+      const now = new Date();
+      const twentyFiveHoursAgo = new Date(now.getTime() - 25 * 60 * 60 * 1000);
+
+      const [payinResult, payoutResult] = await Promise.allSettled([
+        paymentService.searchTransactions({
+          limit: 1000,
+          sortBy: 'createdAt',
+          sortOrder: 'desc',
+        }),
+        paymentService.searchPayouts({
+          limit: 1000,
+          sortBy: 'createdAt',
+          sortOrder: 'desc',
+        }),
+      ]);
+
+      const allPayins = payinResult.status === 'fulfilled' ? (payinResult.value.transactions || []) : [];
+      const allPayouts = payoutResult.status === 'fulfilled' ? (payoutResult.value.payouts || []) : [];
+
+      // Filter last 25 hours
+      const payin = allPayins.filter((txn: any) => {
+        const txnDate = new Date(txn.createdAt || txn.created_at);
+        return txnDate >= twentyFiveHoursAgo && txn.settlementStatus !== 'settled';
+      });
+
+      const payout = allPayouts.filter((p: any) => {
+        const pDate = new Date(p.createdAt || p.created_at);
+        return pDate >= twentyFiveHoursAgo;
+      });
+
+      const settlement = allPayins.filter((txn: any) => {
+        const txnDate = new Date(txn.createdAt || txn.created_at);
+        return txnDate >= twentyFiveHoursAgo && txn.settlementStatus === 'settled';
+      });
+
+      return { payin, payout, settlement };
+    } catch (error) {
+      console.error('Error fetching today transactions:', error);
+      return { payin: [], payout: [], settlement: [] };
     }
   };
 
@@ -139,27 +188,9 @@ export default function AdminDashboard() {
     loadDashboardData();
   };
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            await authService.logout();
-            router.replace('/login');
-          },
-        },
-      ]
-    );
-  };
-
-
-  const formatCurrency = (amount: number) => {
-    return `₹${parseFloat(String(amount || 0)).toLocaleString('en-IN', {
+  const formatCurrency = (amount: number | string | undefined) => {
+    if (amount === undefined || amount === null) return '0.00';
+    return `₹${parseFloat(String(amount)).toLocaleString('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
@@ -167,10 +198,6 @@ export default function AdminDashboard() {
 
   const getCurrentDateRange = () => {
     const now = new Date();
-    const monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
-    ];
     
     if (dateRange === 'daily') {
       const startDate = new Date(now);
@@ -187,35 +214,105 @@ export default function AdminDashboard() {
     }
   };
 
+  const getPeriodData = () => {
+    const balanceData = stats?.balance;
+    if (dateRange === 'weekly' && balanceData?.balanceOfPastWeek) {
+      return balanceData.balanceOfPastWeek;
+    } else if (dateRange === 'monthly' && balanceData?.balanceOfPastMonth) {
+      return balanceData.balanceOfPastMonth;
+    }
+    return null;
+  };
+
+  const calculateMetrics = () => {
+    const balanceData = stats?.balance;
+    const balance = balanceData?.balance;
+    const periodData = getPeriodData();
+
+    const totalRevenue = periodData
+      ? periodData.total_revenue
+      : balance?.total_revenue || balance?.settled_revenue || 0;
+    
+    const totalPaidOut = periodData
+      ? periodData.total_paid_out
+      : balance?.total_paid_out || 0;
+
+    const todayPayinAmount = balance?.totalTodayRevenue || 0;
+    const availableBalance = balance?.available_balance || 0;
+    const unsettledBalance = balance?.unsettled_net_revenue || balance?.unsettled_revenue || 0;
+    
+    const payoutCount = balanceData?.transaction_summary?.pending_payout_requests ||
+      stats?.payouts?.payouts?.length || 0;
+
+    const totalPayinCommission = periodData
+      ? periodData.total_commission
+      : balance?.totalPayinCommission || 0;
+
+    const totalPayoutCommission = periodData
+      ? periodData.total_payout_commission
+      : balance?.totalTodaysPayoutCommission || 0;
+
+    // Calculate today's payin/payout
+    const todayPayin = {
+      count: stats?.todayTransactions?.payin?.length || 0,
+      amount: (stats?.todayTransactions?.payin || []).reduce((sum: number, txn: any) => sum + parseFloat(txn.amount || 0), 0),
+    };
+
+    const todayPayout = {
+      count: stats?.todayTransactions?.payout?.length || 0,
+      amount: (stats?.todayTransactions?.payout || []).reduce((sum: number, p: any) => sum + parseFloat(p.netAmount || p.amount || 0), 0),
+    };
+
+    return {
+      totalRevenue,
+      totalPaidOut,
+      todayPayinAmount: dateRange === 'weekly' || dateRange === 'monthly' ? parseFloat(String(totalRevenue)) : todayPayinAmount,
+      availableBalance,
+      unsettledBalance,
+      payoutCount,
+      totalPayinCommission,
+      totalPayoutCommission,
+      todayPayin,
+      todayPayout,
+    };
+  };
+
+  const metrics = calculateMetrics();
+
+  // Calculate GST from commission
+  const calculateGST = (commission: number) => {
+    const gstRate = 18;
+    return commission * (gstRate / (100 + gstRate));
+  };
+
   const metricCards = [
     {
       icon: 'cash-outline',
       title: 'Total revenue',
-      value: formatCurrency(stats?.totalRevenue || 0),
+      value: formatCurrency(metrics.totalRevenue),
       trend: '+11.2% VS PREV. 28 DAYS',
       trendColor: Colors.success,
     },
     {
       icon: 'arrow-down-outline',
       title: 'Total Paid payout',
-      value: formatCurrency(0),
+      value: formatCurrency(metrics.totalPaidOut),
       trendColor: Colors.textSubtleLight,
     },
     {
       icon: 'arrow-up-outline',
       title: dateRange === 'weekly' ? 'Week Payin' : dateRange === 'monthly' ? 'Month Payin' : 'Today payin',
-      value: formatCurrency(stats?.totalRevenue || 0),
+      value: formatCurrency(metrics.todayPayinAmount),
     },
     {
       icon: 'arrow-down-outline',
       title: 'Payout',
-      value: String(stats?.pendingPayouts || 0),
+      value: String(metrics.payoutCount),
       subtitle: 'Realtime update',
-      isSpecialCard: true,
       actionButton: (
         <TouchableOpacity
           style={styles.requestPayoutButton}
-          onPress={() => router.push('/(admin)/payouts')}
+          onPress={() => router.push('/(admin)/payout-request')}
         >
           <Ionicons name="flash-outline" size={16} color={Colors.textLight} />
           <Text style={styles.requestPayoutText}>Request payout</Text>
@@ -225,17 +322,122 @@ export default function AdminDashboard() {
     {
       icon: 'wallet-outline',
       title: 'Available Wallet Balance',
-      value: formatCurrency(stats?.availableBalance || 0),
+      value: formatCurrency(metrics.availableBalance),
       trend: '+11.2% VS PREV. 28 DAYS',
       trendColor: Colors.success,
+      subtitle: stats?.balance?.balance?.blocked_balance && parseFloat(String(stats.balance.balance.blocked_balance)) > 0
+        ? `Freezed: ${formatCurrency(stats.balance.balance.blocked_balance)}`
+        : undefined,
     },
     {
       icon: 'arrow-down-outline',
       title: 'Unsettled Balance',
-      value: formatCurrency(0),
+      value: formatCurrency(metrics.unsettledBalance),
       trendColor: Colors.textSubtleLight,
     },
+    {
+      icon: 'book-outline',
+      title: dateRange === 'weekly' ? 'Week Payin Commission' : dateRange === 'monthly' ? 'Month Payin Commission' : 'Today payin Commission',
+      value: formatCurrency(metrics.totalPayinCommission),
+      subtitle: `GST Rate: 18% | Total GST: ${formatCurrency(calculateGST(parseFloat(String(metrics.totalPayinCommission))))}`,
+    },
+    {
+      icon: 'book-outline',
+      title: dateRange === 'weekly' ? 'Week Payout commission' : dateRange === 'monthly' ? 'Month Payout commission' : 'Today Payout commission',
+      value: formatCurrency(metrics.totalPayoutCommission),
+    },
   ];
+
+  const getFilteredTransactions = () => {
+    if (!stats?.todayTransactions) return [];
+    
+    let allTransactions: any[] = [];
+    
+    if (todayPayinFilter === 'all') {
+      allTransactions = [
+        ...(stats.todayTransactions.payin || []).map((t: any) => ({ ...t, type: 'payin' })),
+        ...(stats.todayTransactions.payout || []).map((p: any) => ({ ...p, type: 'payout' })),
+        ...(stats.todayTransactions.settlement || []).map((s: any) => ({ ...s, type: 'settlement' })),
+      ];
+    } else if (todayPayinFilter === 'payin') {
+      allTransactions = (stats.todayTransactions.payin || []).map((t: any) => ({ ...t, type: 'payin' }));
+    } else if (todayPayinFilter === 'payout') {
+      allTransactions = (stats.todayTransactions.payout || []).map((p: any) => ({ ...p, type: 'payout' }));
+    } else if (todayPayinFilter === 'settlement') {
+      allTransactions = (stats.todayTransactions.settlement || []).map((s: any) => ({ ...s, type: 'settlement' }));
+    }
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      allTransactions = allTransactions.filter((txn: any) => {
+        const name = txn.customerName || txn.customer_name || txn.description || '';
+        const id = txn.transactionId || txn.transaction_id || txn.payoutId || '';
+        return name.toLowerCase().includes(query) || id.toLowerCase().includes(query);
+      });
+    }
+
+    return allTransactions;
+  };
+
+  const filteredTransactions = getFilteredTransactions();
+
+  const renderTransaction = ({ item }: { item: any }) => {
+    const name = item.type === 'payout'
+      ? item.description || item.beneficiaryDetails?.accountHolderName || `Payout ${item.payoutId || ''}`
+      : item.customerName || item.customer_name || item.description || `Transaction ${item.transactionId || ''}`;
+    
+    const amount = item.amount || item.netAmount || 0;
+    const status = item.status || 'created';
+    const type = item.type || 'payin';
+    const date = new Date(item.createdAt || item.created_at);
+
+    return (
+      <TouchableOpacity
+        style={styles.transactionRow}
+        onPress={() => {
+          if (type === 'payin' || type === 'settlement') {
+            router.push(`/(admin)/transaction-detail?transactionId=${item.transactionId || item.transaction_id || item.id}`);
+          }
+        }}
+      >
+        <View style={styles.transactionCell}>
+          <Text style={styles.transactionName}>
+            {name} ({type})
+          </Text>
+        </View>
+        <View style={styles.transactionCell}>
+          <Text style={styles.transactionAmount}>{formatCurrency(amount)}</Text>
+        </View>
+        <View style={styles.transactionCell}>
+          <Text style={styles.transactionType}>{type}</Text>
+        </View>
+        <View style={styles.transactionCell}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(status) + '20' }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(status) }]}>
+              {status}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.transactionCell}>
+          <Text style={styles.transactionLabel}>
+            {type === 'payout' ? 'Out' : type === 'settlement' ? 'Settlement' : 'In'}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const getStatusColor = (status: string) => {
+    const statusLower = status.toLowerCase();
+    if (statusLower === 'paid' || statusLower === 'completed' || statusLower === 'success') {
+      return Colors.success;
+    } else if (statusLower === 'failed' || statusLower === 'rejected') {
+      return Colors.danger;
+    } else if (statusLower === 'pending') {
+      return Colors.warning;
+    }
+    return Colors.textSubtleLight;
+  };
 
   return (
     <View style={styles.container}>
@@ -260,10 +462,9 @@ export default function AdminDashboard() {
             tintColor={Colors.accent}
           />
         }
+        showsVerticalScrollIndicator={false}
+        contentOffset={{ x: 0, y: 0 }}
       >
-        {/* Spacer for graphic */}
-        <View style={styles.spacer} />
-
         {/* Main Content Card */}
         <View style={styles.mainCard}>
           {/* Greeting and Controls */}
@@ -325,36 +526,69 @@ export default function AdminDashboard() {
           )}
         </View>
 
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/(admin)/transactions')}
-          >
-            <Ionicons name="receipt-outline" size={24} color={Colors.success} />
-            <Text style={styles.actionButtonText}>View Transactions</Text>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSubtleLight} />
-          </TouchableOpacity>
+        {/* Bottom Section - Transactions */}
+        <View style={styles.bottomSection}>
+          {/* Today Transactions Table */}
+          <View style={styles.transactionsCard}>
+            <View style={styles.transactionsHeader}>
+              <Text style={styles.sectionTitle}>
+                Last 25 Hours {filteredTransactions.length || 0}
+              </Text>
+              <View style={styles.searchContainer}>
+                <Ionicons name="search" size={16} color={Colors.textSubtleLight} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search..."
+                  placeholderTextColor={Colors.textSubtleLight}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+              </View>
+            </View>
 
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/(admin)/payouts')}
-          >
-            <Ionicons name="cash-outline" size={24} color={Colors.info} />
-            <Text style={styles.actionButtonText}>Manage Payouts</Text>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSubtleLight} />
-          </TouchableOpacity>
+            {/* Filter Buttons */}
+            <View style={styles.filterButtons}>
+              {[
+                { value: 'all', label: 'All' },
+                { value: 'payin', label: 'In' },
+                { value: 'payout', label: 'Out' },
+                { value: 'settlement', label: 'Settlement' },
+              ].map((filter) => (
+                <TouchableOpacity
+                  key={filter.value}
+                  style={[
+                    styles.filterButton,
+                    todayPayinFilter === filter.value && styles.filterButtonActive,
+                  ]}
+                  onPress={() => setTodayPayinFilter(filter.value as any)}
+                >
+                  <Text
+                    style={[
+                      styles.filterButtonText,
+                      todayPayinFilter === filter.value && styles.filterButtonTextActive,
+                    ]}
+                  >
+                    {filter.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/(admin)/payments')}
-          >
-            <Ionicons name="card-outline" size={24} color={Colors.warning} />
-            <Text style={styles.actionButtonText}>Create Payment</Text>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSubtleLight} />
-          </TouchableOpacity>
+            {/* Transactions List */}
+            <FlatList
+              data={filteredTransactions}
+              renderItem={renderTransaction}
+              keyExtractor={(item, index) => 
+                item.transactionId || item.transaction_id || item.payoutId || item.id || `txn-${index}`
+              }
+              scrollEnabled={false}
+              ListEmptyComponent={
+                <View style={styles.emptyTransactions}>
+                  <Text style={styles.emptyText}>No transactions found</Text>
+                </View>
+              }
+            />
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -373,13 +607,13 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     alignItems: 'center',
-    justifyContent: 'center',
-    opacity: 0.3,
+    justifyContent: 'flex-start',
+    opacity: 0.2,
     zIndex: 0,
   },
   xGraphic: {
-    width: '120%',
-    height: '85%',
+    width: '100%',
+    height: '60%',
     tintColor: Colors.accent,
   },
   content: {
@@ -390,17 +624,18 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   spacer: {
-    height: '50%',
-    minHeight: 300,
+    height: 0,
+    minHeight: 0,
   },
   mainCard: {
     backgroundColor: Colors.bgSecondary,
     borderRadius: 12,
     padding: 16,
     marginHorizontal: 16,
+    marginTop: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: Colors.border,
   },
   greetingSection: {
     marginBottom: 16,
@@ -427,7 +662,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 4,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: Colors.border,
   },
   dateRangeButton: {
     flex: 1,
@@ -489,13 +724,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Colors.textLight,
   },
-  quickActions: {
-    padding: 16,
-    backgroundColor: Colors.bgSecondary,
-    borderRadius: 12,
-    marginHorizontal: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+  bottomSection: {
+    paddingHorizontal: 16,
+    gap: 16,
   },
   sectionTitle: {
     fontSize: 18,
@@ -503,21 +734,104 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     marginBottom: 12,
   },
-  actionButton: {
+  transactionsCard: {
+    backgroundColor: Colors.bgSecondary,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  transactionsHeader: {
+    marginBottom: 12,
+  },
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.bgTertiary,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: Colors.border,
   },
-  actionButtonText: {
+  searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 14,
     color: Colors.textLight,
-    marginLeft: 12,
+    marginLeft: 8,
+  },
+  filterButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: Colors.bgTertiary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+  },
+  filterButtonActive: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  filterButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Colors.textSubtleLight,
+  },
+  filterButtonTextActive: {
+    color: Colors.textLight,
+  },
+  transactionRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  transactionCell: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  transactionName: {
+    fontSize: 12,
+    color: Colors.textLight,
+    flex: 1,
+  },
+  transactionAmount: {
+    fontSize: 12,
+    color: Colors.textLight,
+    fontWeight: '500',
+  },
+  transactionType: {
+    fontSize: 12,
+    color: Colors.textSubtleLight,
+  },
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  transactionLabel: {
+    fontSize: 12,
+    color: Colors.textSubtleLight,
+  },
+  emptyTransactions: {
+    padding: 32,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: Colors.textSubtleLight,
   },
 });
-
