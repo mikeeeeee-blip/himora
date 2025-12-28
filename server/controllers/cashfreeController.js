@@ -244,7 +244,7 @@ exports.createCashfreePaymentLink = async (req, res) => {
 
             // Construct Next.js checkout page URL (using iframe version for better UPI auto-click)
             // The checkout-iframe page will embed the checkout page in an iframe and auto-click UPI button
-            const checkoutUrl = new URL(`${nextjsBaseUrl}/checkout-iframe`);
+            const checkoutUrl = new URL(`${nextjsBaseUrl}/checkout`);
             checkoutUrl.searchParams.set('amount', amountValue.toString());
             checkoutUrl.searchParams.set('customer_name', customer_name);
             checkoutUrl.searchParams.set('customer_email', customer_email);
