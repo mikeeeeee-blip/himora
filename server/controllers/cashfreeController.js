@@ -242,8 +242,12 @@ exports.createCashfreePaymentLink = async (req, res) => {
                 );
             }
 
-            // Construct Next.js checkout page URL (using iframe version for better UPI auto-click)
-            // The checkout-iframe page will embed the checkout page in an iframe and auto-click UPI button
+            // Construct Next.js checkout page URL with UPI Intent support
+            // The checkout page includes UPI Intent support that automatically opens UPI apps
+            // when users select UPI payment options (PhonePe, GPay, Paytm, etc.)
+            // Reference: https://www.cashfree.com/docs/payments/online/mobile/misc/upi_intent_support_js_sdk
+            // The checkout page intercepts UPI intent URLs (upi://pay, tez://, gpay://, paytmmp://, phonepe://)
+            // and opens them directly to launch UPI apps on mobile devices
             const checkoutUrl = new URL(`${nextjsBaseUrl}/checkout`);
             checkoutUrl.searchParams.set('amount', amountValue.toString());
             checkoutUrl.searchParams.set('customer_name', customer_name);
@@ -292,10 +296,15 @@ exports.createCashfreePaymentLink = async (req, res) => {
                 merchant_id: merchantId.toString(),
                 merchant_name: merchantName
             },
-                message: 'Payment link created successfully. Redirect to payment_url to proceed with payment. Gateway: Cashfree.',
+                message: 'Payment link created successfully. Redirect to payment_url to proceed with payment. Gateway: Cashfree. The checkout page includes UPI Intent support for seamless UPI app integration.',
                 payment_url: paymentUrl,
                 paymentLink: paymentUrl
         };
+        
+        // Note: The checkout page at /checkout includes UPI Intent support
+        // It automatically intercepts and opens UPI apps (PhonePe, GPay, Paytm, etc.)
+        // when users select UPI payment options on mobile devices
+        // Reference: https://www.cashfree.com/docs/payments/online/mobile/misc/upi_intent_support_js_sdk
 
         res.json(responseData);
 
