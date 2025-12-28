@@ -16,7 +16,8 @@ import {
   FiCreditCard,
   FiInfo,
   FiCopy,
-  FiTrash2
+  FiTrash2,
+  FiRotateCcw
 } from 'react-icons/fi';
 import { RiMoneyDollarCircleLine } from 'react-icons/ri';
 import superadminPaymentService from '../../services/superadminPaymentService';
@@ -50,6 +51,7 @@ const PayoutsManagement = () => {
   const [processUtr, setProcessUtr] = useState('');
   const [processNotes, setProcessNotes] = useState('');
   const [deleteReason, setDeleteReason] = useState('');
+  const [revertReason, setRevertReason] = useState('');
 
   useEffect(() => {
     fetchPayouts();
@@ -181,6 +183,27 @@ const PayoutsManagement = () => {
     setProcessUtr('');
     setProcessNotes('');
     setDeleteReason('');
+    setRevertReason('');
+  };
+
+  const handleRevertPayout = async () => {
+    if (!revertReason.trim()) {
+      setToast({ message: 'Revert reason is required', type: 'error' });
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      await superadminPaymentService.revertPayout(selectedPayout.payoutId, revertReason);
+      setToast({ message: 'Payout reverted successfully. Amount added back to merchant balance.', type: 'success' });
+      setShowModal(false);
+      setRevertReason('');
+      fetchPayouts();
+    } catch (error) {
+      setToast({ message: error.message, type: 'error' });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleDeletePayout = async () => {
@@ -233,6 +256,8 @@ const PayoutsManagement = () => {
       case 'cancelled':
       case 'rejected':
         return <FiXCircle className="status-icon error" />;
+      case 'reverted':
+        return <FiRotateCcw className="status-icon warning" />;
       case 'requested':
         return <FiAlertCircle className="status-icon warning" />;
       case 'pending':
@@ -451,6 +476,7 @@ const PayoutsManagement = () => {
                     <option value="rejected">Rejected</option>
                     <option value="failed">Failed</option>
                     <option value="cancelled">Cancelled</option>
+                    <option value="reverted">Reverted</option>
                   </select>
                 </div>
                 {/* Payouts Table */}
@@ -593,6 +619,18 @@ const PayoutsManagement = () => {
                                     <span className="hidden sm:inline">Reject</span>
                             </button>
                             </>
+                          )}
+
+                          {/* Revert button - show for completed payouts */}
+                          {payout.status === 'completed' && (
+                            <button
+                              onClick={() => openModal('revert', payout)}
+                              className="flex items-center gap-1 px-2 py-1 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg text-xs font-medium font-['Albert_Sans'] transition-colors"
+                              title="Revert Payout (Add amount back to balance)"
+                            >
+                              <FiRotateCcw size={12} />
+                              <span className="hidden sm:inline">Revert</span>
+                            </button>
                           )}
 
                           {/* Delete button - show for non-completed payouts */}
@@ -913,6 +951,12 @@ const PayoutsManagement = () => {
                             Process Payout
                           </>
                         )}
+                        {modalType === 'revert' && (
+                          <>
+                            <FiRotateCcw style={{ color: '#f97316' }} />
+                            Revert Payout
+                          </>
+                        )}
                         {modalType === 'delete' && (
                           <>
                             <FiTrash2 style={{ color: '#ef4444' }} />
@@ -1208,6 +1252,55 @@ const PayoutsManagement = () => {
                         </div>
                       )}
 
+                      {/* REVERT FORM */}
+                      {modalType === 'revert' && (
+                        <div>
+                          <div className="confirmation-box">
+                            <div className="confirmation-icon warning">
+                              <FiRotateCcw size={32} />
+                            </div>
+                            <p className="confirmation-message">
+                              ⚠️ Reverting this payout will add the amount back to the merchant's account balance. The payout status will be changed to 'reverted' and associated transactions will be made available for new payout requests.
+                            </p>
+                          </div>
+
+                          <div className="info-box">
+                            <div className="info-row">
+                              <span className="info-label">Payout ID</span>
+                              <span className="info-value" style={{ fontFamily: 'monospace' }}>
+                                {selectedPayout.payoutId}
+                              </span>
+                            </div>
+                            <div className="info-row">
+                              <span className="info-label">Merchant</span>
+                              <span className="info-value">{selectedPayout.merchantName}</span>
+                            </div>
+                            <div className="info-row">
+                              <span className="info-label">Amount to be added back</span>
+                              <span className="info-value highlight">{formatCurrency(selectedPayout.netAmount)}</span>
+                            </div>
+                            <div className="info-row">
+                              <span className="info-label">Status</span>
+                              <span className={`status-badge ${getStatusBadgeClass(selectedPayout.status)}`}>
+                                {getStatusIcon(selectedPayout.status)}
+                                {selectedPayout.status}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="form-group">
+                            <label>Revert Reason *</label>
+                            <textarea
+                              value={revertReason}
+                              onChange={(e) => setRevertReason(e.target.value)}
+                              placeholder="Enter reason for reverting this payout..."
+                              required
+                              rows={4}
+                            />
+                          </div>
+                        </div>
+                      )}
+
                       {/* DELETE FORM */}
                       {modalType === 'delete' && (
                         <div>
@@ -1298,6 +1391,18 @@ const PayoutsManagement = () => {
                         </button>
                       )}
 
+                      {modalType === 'revert' && (
+                        <button
+                          onClick={handleRevertPayout}
+                          disabled={actionLoading || !revertReason.trim()}
+                          className="btn btn-warning"
+                          style={{ backgroundColor: '#f97316', color: 'white' }}
+                        >
+                          <FiRotateCcw />
+                          {actionLoading ? 'Reverting...' : 'Revert Payout'}
+                        </button>
+                      )}
+
                       {modalType === 'delete' && (
                         <button
                           onClick={handleDeletePayout}
@@ -1351,6 +1456,18 @@ const PayoutsManagement = () => {
                 >
                   <FiSend />
                   {actionLoading ? 'Processing...' : 'Complete Payout'}
+                </button>
+              )}
+
+              {modalType === 'revert' && (
+                <button
+                  onClick={handleRevertPayout}
+                  disabled={actionLoading || !revertReason.trim()}
+                  className="primary-btn"
+                  style={{ backgroundColor: '#f97316', color: 'white' }}
+                >
+                  <FiRotateCcw />
+                  {actionLoading ? 'Reverting...' : 'Revert Payout'}
                 </button>
               )}
 

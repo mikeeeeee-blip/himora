@@ -90,6 +90,7 @@ export const API_ENDPOINTS = {
   ADMIN_PAYOUT_APPROVE: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}/approve`,
   ADMIN_PAYOUT_REJECT: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}/reject`,
   ADMIN_PAYOUT_PROCESS: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}/process`,
+  ADMIN_PAYOUT_REVERT: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}/revert`,
   ADMIN_PAYOUT_DELETE: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}`,
   ADMIN_PAYOUT_DETAILS: (payoutId) => `${BASE_URL}/payments/admin/payout/${payoutId}/details`,
   

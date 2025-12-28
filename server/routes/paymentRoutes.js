@@ -20,6 +20,7 @@ const {
     approvePayout,
     rejectPayout,
     processPayout,
+    revertPayout,
     deletePayout,
     settleTransaction,
     updateTransactionStatus,
@@ -131,6 +132,7 @@ router.get('/admin/payouts/all', superAdminAuth, getAllPayouts);
 router.post('/admin/payout/:payoutId/approve', superAdminAuth, approvePayout);
 router.post('/admin/payout/:payoutId/reject', superAdminAuth, rejectPayout);
 router.post('/admin/payout/:payoutId/process', superAdminAuth, processPayout);
+router.post('/admin/payout/:payoutId/revert', superAdminAuth, revertPayout);
 router.delete('/admin/payout/:payoutId', superAdminAuth, deletePayout);
 router.get('/admin/transactions', superAdminAuth, getAllTransactions);
 router.get('/admin/merchants/:merchantId/analytics', superAdminAuth, getMerchantAnalytics);

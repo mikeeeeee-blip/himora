@@ -28,7 +28,7 @@ const PayoutSchema = new mongoose.Schema({
 
     status: {
         type: String,
-        enum: ['requested', 'rejected', 'pending', 'processing', 'completed', 'failed', 'cancelled'],
+        enum: ['requested', 'rejected', 'pending', 'processing', 'completed', 'failed', 'cancelled', 'reverted'],
         default: 'requested'
     },
 
@@ -48,6 +48,11 @@ const PayoutSchema = new mongoose.Schema({
     rejectedByName: String,
     rejectedAt: Date,
     rejectionReason: String,
+    
+    revertedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    revertedByName: String,
+    revertedAt: Date,
+    revertReason: String,
     // Payout.js
     commissionType: {
         type: String,
