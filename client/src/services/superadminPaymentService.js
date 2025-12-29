@@ -464,6 +464,34 @@ async triggerManualSettlement() {
     }
   }
 
+  async revertPayout(payoutId, reason = '') {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      console.log('Reverting payout:', payoutId);
+
+      const response = await axios.post(
+        API_ENDPOINTS.ADMIN_PAYOUT_REVERT(payoutId),
+        { reason },
+        {
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('Revert payout response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Revert payout error:', error);
+      this.handleError(error, 'Failed to revert payout');
+    }
+  }
+
   async deletePayout(payoutId, reason = '') {
     try {
       const token = authService.getToken();

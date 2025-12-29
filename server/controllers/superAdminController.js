@@ -529,6 +529,108 @@ exports.processPayout = async (req, res) => {
     }
 };
 
+// ============ REVERT PAYOUT (Add amount back to account balance) ============
+exports.revertPayout = async (req, res) => {
+    try {
+        const { payoutId } = req.params;
+        const { reason } = req.body;
+
+        console.log(`🔄 SuperAdmin ${req.user.name} reverting payout: ${payoutId}`);
+
+        const payout = await Payout.findOne({ payoutId });
+
+        if (!payout) {
+            return res.status(404).json({
+                success: false,
+                error: 'Payout request not found'
+            });
+        }
+
+        // ✅ Can only revert 'completed' payouts
+        if (payout.status !== 'completed') {
+            return res.status(400).json({
+                success: false,
+                error: `Cannot revert payout with status: ${payout.status}. Only 'completed' payouts can be reverted.`,
+                currentStatus: payout.status
+            });
+        }
+
+        // Update payout status to 'reverted'
+        payout.status = 'reverted';
+        payout.revertedBy = req.user._id;
+        payout.revertedByName = req.user.name;
+        payout.revertedAt = new Date();
+        payout.revertReason = reason || 'Payout reverted by superadmin';
+        
+        // Clear completion fields
+        payout.processedBy = null;
+        payout.processedByName = null;
+        payout.processedAt = null;
+        payout.completedAt = null;
+        payout.utr = null;
+
+        await payout.save();
+
+        // ✅ Rollback associated transactions - make them available for payout again
+        const updateResult = await Transaction.updateMany(
+            { payoutId: payout._id },
+            { 
+                $set: { 
+                    payoutStatus: 'unpaid',
+                    payoutId: null
+                }
+            }
+        );
+
+        console.log(`✅ Payout ${payoutId} reverted. ${updateResult.modifiedCount} transactions rolled back. Amount ₹${payout.netAmount} added back to merchant balance.`);
+
+        // Send webhook to merchant about payout reversion
+        const merchant = await User.findById(payout.merchantId);
+        if (merchant) {
+            const webhookPayload = {
+                event: 'payout.reverted',
+                timestamp: new Date().toISOString(),
+                payout: {
+                    payout_id: payout.payoutId,
+                    status: payout.status,
+                    amount: payout.amount,
+                    net_amount: payout.netAmount,
+                    commission: payout.commission,
+                    transfer_mode: payout.transferMode,
+                    revert_reason: payout.revertReason,
+                    reverted_at: payout.revertedAt,
+                    reverted_by: payout.revertedByName
+                }
+            };
+
+            await sendPayoutWebhook(merchant, webhookPayload);
+        }
+
+        res.json({
+            success: true,
+            message: `Payout reverted successfully. Amount ₹${payout.netAmount} has been added back to merchant account balance.`,
+            payout: {
+                payoutId: payout.payoutId,
+                status: payout.status,
+                amount: payout.amount,
+                netAmount: payout.netAmount,
+                revertedBy: payout.revertedByName,
+                revertedAt: payout.revertedAt,
+                revertReason: payout.revertReason
+            },
+            transactions_rolled_back: updateResult.modifiedCount
+        });
+
+    } catch (error) {
+        console.error('❌ Revert Payout Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to revert payout',
+            detail: error.message
+        });
+    }
+};
+
 // ============ GET ALL TRANSACTIONS (All Merchants) ============
 exports.getAllTransactions = async (req, res) => {
     try {
