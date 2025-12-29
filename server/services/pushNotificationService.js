@@ -101,9 +101,15 @@ async function notifySuperAdmins(notification) {
     
     if (devices.length === 0) {
       console.warn('⚠️ No superadmin devices found for push notification');
-      return { success: false, error: 'No superadmin devices found' };
+      console.warn('   Tip: Make sure devices are registered via POST /api/device/register');
+      console.warn('   Check registered devices with: GET /api/device/list?role=superAdmin');
+      return { 
+        success: false, 
+        error: 'No superadmin devices found. Please ensure the device is registered via the mobile app.' 
+      };
     }
 
+    console.log(`📤 Sending notification to ${devices.length} superadmin device(s)`);
     const pushTokens = devices.map(device => device.pushToken);
     return await sendPushNotification(pushTokens, notification);
   } catch (error) {

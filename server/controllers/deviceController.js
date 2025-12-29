@@ -102,7 +102,14 @@ exports.getDeviceTokensByRole = async (role) => {
     const devices = await Device.find({
       role: role,
       isActive: true
-    }).select('pushToken userId platform');
+    }).select('pushToken userId platform role isActive createdAt');
+
+    console.log(`📱 Found ${devices.length} active device(s) with role: ${role}`);
+    if (devices.length > 0) {
+      devices.forEach((device, index) => {
+        console.log(`   Device ${index + 1}: userId=${device.userId}, platform=${device.platform}, registered=${device.createdAt}`);
+      });
+    }
 
     return devices.map(device => ({
       pushToken: device.pushToken,
@@ -112,6 +119,50 @@ exports.getDeviceTokensByRole = async (role) => {
   } catch (error) {
     console.error('Error fetching device tokens:', error);
     return [];
+  }
+};
+
+/**
+ * Get all devices (for debugging/admin purposes)
+ * GET /api/device/list
+ */
+exports.getAllDevices = async (req, res) => {
+  try {
+    const { role, userId, isActive } = req.query;
+    
+    const query = {};
+    if (role) query.role = role;
+    if (userId) query.userId = userId;
+    if (isActive !== undefined) query.isActive = isActive === 'true';
+
+    const devices = await Device.find(query)
+      .select('userId role pushToken platform deviceId appVersion isActive createdAt lastUsedAt')
+      .populate('userId', 'name email role')
+      .sort({ createdAt: -1 });
+
+    return res.json({
+      success: true,
+      count: devices.length,
+      devices: devices.map(device => ({
+        id: device._id,
+        userId: device.userId,
+        role: device.role,
+        platform: device.platform,
+        deviceId: device.deviceId,
+        appVersion: device.appVersion,
+        isActive: device.isActive,
+        createdAt: device.createdAt,
+        lastUsedAt: device.lastUsedAt,
+        pushTokenPreview: device.pushToken ? `${device.pushToken.substring(0, 30)}...` : null
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Error fetching devices:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch devices',
+      details: error.message
+    });
   }
 };
 
