@@ -2571,3 +2571,75 @@ exports.blockMerchantFunds = async (req, res) => {
         });
     }
 };
+
+// ============ SEND NOTIFICATION TO MOBILE APP (SuperAdmin) ============
+exports.sendNotification = async (req, res) => {
+    try {
+        const { title, body, target, userId, data } = req.body;
+
+        // Validate required fields
+        if (!title || !body) {
+            return res.status(400).json({
+                success: false,
+                error: 'Title and body are required'
+            });
+        }
+
+        if (!target || !['all_superadmins', 'specific_user'].includes(target)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Target must be either "all_superadmins" or "specific_user"'
+            });
+        }
+
+        if (target === 'specific_user' && !userId) {
+            return res.status(400).json({
+                success: false,
+                error: 'userId is required when target is "specific_user"'
+            });
+        }
+
+        // Prepare notification payload
+        const notification = {
+            title,
+            body,
+            data: {
+                type: 'custom_notification',
+                ...data
+            },
+            sound: 'default',
+            badge: 1
+        };
+
+        let result;
+        if (target === 'all_superadmins') {
+            result = await notifySuperAdmins(notification);
+        } else {
+            result = await notifyUser(userId, notification);
+        }
+
+        if (result.success) {
+            res.json({
+                success: true,
+                message: `Notification sent successfully to ${result.sent || 0} device(s)`,
+                result: {
+                    sent: result.sent || 0,
+                    errors: result.errors || 0
+                }
+            });
+        } else {
+            res.status(500).json({
+                success: false,
+                error: result.error || 'Failed to send notification'
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Send Notification Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to send notification',
+            detail: error.message
+        });
+    }
+};
