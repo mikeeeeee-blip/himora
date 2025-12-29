@@ -40,8 +40,13 @@ const checkMongoConnection = (req, res, next) => {
     next();
 };
 
-// Enable CORS
-app.use(cors());
+// Enable CORS - Allow all origins
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: false
+}));
 
 // Parse bodies
 app.use(express.urlencoded({ extended: true }));

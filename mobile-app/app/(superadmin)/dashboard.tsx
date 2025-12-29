@@ -547,7 +547,7 @@ export default function SuperadminDashboard() {
               {/* Platform Overview - Total Payin and Total Payout */}
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Platform Overview</Text>
+                <Text style={styles.sectionTitle}>Platform Overview</Text>
                 </View>
                 <View style={styles.platformOverviewGrid}>
                   <View style={[styles.platformCard, styles.payinCard]}>
@@ -575,7 +575,7 @@ export default function SuperadminDashboard() {
                         </Text>
                       </View>
                     </View>
-                  </View>
+              </View>
 
                   <View style={[styles.platformCard, styles.platformPayoutCard]}>
                     {loading && (
@@ -953,8 +953,8 @@ export default function SuperadminDashboard() {
                 <View style={styles.transactionsGrid}>
                   <TouchableOpacity
                     style={styles.transactionCard}
-                    onPress={() => router.push('/(superadmin)/transactions')}
-                  >
+                onPress={() => router.push('/(superadmin)/transactions')}
+              >
                     <Ionicons name="receipt-outline" size={isSmallScreen ? 18 : 20} color={Colors.textLight} />
                     <View style={styles.transactionCardContent}>
                       <Text style={styles.transactionCardTitle}>Total Transactions</Text>
@@ -970,7 +970,7 @@ export default function SuperadminDashboard() {
                         Success Rate: {stats.transactions?.success_rate || 0}%
                       </Text>
                     </View>
-                  </TouchableOpacity>
+              </TouchableOpacity>
 
                   <View style={styles.transactionCard}>
                     <Ionicons name="checkmark-circle" size={isSmallScreen ? 18 : 20} color={Colors.success} />
@@ -1021,8 +1021,8 @@ export default function SuperadminDashboard() {
                       </Text>
                     </View>
                   </View> */}
+                  </View>
                 </View>
-              </View>
 
               {/* Today's Requests Section - Separate Section */}
               {/* <View style={styles.section}>
@@ -1033,7 +1033,7 @@ export default function SuperadminDashboard() {
                     <Text style={styles.todayRequestsValue}>
                       {formatNumber(stats.payouts?.today || 0)}
                     </Text>
-                  </View>
+              </View>
                 </View>
               </View> */}
 
@@ -1046,10 +1046,10 @@ export default function SuperadminDashboard() {
                   </Text>
                 </View>
                 <View style={styles.payoutsGrid}>
-                  <TouchableOpacity
+              <TouchableOpacity
                     style={styles.payoutCard}
-                    onPress={() => router.push('/(superadmin)/payouts')}
-                  >
+                onPress={() => router.push('/(superadmin)/payouts')}
+              >
                     <Ionicons name="cash-outline" size={isSmallScreen ? 18 : 20} color={Colors.textLight} />
                     <View style={styles.payoutCardContent}>
                       <Text style={styles.payoutCardTitle}>Total Requests</Text>
@@ -1060,7 +1060,7 @@ export default function SuperadminDashboard() {
                         {formatCurrency(stats.payouts?.total_amount_requested || 0)}
                       </Text>
                     </View>
-                  </TouchableOpacity>
+              </TouchableOpacity>
 
                   <View style={[styles.payoutCard, notificationCount > 0 && styles.payoutCardHighlight]}>
                     <Ionicons name="alert-circle" size={isSmallScreen ? 18 : 20} color={Colors.warning} />
@@ -1084,8 +1084,8 @@ export default function SuperadminDashboard() {
                     </View>
                   </View>
 
-                </View>
-              </View>
+                    </View>
+                  </View>
             </>
           ) : null}
         </View>

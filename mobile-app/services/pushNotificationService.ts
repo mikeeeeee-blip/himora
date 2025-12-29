@@ -38,12 +38,12 @@ async function configureNotificationHandler() {
     const available = await ensureNotificationsAvailable();
     if (available && Notifications) {
       try {
-        Notifications.setNotificationHandler({
-          handleNotification: async () => ({
-            shouldShowAlert: true,
-            shouldPlaySound: true,
-            shouldSetBadge: true,
-          }),
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
         });
       } catch (error) {
         console.warn('⚠️ Could not configure notification handler:', error);
@@ -220,19 +220,19 @@ export function setupNotificationListeners(
     }
 
     try {
-      // Listener for notifications received while app is foregrounded
+  // Listener for notifications received while app is foregrounded
       receivedListener = Notifications.addNotificationReceivedListener((notification) => {
-        console.log('📬 Notification received:', notification.request.content.title);
-        if (onNotificationReceived) {
-          onNotificationReceived(notification);
-        }
-      });
+    console.log('📬 Notification received:', notification.request.content.title);
+    if (onNotificationReceived) {
+      onNotificationReceived(notification);
+    }
+  });
 
-      // Listener for when user taps on notification
+  // Listener for when user taps on notification
       responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
-        console.log('👆 Notification tapped:', response.notification.request.content.title);
-        if (onNotificationTapped) {
-          onNotificationTapped(response);
+    console.log('👆 Notification tapped:', response.notification.request.content.title);
+    if (onNotificationTapped) {
+      onNotificationTapped(response);
         }
       });
     } catch (error) {
@@ -244,10 +244,10 @@ export function setupNotificationListeners(
   return () => {
     try {
       if (receivedListener) {
-        receivedListener.remove();
+    receivedListener.remove();
       }
       if (responseListener) {
-        responseListener.remove();
+    responseListener.remove();
       }
     } catch (error) {
       console.warn('⚠️ Error removing notification listeners:', error);

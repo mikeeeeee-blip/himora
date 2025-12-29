@@ -521,7 +521,7 @@ export default function SuperadminDashboard() {
               {/* Platform Overview - Total Payin and Total Payout */}
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Platform Overview</Text>
+                <Text style={styles.sectionTitle}>Platform Overview</Text>
                 </View>
                 <View style={styles.platformOverviewGrid}>
                   <View style={[styles.platformCard, styles.payinCard]}>
@@ -530,7 +530,7 @@ export default function SuperadminDashboard() {
                         <ActivityIndicator size="small" color={Colors.accent} />
                       </View>
                     )}
-                    <View style={styles.platformCardContent}>
+                      <View style={styles.platformCardContent}>
                       <View style={[styles.platformIcon, styles.payinIcon]}>
                         <Ionicons name="arrow-up" size={isSmallScreen ? 24 : 28} color={Colors.success} />
                       </View>
@@ -557,7 +557,7 @@ export default function SuperadminDashboard() {
                         <ActivityIndicator size="small" color={Colors.accent} />
                       </View>
                     )}
-                    <View style={styles.platformCardContent}>
+                      <View style={styles.platformCardContent}>
                       <View style={[styles.platformIcon, styles.payoutIcon]}>
                         <Ionicons name="arrow-down" size={isSmallScreen ? 24 : 28} color={Colors.info} />
                       </View>
@@ -919,7 +919,7 @@ export default function SuperadminDashboard() {
                   </View>
                 </View>
               </View>
-              
+
               {/* Payouts Section */}
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
