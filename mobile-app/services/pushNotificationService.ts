@@ -142,6 +142,13 @@ export async function registerDeviceToken(
 
     console.log(`   API Endpoint: ${API_ENDPOINTS.DEVICE_REGISTER}`);
     console.log(`   Auth token: ${token.substring(0, 20)}...`);
+    console.log(`   Request payload:`, {
+      userId,
+      role,
+      platform,
+      pushTokenLength: pushToken.length,
+      deviceId: Platform.OS === 'android' ? 'android' : 'ios'
+    });
     
     // Note: apiClient interceptor already adds x-auth-token, but we can also add it explicitly
     const response = await apiClient.post(
@@ -172,11 +179,21 @@ export async function registerDeviceToken(
     console.error('❌ Error registering device:', error);
     if (error.response) {
       console.error('   Response status:', error.response.status);
-      console.error('   Response data:', error.response.data);
+      console.error('   Response statusText:', error.response.statusText);
+      console.error('   Response data:', JSON.stringify(error.response.data));
+      console.error('   Response headers:', error.response.headers);
     } else if (error.request) {
-      console.error('   No response received:', error.request);
+      console.error('   ❌ No response received from server');
+      console.error('   Request URL:', error.config?.url);
+      console.error('   Request method:', error.config?.method);
+      console.error('   This usually means:');
+      console.error('     1. Server is not reachable');
+      console.error('     2. Network connection issue');
+      console.error('     3. CORS blocking the request');
+      console.error('     4. Request timeout');
     } else {
       console.error('   Error message:', error.message);
+      console.error('   Error stack:', error.stack);
     }
     return false;
   }

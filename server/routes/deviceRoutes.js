@@ -8,9 +8,29 @@ const {
   getAllDevices
 } = require('../controllers/deviceController.js');
 
+// Logging middleware for device routes
+const logDeviceRequest = (req, res, next) => {
+  console.log('📱 Device route request:', {
+    method: req.method,
+    path: req.path,
+    url: req.url,
+    body: req.body ? {
+      userId: req.body.userId,
+      role: req.body.role,
+      platform: req.body.platform,
+      pushToken: req.body.pushToken ? `${req.body.pushToken.substring(0, 30)}...` : 'missing'
+    } : 'no body',
+    headers: {
+      'x-auth-token': req.headers['x-auth-token'] ? `${req.headers['x-auth-token'].substring(0, 20)}...` : 'missing',
+      'content-type': req.headers['content-type']
+    }
+  });
+  next();
+};
+
 // Register device (both admin and superadmin can register)
 // POST /api/device/register
-router.post('/register', auth, registerDevice);
+router.post('/register', logDeviceRequest, auth, registerDevice);
 
 // Unregister device
 // POST /api/device/unregister

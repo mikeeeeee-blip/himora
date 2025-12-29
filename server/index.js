@@ -403,6 +403,19 @@ app.post('/api/debug/reject-payout/:payoutId', async (req, res) => {
     }
 });
 
+// Request logging middleware for device routes
+app.use((req, res, next) => {
+    if (req.path && req.path.includes('/device')) {
+        console.log('📥 Incoming request:', {
+            method: req.method,
+            path: req.path,
+            url: req.url,
+            timestamp: new Date().toISOString()
+        });
+    }
+    next();
+});
+
 // ✅ Apply MongoDB connection check to all API routes (except /api/health)
 app.use('/api', (req, res, next) => {
     if (req.path === '/health') {
