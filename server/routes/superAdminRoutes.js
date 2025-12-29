@@ -9,7 +9,8 @@ const {
     updatePaymentGatewaySettings,
     getSettlementSettings,
     updateSettlementSettings,
-    blockMerchantFunds
+    blockMerchantFunds,
+    sendNotification
 } = require('../controllers/superAdminController');
 const { deleteUser, changeUserPassword } = require('../controllers/authController');
 const {
@@ -41,6 +42,9 @@ router.put('/users/:userId/password', auth, changeUserPassword);
 
 // Block/Unblock merchant funds - accessible by superAdmin and subSuperAdmin (with permission)
 router.put('/merchants/:merchantId/block-funds', subSuperAdminAuth, subSuperAdminAuth.checkAccess('canBlockMerchantFunds'), blockMerchantFunds);
+
+// Send notification to mobile app (SuperAdmin only)
+router.post('/notifications/send', auth, sendNotification);
 
 // Sub-SuperAdmin management routes (SuperAdmin only)
 router.post('/sub-superadmins', auth, createSubSuperAdmin);

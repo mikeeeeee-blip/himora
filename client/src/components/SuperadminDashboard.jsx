@@ -35,6 +35,15 @@ const SuperadminDashboard = () => {
   const [merchantsData, setMerchantsData] = useState([]);
   const [loadingMerchants, setLoadingMerchants] = useState(false);
   
+  // Notification states
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notificationTitle, setNotificationTitle] = useState('');
+  const [notificationBody, setNotificationBody] = useState('');
+  const [notificationTarget, setNotificationTarget] = useState('all_superadmins');
+  const [notificationUserId, setNotificationUserId] = useState('');
+  const [sendingNotification, setSendingNotification] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
+  
   // Date filter states
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showDateRangePicker, setShowDateRangePicker] = useState(false);
@@ -86,6 +95,58 @@ const SuperadminDashboard = () => {
       setLoadingMerchants(false);
     }
   };
+  const handleSendNotification = async () => {
+    if (!notificationTitle || !notificationBody) {
+      setNotificationMessage('❌ Title and message are required');
+      return;
+    }
+
+    if (notificationTarget === 'specific_user' && !notificationUserId) {
+      setNotificationMessage('❌ User ID is required when targeting specific user');
+      return;
+    }
+
+    setSendingNotification(true);
+    setNotificationMessage('');
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/superadmin/notifications/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token
+        },
+        body: JSON.stringify({
+          title: notificationTitle,
+          body: notificationBody,
+          target: notificationTarget,
+          userId: notificationTarget === 'specific_user' ? notificationUserId : undefined
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setNotificationMessage(`✅ Notification sent successfully to ${data.sent} device(s)`);
+        setNotificationTitle('');
+        setNotificationBody('');
+        setNotificationUserId('');
+        setTimeout(() => {
+          setShowNotificationModal(false);
+          setNotificationMessage('');
+        }, 2000);
+      } else {
+        setNotificationMessage(`❌ ${data.error || 'Failed to send notification'}`);
+      }
+    } catch (error) {
+      console.error('Error sending notification:', error);
+      setNotificationMessage('❌ Failed to send notification. Please try again.');
+    } finally {
+      setSendingNotification(false);
+    }
+  };
+
   const handleManualSettlement = async () => {
     if (
       !window.confirm(
@@ -1513,12 +1574,156 @@ const SuperadminDashboard = () => {
                       </div>
                     </div>
                   </div> */}
+
+                  {/* Send Notification Section */}
+                  <div className="bg-gradient-to-br from-bg-secondary to-bg-tertiary border border-white/10 rounded-2xl p-6 sm:p-8 transition-all duration-300 hover:shadow-xl">
+                    <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/10">
+                      <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
+                        <FiAlertCircle /> Send Mobile Notification
+                      </h2>
+                      <button
+                        onClick={() => setShowNotificationModal(true)}
+                        className="flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2 rounded-full text-sm font-medium font-['Albert_Sans'] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg-primary"
+                      >
+                        <FiAlertCircle />
+                        Send Notification
+                      </button>
+                    </div>
+                    <p className="text-sm text-white/60 font-['Albert_Sans']">
+                      Send push notifications to mobile app users. Notifications will be delivered instantly to all registered devices.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
       </section>
+
+      {/* Notification Modal */}
+      {showNotificationModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-bg-secondary border border-white/10 rounded-2xl p-6 sm:p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl text-white font-semibold font-['Albert_Sans']">
+                Send Mobile Notification
+              </h3>
+              <button
+                onClick={() => {
+                  setShowNotificationModal(false);
+                  setNotificationTitle('');
+                  setNotificationBody('');
+                  setNotificationTarget('all_superadmins');
+                  setNotificationUserId('');
+                  setNotificationMessage('');
+                }}
+                className="text-white/60 hover:text-white transition-colors"
+              >
+                <FiX size={24} />
+              </button>
+            </div>
+
+            {notificationMessage && (
+              <div
+                className={`mb-4 p-4 rounded-lg flex items-center gap-2 font-['Albert_Sans'] ${
+                  notificationMessage.includes('✅') || notificationMessage.includes('success')
+                    ? 'bg-green-500/20 border border-green-500/40 text-green-400'
+                    : 'bg-red-500/20 border border-red-500/40 text-red-400'
+                }`}
+              >
+                {notificationMessage}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-white/70 font-medium font-['Albert_Sans'] mb-2">
+                  Target
+                </label>
+                <select
+                  value={notificationTarget}
+                  onChange={(e) => setNotificationTarget(e.target.value)}
+                  className="w-full bg-bg-tertiary border border-white/10 rounded-lg px-4 py-2 text-white font-['Albert_Sans'] focus:outline-none focus:ring-2 focus:ring-accent"
+                >
+                  <option value="all_superadmins">All SuperAdmins</option>
+                  <option value="specific_user">Specific User</option>
+                </select>
+              </div>
+
+              {notificationTarget === 'specific_user' && (
+                <div>
+                  <label className="block text-sm text-white/70 font-medium font-['Albert_Sans'] mb-2">
+                    User ID
+                  </label>
+                  <input
+                    type="text"
+                    value={notificationUserId}
+                    onChange={(e) => setNotificationUserId(e.target.value)}
+                    placeholder="Enter user ID"
+                    className="w-full bg-bg-tertiary border border-white/10 rounded-lg px-4 py-2 text-white font-['Albert_Sans'] focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm text-white/70 font-medium font-['Albert_Sans'] mb-2">
+                  Title <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={notificationTitle}
+                  onChange={(e) => setNotificationTitle(e.target.value)}
+                  placeholder="Notification title"
+                  className="w-full bg-bg-tertiary border border-white/10 rounded-lg px-4 py-2 text-white font-['Albert_Sans'] focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-white/70 font-medium font-['Albert_Sans'] mb-2">
+                  Message <span className="text-red-400">*</span>
+                </label>
+                <textarea
+                  value={notificationBody}
+                  onChange={(e) => setNotificationBody(e.target.value)}
+                  placeholder="Notification message"
+                  rows={4}
+                  className="w-full bg-bg-tertiary border border-white/10 rounded-lg px-4 py-2 text-white font-['Albert_Sans'] focus:outline-none focus:ring-2 focus:ring-accent resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowNotificationModal(false);
+                    setNotificationTitle('');
+                    setNotificationBody('');
+                    setNotificationTarget('all_superadmins');
+                    setNotificationUserId('');
+                    setNotificationMessage('');
+                  }}
+                  className="flex-1 bg-bg-tertiary border border-white/10 text-white px-4 py-2 rounded-lg font-medium font-['Albert_Sans'] hover:bg-white/5 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendNotification}
+                  disabled={sendingNotification || !notificationTitle || !notificationBody || (notificationTarget === 'specific_user' && !notificationUserId)}
+                  className="flex-1 bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {sendingNotification ? (
+                    <>
+                      <FiRefreshCw className="animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    'Send Notification'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

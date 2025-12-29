@@ -14,11 +14,11 @@ import {
   Image,
   Modal,
   TextInput,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Notifications from 'expo-notifications';
 import superadminPaymentService from '@/services/superadminPaymentService';
 import authService from '@/services/authService';
 import Navbar from '@/components/Navbar';
@@ -99,6 +99,9 @@ interface MerchantData {
   };
 }
 
+const { width: screenWidth } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 380;
+
 export default function SuperadminDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -140,10 +143,17 @@ export default function SuperadminDashboard() {
       const removeListeners = setupNotificationListeners(
         (notification) => {
           // Handle notification received
-          if (notification.request.content.data?.type === 'payout_request') {
+          const notificationType = notification.request.content.data?.type;
+          
+          if (notificationType === 'payout_request') {
+            const notificationData = notification.request.content.data;
+            const amount = notificationData?.amount || notificationData?.grossAmount || 0;
+            const merchantName = notificationData?.merchantName || 'Merchant';
+            const formattedAmount = `₹${parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            
             Alert.alert(
-              notification.request.content.title || 'New Payout Request',
-              notification.request.content.body || '',
+              notification.request.content.title || '💰 New Payout Request',
+              `${merchantName} has created a payout request of ${formattedAmount}.\n\nPlease review and approve.`,
               [
                 { text: 'View Later', style: 'cancel' },
                 {
@@ -156,12 +166,26 @@ export default function SuperadminDashboard() {
             );
             // Refresh dashboard to show updated counts
             loadDashboardData();
+          } else if (notificationType === 'custom_notification') {
+            // Handle custom notifications from superadmin dashboard
+            Alert.alert(
+              notification.request.content.title || '📱 Notification',
+              notification.request.content.body || '',
+              [
+                { text: 'OK', style: 'default' }
+              ]
+            );
           }
         },
         (response) => {
           // Handle notification tapped
-          if (response.notification.request.content.data?.type === 'payout_request') {
+          const notificationType = response.notification.request.content.data?.type;
+          
+          if (notificationType === 'payout_request') {
             router.push('/(superadmin)/payouts');
+          } else if (notificationType === 'custom_notification') {
+            // Custom notifications just show the alert, no navigation needed
+            // The alert is already shown in the received handler
           }
         }
       );
@@ -522,44 +546,56 @@ export default function SuperadminDashboard() {
             <>
               {/* Platform Overview - Total Payin and Total Payout */}
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Platform Overview</Text>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Platform Overview</Text>
+                </View>
                 <View style={styles.platformOverviewGrid}>
                   <View style={[styles.platformCard, styles.payinCard]}>
+                    {loading && (
+                      <View style={styles.platformCardLoading}>
+                        <ActivityIndicator size="small" color={Colors.accent} />
+                      </View>
+                    )}
                     <View style={styles.platformCardContent}>
                       <View style={[styles.platformIcon, styles.payinIcon]}>
-                        <Ionicons name="arrow-up" size={28} color={Colors.success} />
+                        <Ionicons name="arrow-up" size={isSmallScreen ? 24 : 28} color={Colors.success} />
                       </View>
                       <View style={styles.platformCardText}>
                         <Text style={styles.platformCardTitle}>Total Payin</Text>
                         <Text 
-                          style={styles.platformCardValue}
+                          style={[styles.platformCardValue, loading && styles.platformCardValueLoading]}
                           numberOfLines={1}
                           adjustsFontSizeToFit={true}
                           minimumFontScale={0.7}
                         >
-                          {formatCurrencyFull(stats.revenue?.total || 0)}
+                          {formatCurrency(stats.revenue?.total || 0)}
                         </Text>
                         <Text style={styles.platformCardSubtext} numberOfLines={1}>
                           {formatNumber(stats.transactions?.paid || 0)} paid transactions
                         </Text>
                       </View>
                     </View>
-              </View>
+                  </View>
 
                   <View style={[styles.platformCard, styles.platformPayoutCard]}>
+                    {loading && (
+                      <View style={styles.platformCardLoading}>
+                        <ActivityIndicator size="small" color={Colors.accent} />
+                      </View>
+                    )}
                     <View style={styles.platformCardContent}>
                       <View style={[styles.platformIcon, styles.payoutIcon]}>
-                        <Ionicons name="arrow-down" size={28} color={Colors.info} />
+                        <Ionicons name="arrow-down" size={isSmallScreen ? 24 : 28} color={Colors.info} />
                       </View>
                       <View style={styles.platformCardText}>
                         <Text style={styles.platformCardTitle}>Total Payout</Text>
                         <Text 
-                          style={styles.platformCardValue}
+                          style={[styles.platformCardValue, loading && styles.platformCardValueLoading]}
                           numberOfLines={1}
                           adjustsFontSizeToFit={true}
                           minimumFontScale={0.7}
                         >
-                          {formatCurrencyFull(stats.payouts?.total_completed || 0)}
+                          {formatCurrency(stats.payouts?.total_completed || 0)}
                         </Text>
                         <Text style={styles.platformCardSubtext} numberOfLines={1}>
                           {formatNumber(stats.payouts?.completed || 0)} completed payouts
@@ -578,7 +614,7 @@ export default function SuperadminDashboard() {
                     {/* Top Payin Merchants */}
                     <View style={styles.leaderboardCard}>
                       <View style={styles.leaderboardHeader}>
-                        <Ionicons name="arrow-up" size={16} color={Colors.success} />
+                        <Ionicons name="arrow-up" size={isSmallScreen ? 14 : 16} color={Colors.success} />
                         <Text style={styles.leaderboardTitle}>Top Payin Merchants</Text>
               </View>
                       <Text style={styles.leaderboardSubtitle}>Ranked by total revenue</Text>
@@ -637,7 +673,7 @@ export default function SuperadminDashboard() {
                     {/* Top Payout Merchants */}
                     <View style={styles.leaderboardCard}>
                       <View style={styles.leaderboardHeader}>
-                        <Ionicons name="arrow-down" size={16} color={Colors.info} />
+                        <Ionicons name="arrow-down" size={isSmallScreen ? 14 : 16} color={Colors.info} />
                         <Text style={styles.leaderboardTitle}>Top Payout Merchants</Text>
                       </View>
                       <Text style={styles.leaderboardSubtitle}>Ranked by total payouts</Text>
@@ -917,9 +953,9 @@ export default function SuperadminDashboard() {
                 <View style={styles.transactionsGrid}>
                   <TouchableOpacity
                     style={styles.transactionCard}
-                onPress={() => router.push('/(superadmin)/transactions')}
-              >
-                    <Ionicons name="receipt-outline" size={20} color={Colors.textLight} />
+                    onPress={() => router.push('/(superadmin)/transactions')}
+                  >
+                    <Ionicons name="receipt-outline" size={isSmallScreen ? 18 : 20} color={Colors.textLight} />
                     <View style={styles.transactionCardContent}>
                       <Text style={styles.transactionCardTitle}>Total Transactions</Text>
                       <Text 
@@ -934,10 +970,10 @@ export default function SuperadminDashboard() {
                         Success Rate: {stats.transactions?.success_rate || 0}%
                       </Text>
                     </View>
-              </TouchableOpacity>
+                  </TouchableOpacity>
 
                   <View style={styles.transactionCard}>
-                    <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                    <Ionicons name="checkmark-circle" size={isSmallScreen ? 18 : 20} color={Colors.success} />
                     <View style={styles.transactionCardContent}>
                       <Text style={styles.transactionCardTitle}>Paid</Text>
                       <Text style={styles.transactionCardValue}>
@@ -946,18 +982,18 @@ export default function SuperadminDashboard() {
                     </View>
                   </View>
 
-                  <View style={styles.transactionCard}>
-                    <Ionicons name="time-outline" size={20} color={Colors.warning} />
+                  {/* <View style={styles.transactionCard}>
+                    <Ionicons name="time-outline" size={isSmallScreen ? 18 : 20} color={Colors.warning} />
                     <View style={styles.transactionCardContent}>
                       <Text style={styles.transactionCardTitle}>Pending</Text>
                       <Text style={styles.transactionCardValue}>
                         {formatNumber(stats.transactions?.pending || 0)}
                       </Text>
                     </View>
-                  </View>
+                  </View> */}
 
-                  <View style={styles.transactionCard}>
-                    <Ionicons name="close-circle" size={20} color={Colors.danger} />
+                  {/* <View style={styles.transactionCard}>
+                    <Ionicons name="close-circle" size={isSmallScreen ? 18 : 20} color={Colors.danger} />
                     <View style={styles.transactionCardContent}>
                       <Text style={styles.transactionCardTitle}>Failed</Text>
                       <Text style={styles.transactionCardValue}>
@@ -967,41 +1003,54 @@ export default function SuperadminDashboard() {
                   </View>
 
                   <View style={styles.transactionCard}>
-                    <Ionicons name="checkmark-circle" size={20} color={Colors.textLight} />
+                    <Ionicons name="checkmark-circle" size={isSmallScreen ? 18 : 20} color={Colors.textLight} />
                     <View style={styles.transactionCardContent}>
                       <Text style={styles.transactionCardTitle}>Settled</Text>
                       <Text style={styles.transactionCardValue}>
                         {formatNumber(stats.transactions?.settled || 0)}
                       </Text>
                     </View>
-                  </View>
+                  </View> */}
 
-                  <View style={styles.transactionCard}>
-                    <Ionicons name="time-outline" size={20} color={Colors.textLight} />
+                  {/* <View style={styles.transactionCard}>
+                    <Ionicons name="time-outline" size={isSmallScreen ? 18 : 20} color={Colors.textLight} />
                     <View style={styles.transactionCardContent}>
                       <Text style={styles.transactionCardTitle}>Unsettled</Text>
                       <Text style={styles.transactionCardValue}>
                         {formatNumber(stats.transactions?.unsettled || 0)}
                       </Text>
                     </View>
-                  </View>
+                  </View> */}
                 </View>
               </View>
 
-              {/* Payouts Section */}
+              {/* Today's Requests Section - Separate Section */}
               {/* <View style={styles.section}>
+                <View style={styles.todayRequestsCard}>
+                  <Ionicons name="time-outline" size={isSmallScreen ? 20 : 24} color={Colors.warning} />
+                  <View style={styles.todayRequestsContent}>
+                    <Text style={styles.todayRequestsTitle}>Today's Requests</Text>
+                    <Text style={styles.todayRequestsValue}>
+                      {formatNumber(stats.payouts?.today || 0)}
+                    </Text>
+                  </View>
+                </View>
+              </View> */}
+
+              {/* Payouts Section */}
+              <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Payouts</Text>
-                  <Text style={styles.sectionBadge}> */}
-                    {/* {formatNumber(stats.payouts?.total_requests || 0)} Requests
-                  </Text> */}
-                {/* </View> */}
-                {/* <View style={styles.payoutsGrid}>
-              <TouchableOpacity
+                  <Text style={styles.sectionBadge}>
+                    {formatNumber(stats.payouts?.total_requests || 0)} Requests
+                  </Text>
+                </View>
+                <View style={styles.payoutsGrid}>
+                  <TouchableOpacity
                     style={styles.payoutCard}
-                onPress={() => router.push('/(superadmin)/payouts')}
-              >
-                    <Ionicons name="cash-outline" size={20} color={Colors.textLight} />
+                    onPress={() => router.push('/(superadmin)/payouts')}
+                  >
+                    <Ionicons name="cash-outline" size={isSmallScreen ? 18 : 20} color={Colors.textLight} />
                     <View style={styles.payoutCardContent}>
                       <Text style={styles.payoutCardTitle}>Total Requests</Text>
                       <Text style={styles.payoutCardValue}>
@@ -1011,70 +1060,32 @@ export default function SuperadminDashboard() {
                         {formatCurrency(stats.payouts?.total_amount_requested || 0)}
                       </Text>
                     </View>
-              </TouchableOpacity>
+                  </TouchableOpacity>
 
                   <View style={[styles.payoutCard, notificationCount > 0 && styles.payoutCardHighlight]}>
-                    <Ionicons name="alert-circle" size={20} color={Colors.warning} />
+                    <Ionicons name="alert-circle" size={isSmallScreen ? 18 : 20} color={Colors.warning} />
                     <View style={styles.payoutCardContent}>
-                      <Text style={styles.payoutCardTitle}>Pending Approval</Text>
-                      <Text style={[styles.payoutCardValue, notificationCount > 0 && styles.payoutCardValueHighlight]}>
+                      <Text style={styles.payoutCardTitle} numberOfLines={1}>Pending Approval</Text>
+                      <Text 
+                        style={[styles.payoutCardValue, notificationCount > 0 && styles.payoutCardValueHighlight]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit={true}
+                        minimumFontScale={0.8}
+                      >
                         {formatNumber(stats.payouts?.requested || 0)}
                       </Text>
                       {notificationCount > 0 && (
                         <View style={styles.notificationBadge}>
-                          <Text style={styles.notificationBadgeText}>{notificationCount} new</Text>
+                          <Text style={styles.notificationBadgeText} numberOfLines={1}>
+                            {notificationCount} new
+                          </Text>
                         </View>
                       )}
                     </View>
                   </View>
 
-                  <View style={styles.payoutCard}>
-                    <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
-                    <View style={styles.payoutCardContent}>
-                      <Text style={styles.payoutCardTitle}>Completed</Text>
-                      <Text style={styles.payoutCardValue}>
-                        {formatNumber(stats.payouts?.completed || 0)}
-                      </Text>
-                      <Text style={styles.payoutCardSubtext}>
-                        {formatCurrency(stats.payouts?.total_completed || 0)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.payoutCard}>
-                    <Ionicons name="close-circle" size={20} color={Colors.danger} />
-                    <View style={styles.payoutCardContent}>
-                      <Text style={styles.payoutCardTitle}>Rejected</Text>
-                      <Text style={styles.payoutCardValue}>
-                        {formatNumber(stats.payouts?.rejected || 0)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.payoutCard}>
-                    <Ionicons name="cash-outline" size={20} color={Colors.textLight} />
-                    <View style={styles.payoutCardContent}>
-                      <Text style={styles.payoutCardTitle}>Commission Earned</Text>
-                      <Text 
-                        style={styles.payoutCardValue}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit={true}
-                        minimumFontScale={0.7}
-                      >
-                        {formatCurrencyFull(stats.payouts?.commission_earned || 0)}
-                      </Text>
-                    </View>
-                  </View>
-                </View> */}
-
-                {/* Today's Requests */}
-                <View style={styles.todayRequestsCard}>
-                  <Text style={styles.todayRequestsTitle}>Today's Requests</Text>
-                  <Text style={styles.todayRequestsValue}>
-                    {formatNumber(stats.payouts?.today || 0)}
-                  </Text>
                 </View>
-              {/* </View> */}
+              </View>
             </>
           ) : null}
         </View>
@@ -1178,7 +1189,8 @@ const styles = StyleSheet.create({
     height: '60%',
   },
   xGraphic: {
-    width: '120%',
+    width: '100%',
+    maxWidth: '100%',
     height: '85%',
     tintColor: Colors.accent,
   },
@@ -1187,7 +1199,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   contentContainer: {
-    paddingBottom: 120,
+    paddingBottom: isSmallScreen ? 100 : 120,
   },
   spacer: {
     height: 80,
@@ -1196,8 +1208,8 @@ const styles = StyleSheet.create({
   mainCard: {
     backgroundColor: Colors.bgSecondary,
     borderRadius: 12,
-    padding: 18,
-    marginHorizontal: 16,
+    padding: isSmallScreen ? 12 : 18,
+    marginHorizontal: isSmallScreen ? 12 : 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -1214,13 +1226,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: isSmallScreen ? 20 : 24,
     fontWeight: 'bold',
     color: Colors.textLight,
     marginBottom: 4,
+    flexShrink: 1,
   },
   headerSubtitle: {
-    fontSize: 12,
+    fontSize: isSmallScreen ? 11 : 12,
     color: Colors.textSubtleLight,
   },
   refreshButton: {
@@ -1235,8 +1248,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
-    gap: 8,
+    marginBottom: isSmallScreen ? 12 : 16,
+    gap: isSmallScreen ? 6 : 8,
+    minHeight: isSmallScreen ? 40 : 44,
+    maxHeight: isSmallScreen ? 44 : 48,
   },
   dateNavigation: {
     flexDirection: 'row',
@@ -1247,6 +1262,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     padding: 2,
     flex: 1,
+    minHeight: isSmallScreen ? 36 : 40,
   },
   dateNavButton: {
     padding: 8,
@@ -1261,21 +1277,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 8,
+    paddingVertical: isSmallScreen ? 6 : 8,
     paddingHorizontal: 12,
+    minHeight: isSmallScreen ? 36 : 40,
   },
   dateDisplayText: {
-    fontSize: 12,
+    fontSize: isSmallScreen ? 11 : 12,
     fontWeight: '500',
     color: Colors.textLight,
   },
   allTimeButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: isSmallScreen ? 6 : 8,
+    paddingHorizontal: isSmallScreen ? 12 : 16,
     borderRadius: 8,
     backgroundColor: Colors.bgTertiary,
     borderWidth: 1,
     borderColor: Colors.border,
+    minHeight: isSmallScreen ? 36 : 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   allTimeButtonActive: {
     backgroundColor: Colors.accent,
@@ -1300,35 +1320,36 @@ const styles = StyleSheet.create({
     color: Colors.textSubtleLight,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: isSmallScreen ? 16 : 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingBottom: 8,
+    marginBottom: isSmallScreen ? 8 : 10,
+    paddingBottom: isSmallScreen ? 8 : 8,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: isSmallScreen ? 16 : 18,
     fontWeight: '600',
     color: Colors.textLight,
+    flexShrink: 1,
   },
   sectionValue: {
-    fontSize: 14,
+    fontSize: isSmallScreen ? 12 : 14,
     fontWeight: '600',
     color: Colors.success,
-    flexShrink: 1,
-    maxWidth: 150,
+    flexShrink: 0,
+    maxWidth: isSmallScreen ? 120 : 150,
   },
   sectionBadge: {
-    fontSize: 12,
+    fontSize: isSmallScreen ? 11 : 12,
     fontWeight: '500',
     color: Colors.textLight,
     backgroundColor: Colors.bgTertiary,
-    paddingHorizontal: 12,
+    paddingHorizontal: isSmallScreen ? 10 : 12,
     paddingVertical: 4,
     borderRadius: 12,
   },
@@ -1340,19 +1361,19 @@ const styles = StyleSheet.create({
   },
   // Platform Overview Styles
   platformOverviewGrid: {
-    flexDirection: 'row',
-    gap: 10,
+    flexDirection: 'column',
+    gap: isSmallScreen ? 10 : 12,
     marginTop: 6,
-    alignItems: 'stretch',
+    width: '100%',
   },
   platformCard: {
-    flex: 1,
+    width: '100%',
     borderRadius: 12,
-    padding: 14,
+    padding: isSmallScreen ? 12 : 16,
     borderWidth: 1,
     borderColor: Colors.border,
-    minHeight: 130,
-    maxHeight: 150,
+    minHeight: isSmallScreen ? 120 : 140,
+    position: 'relative',
   },
   payinCard: {
     backgroundColor: 'rgba(34, 197, 94, 0.15)',
@@ -1366,17 +1387,21 @@ const styles = StyleSheet.create({
   },
   platformCardContent: {
     flex: 1,
-    justifyContent: 'flex-start',
-    minHeight: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+    gap: isSmallScreen ? 10 : 12,
+    width: '100%',
   },
   platformCardText: {
-    marginTop: 8,
     flex: 1,
-    minWidth: 0, // Important for text wrapping
+    minWidth: isSmallScreen ? '100%' : 0,
+    flexBasis: isSmallScreen ? '100%' : 'auto',
+    justifyContent: 'flex-start',
   },
   platformIcon: {
-    width: 52,
-    height: 52,
+    width: isSmallScreen ? 44 : 52,
+    height: isSmallScreen ? 44 : 52,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1389,19 +1414,30 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59, 130, 246, 0.25)',
   },
   platformCardTitle: {
-    fontSize: 12,
+    fontSize: isSmallScreen ? 11 : 12,
     fontWeight: '600',
     color: Colors.textSubtleLight,
-    marginBottom: 6,
+    marginBottom: isSmallScreen ? 2 : 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   platformCardValue: {
-    fontSize: 20,
+    fontSize: isSmallScreen ? 20 : 24,
     fontWeight: 'bold',
     color: Colors.textLight,
+    marginTop: isSmallScreen ? 2 : 4,
     marginBottom: 4,
-    lineHeight: 24,
+    lineHeight: isSmallScreen ? 24 : 28,
+    flexShrink: 1,
+  },
+  platformCardLoading: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 1,
+  },
+  platformCardValueLoading: {
+    opacity: 0.5,
   },
   platformCardSubtext: {
     fontSize: 10,
@@ -1410,38 +1446,39 @@ const styles = StyleSheet.create({
   },
   // Leaderboard Styles
   leaderboardGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
+    flexDirection: 'column',
+    gap: isSmallScreen ? 10 : 12,
+    width: '100%',
   },
   leaderboardCard: {
-    flex: 1,
-    minWidth: '48%',
+    width: '100%',
     backgroundColor: Colors.bgTertiary,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.border,
     overflow: 'hidden',
-    maxHeight: 320,
+    maxHeight: isSmallScreen ? 300 : 320,
   },
   leaderboardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: isSmallScreen ? 6 : 8,
     backgroundColor: Colors.bgSecondary,
-    padding: 10,
+    padding: isSmallScreen ? 8 : 10,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   leaderboardTitle: {
-    fontSize: 14,
+    fontSize: isSmallScreen ? 12 : 14,
     fontWeight: '600',
     color: Colors.textLight,
+    flexShrink: 1,
+    flex: 1,
   },
   leaderboardSubtitle: {
-    fontSize: 10,
+    fontSize: isSmallScreen ? 9 : 10,
     color: Colors.textSubtleLight,
-    paddingHorizontal: 12,
+    paddingHorizontal: isSmallScreen ? 10 : 12,
     paddingTop: 4,
   },
   leaderboardLoading: {
@@ -1449,30 +1486,32 @@ const styles = StyleSheet.create({
   },
   leaderboardList: {
     paddingVertical: 2,
-    maxHeight: 280,
+    maxHeight: isSmallScreen ? 260 : 280,
   },
   leaderboardItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 10,
+    padding: isSmallScreen ? 8 : 10,
+    paddingVertical: isSmallScreen ? 10 : 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.05)',
-    minHeight: 55,
+    minHeight: isSmallScreen ? 50 : 55,
   },
   leaderboardItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    gap: 12,
+    gap: isSmallScreen ? 8 : 12,
     minWidth: 0, // Important for text truncation
   },
   leaderboardRank: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: isSmallScreen ? 28 : 32,
+    height: isSmallScreen ? 28 : 32,
+    borderRadius: isSmallScreen ? 14 : 16,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   payinRank: {
     backgroundColor: 'rgba(34, 197, 94, 0.2)',
@@ -1481,7 +1520,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59, 130, 246, 0.2)',
   },
   leaderboardRankText: {
-    fontSize: 12,
+    fontSize: isSmallScreen ? 11 : 12,
     fontWeight: 'bold',
     color: Colors.textLight,
   },
@@ -1490,28 +1529,32 @@ const styles = StyleSheet.create({
     minWidth: 0, // Important for text truncation
   },
   leaderboardItemName: {
-    fontSize: 13,
+    fontSize: isSmallScreen ? 12 : 13,
     fontWeight: '500',
     color: Colors.textLight,
-    marginBottom: 2,
+    marginBottom: isSmallScreen ? 1 : 2,
     flexShrink: 1,
+    lineHeight: isSmallScreen ? 16 : 18,
   },
   leaderboardItemSubtext: {
-    fontSize: 10,
+    fontSize: isSmallScreen ? 9 : 10,
     color: Colors.textSubtleLight,
+    lineHeight: isSmallScreen ? 12 : 14,
   },
   leaderboardItemRight: {
     alignItems: 'flex-end',
     flexShrink: 0,
-    marginLeft: 8,
+    marginLeft: isSmallScreen ? 8 : 8,
   },
   leaderboardItemValue: {
-    fontSize: 12,
+    fontSize: isSmallScreen ? 11 : 12,
     fontWeight: '600',
     color: Colors.success,
-    marginBottom: 2,
+    marginBottom: isSmallScreen ? 1 : 2,
     textAlign: 'right',
-    maxWidth: 110,
+    maxWidth: isSmallScreen ? 90 : 110,
+    flexShrink: 0,
+    lineHeight: isSmallScreen ? 14 : 16,
   },
   // Revenue Styles
   revenueGrid: {
@@ -1521,13 +1564,14 @@ const styles = StyleSheet.create({
   },
   revenueCard: {
     flex: 1,
-    minWidth: '48%',
+    minWidth: isSmallScreen ? '100%' : '48%',
     backgroundColor: Colors.bgTertiary,
     borderRadius: 10,
-    padding: 12,
+    padding: isSmallScreen ? 10 : 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    minHeight: 75,
+    minHeight: isSmallScreen ? 70 : 75,
+    marginBottom: isSmallScreen ? 8 : 0,
   },
   revenueCardLarge: {
     minWidth: '100%',
@@ -1547,9 +1591,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   revenueCardValue: {
-    fontSize: 17,
+    fontSize: isSmallScreen ? 15 : 17,
     fontWeight: '600',
     color: Colors.textLight,
+    flexShrink: 1,
   },
   revenueCardSubtext: {
     fontSize: 10,
@@ -1565,12 +1610,13 @@ const styles = StyleSheet.create({
   },
   commissionCard: {
     flex: 1,
-    minWidth: '48%',
+    minWidth: isSmallScreen ? '100%' : '48%',
     borderRadius: 10,
-    padding: 12,
+    padding: isSmallScreen ? 10 : 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    minHeight: 85,
+    minHeight: isSmallScreen ? 80 : 85,
+    marginBottom: isSmallScreen ? 8 : 0,
   },
   commissionCardPayin: {
     backgroundColor: 'rgba(34, 197, 94, 0.1)',
@@ -1651,84 +1697,102 @@ const styles = StyleSheet.create({
   transactionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
+    gap: isSmallScreen ? 8 : 10,
+    marginBottom: isSmallScreen ? 12 : 16,
+    width: '100%',
   },
   transactionCard: {
     flex: 1,
-    minWidth: '48%',
+    minWidth: isSmallScreen ? '100%' : '48%',
+    maxWidth: isSmallScreen ? '100%' : '48%',
     backgroundColor: Colors.bgTertiary,
     borderRadius: 10,
-    padding: 12,
+    padding: isSmallScreen ? 10 : 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    minHeight: 85,
-    marginBottom: 0,
+    minHeight: isSmallScreen ? 80 : 90,
+    marginBottom: isSmallScreen ? 8 : 0,
   },
   transactionCardContent: {
-    marginTop: 6,
+    marginTop: isSmallScreen ? 4 : 6,
     flex: 1,
     minWidth: 0, // Important for text wrapping
   },
   transactionCardTitle: {
-    fontSize: 9,
+    fontSize: isSmallScreen ? 9 : 10,
     color: Colors.textSubtleLight,
-    marginBottom: 3,
+    marginBottom: isSmallScreen ? 3 : 4,
+    lineHeight: isSmallScreen ? 12 : 14,
   },
   transactionCardValue: {
-    fontSize: 16,
+    fontSize: isSmallScreen ? 15 : 17,
     fontWeight: '600',
     color: Colors.textLight,
+    lineHeight: isSmallScreen ? 20 : 22,
+    flexShrink: 1,
   },
   transactionCardSubtext: {
-    fontSize: 10,
+    fontSize: isSmallScreen ? 9 : 10,
     color: Colors.textSubtleLight,
-    marginTop: 4,
+    marginTop: isSmallScreen ? 3 : 4,
+    lineHeight: isSmallScreen ? 12 : 14,
   },
   // Payouts Styles
   payoutsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
+    gap: isSmallScreen ? 8 : 10,
+    marginBottom: isSmallScreen ? 8 : 12,
+    width: '100%',
+    alignItems: 'stretch',
   },
   payoutCard: {
     flex: 1,
-    minWidth: '48%',
+    minWidth: isSmallScreen ? '100%' : '48%',
+    maxWidth: isSmallScreen ? '100%' : '48%',
     backgroundColor: Colors.bgTertiary,
     borderRadius: 10,
-    padding: 12,
+    padding: isSmallScreen ? 10 : 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    minHeight: 85,
-    marginBottom: 0,
+    minHeight: isSmallScreen ? 85 : 95,
+    marginBottom: isSmallScreen ? 8 : 0,
+    overflow: 'hidden',
   },
   payoutCardHighlight: {
     borderColor: Colors.warning,
     borderWidth: 2,
   },
   payoutCardContent: {
-    marginTop: 6,
+    marginTop: isSmallScreen ? 4 : 6,
     flex: 1,
-    minWidth: 0, // Important for text wrapping
+    minWidth: 0,
+    flexShrink: 1,
   },
   payoutCardTitle: {
-    fontSize: 9,
+    fontSize: isSmallScreen ? 9 : 10,
     color: Colors.textSubtleLight,
-    marginBottom: 3,
+    marginBottom: isSmallScreen ? 2 : 3,
+    lineHeight: isSmallScreen ? 12 : 14,
+    flexShrink: 1,
   },
   payoutCardValue: {
-    fontSize: 16,
+    fontSize: isSmallScreen ? 15 : 17,
     fontWeight: '600',
     color: Colors.textLight,
+    lineHeight: isSmallScreen ? 20 : 22,
+    flexShrink: 1,
+    minWidth: 0,
   },
   payoutCardValueHighlight: {
     color: Colors.warning,
   },
   payoutCardSubtext: {
-    fontSize: 10,
+    fontSize: isSmallScreen ? 9 : 10,
     color: Colors.textSubtleLight,
-    marginTop: 4,
+    marginTop: isSmallScreen ? 3 : 4,
+    lineHeight: isSmallScreen ? 12 : 14,
+    flexShrink: 1,
   },
   notificationBadge: {
     backgroundColor: Colors.warning,
@@ -1744,24 +1808,31 @@ const styles = StyleSheet.create({
     color: Colors.bgPrimary,
   },
   todayRequestsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.bgTertiary,
     borderRadius: 10,
-    padding: 12,
+    padding: isSmallScreen ? 12 : 16,
     borderLeftWidth: 4,
     borderLeftColor: Colors.accent,
     borderWidth: 1,
     borderColor: Colors.border,
-    marginTop: 8,
-    marginBottom: 0,
+    gap: isSmallScreen ? 12 : 16,
+    width: '100%',
+  },
+  todayRequestsContent: {
+    flex: 1,
+    minWidth: 0,
   },
   todayRequestsTitle: {
-    fontSize: 9,
+    fontSize: isSmallScreen ? 11 : 12,
     color: Colors.textSubtleLight,
-    marginBottom: 6,
+    marginBottom: isSmallScreen ? 4 : 6,
+    fontWeight: '500',
   },
   todayRequestsValue: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: isSmallScreen ? 22 : 28,
+    fontWeight: 'bold',
     color: Colors.textLight,
   },
   // Modal Styles
