@@ -139,20 +139,20 @@ exports.getTransactions = async (req, res) => {
 
         // ✅ OPTIMIZATION: Run queries in parallel
         const [totalCount, transactions, summaryAgg] = await Promise.all([
-            // Get total count
+        // Get total count
             Transaction.countDocuments(query),
-            
+
             // Get paginated transactions
             (async () => {
-                const sort = {};
-                sort[sort_by] = sort_order === 'asc' ? 1 : -1;
+        const sort = {};
+        sort[sort_by] = sort_order === 'asc' ? 1 : -1;
                 return await Transaction.find(query)
-                    .sort(sort)
-                    .limit(parseInt(limit))
-                    .skip((parseInt(page) - 1) * parseInt(limit))
-                    .lean();
+            .sort(sort)
+            .limit(parseInt(limit))
+            .skip((parseInt(page) - 1) * parseInt(limit))
+            .lean();
             })(),
-            
+
             // ✅ OPTIMIZATION: Calculate summary using aggregation (much faster than loading all transactions)
             Transaction.aggregate([
                 { $match: { merchantId: merchantId } },

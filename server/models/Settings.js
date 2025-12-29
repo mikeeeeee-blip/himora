@@ -26,6 +26,10 @@ const SettingsSchema = new mongoose.Schema({
         cashfree: {
             enabled: { type: Boolean, default: false },
             isDefault: { type: Boolean, default: false }
+        },
+        payu: {
+            enabled: { type: Boolean, default: false },
+            isDefault: { type: Boolean, default: false }
         }
     },
     
@@ -85,7 +89,8 @@ SettingsSchema.statics.getSettings = async function() {
                 phonepe: { enabled: false, isDefault: false },
                 easebuzz: { enabled: false, isDefault: false },
                 sabpaisa: { enabled: false, isDefault: false },
-                cashfree: { enabled: false, isDefault: false }
+                cashfree: { enabled: false, isDefault: false },
+                payu: { enabled: false, isDefault: false }
             },
             roundRobinRotation: {
                 enabled: true,

@@ -397,6 +397,7 @@ app.use('/api/device', require('./routes/deviceRoutes')); // ✅ Device registra
 app.use('/api/razorpay', require('./routes/razorpayRoutes'));
 app.use('/api/paytm', require('./routes/paytmRoutes'));
 app.use('/api/easebuzz', require('./routes/easebuzzRoutes')); // ✅ NEW
+app.use('/api/payu', require('./routes/payuRoutes'));
 app.use('/api/sabpaisa', require('./routes/sabpaisaRoutes')); // ✅ NEW
 app.use('/api/cashfree', require('./routes/cashfreeRoutes')); // ✅ NEW
 

@@ -5,6 +5,7 @@ const { createEasebuzzPaymentLink } = require('./easebuzzController');
 const { createPhonePeDeepLink } = require('./razorpayController');
 const { createSabpaisaPaymentLink } = require('./sabpaisaController');
 const { createCashfreePaymentLink } = require('./cashfreeController');
+const { createPayuPaymentLink } = require('./payuController');
 
 /**
  * Unified payment link creation endpoint
@@ -32,7 +33,7 @@ exports.createPaymentLink = async (req, res) => {
         console.log(`   All enabled gateways (from settings): [${enabledGateways.join(', ') || 'none'}]`);
         
         // List of implemented/available gateways
-        const implementedGateways = ['razorpay', 'paytm', 'phonepe', 'easebuzz', 'sabpaisa', 'cashfree'];
+        const implementedGateways = ['razorpay', 'paytm', 'phonepe', 'easebuzz', 'sabpaisa', 'cashfree', 'payu'];
         console.log(`   Implemented gateways: [${implementedGateways.join(', ')}]`);
         
         // Filter out unimplemented gateways from enabled list
@@ -236,6 +237,9 @@ exports.createPaymentLink = async (req, res) => {
             case 'cashfree':
                 return await createCashfreePaymentLink(req, res);
             
+            case 'payu':
+                return await createPayuPaymentLink(req, res);
+            
             default:
                 return res.status(503).json({
                     success: false,
@@ -328,6 +332,10 @@ exports.getAvailableGateways = async (req, res) => {
                 cashfree: {
                     name: 'Cashfree',
                     enabled: settings.paymentGateways.cashfree.enabled
+                },
+                payu: {
+                    name: 'PayU',
+                    enabled: settings.paymentGateways.payu?.enabled || false
                 }
             }
         });

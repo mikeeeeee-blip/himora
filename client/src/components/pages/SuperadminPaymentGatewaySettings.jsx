@@ -14,7 +14,8 @@ const SuperadminPaymentGatewaySettings = () => {
     phonepe: { enabled: false },
     easebuzz: { enabled: false },
     sabpaisa: { enabled: false },
-    cashfree: { enabled: false }
+    cashfree: { enabled: false },
+    payu: { enabled: false }
   });
   const [roundRobinRotation, setRoundRobinRotation] = useState({
     enabled: true,
@@ -94,6 +95,9 @@ const SuperadminPaymentGatewaySettings = () => {
           },
           cashfree: { 
             enabled: Boolean(response.payment_gateways?.cashfree?.enabled)
+          },
+          payu: { 
+            enabled: Boolean(response.payment_gateways?.payu?.enabled)
           }
         };
         
@@ -210,7 +214,8 @@ const SuperadminPaymentGatewaySettings = () => {
         phonepe: { enabled: prev.phonepe?.enabled || false },
         easebuzz: { enabled: prev.easebuzz?.enabled || false },
         sabpaisa: { enabled: prev.sabpaisa?.enabled || false },
-        cashfree: { enabled: prev.cashfree?.enabled || false }
+        cashfree: { enabled: prev.cashfree?.enabled || false },
+        payu: { enabled: prev.payu?.enabled || false }
       };
       
       const currentGateway = updated[gatewayName];
@@ -403,7 +408,8 @@ const SuperadminPaymentGatewaySettings = () => {
     phonepe: 'PhonePe',
     easebuzz: 'Easebuzz',
     sabpaisa: 'SabPaisa',
-    cashfree: 'Cashfree'
+    cashfree: 'Cashfree',
+    payu: 'PayU'
   };
 
   // Removed handleRotateGateway - round-robin is automatic on the backend

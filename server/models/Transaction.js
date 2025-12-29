@@ -45,8 +45,17 @@ const TransactionSchema = new mongoose.Schema({
     cashfreeOrderId: String,
     cashfreeEnvironment: String, // 'sandbox' or 'production' - stored when transaction is created
     
+    // PayU Fields
+    payuOrderId: String,
+    payuPaymentId: String,
+    payuReferenceId: String,
+    payuIntentData: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null
+    }, // Stores UPI Intent data from S2S API
+    
     // Payment Gateway
-    paymentGateway: String, // 'razorpay', 'paytm', 'phonepe', 'cashfree', 'easebuzz', or 'sabpaisa'
+    paymentGateway: String, // 'razorpay', 'paytm', 'phonepe', 'cashfree', 'easebuzz', 'sabpaisa', or 'payu'
     
     // URLs
     callbackUrl: String,
@@ -199,6 +208,8 @@ TransactionSchema.index({ razorpayPaymentId: 1 });
 TransactionSchema.index({ paytmOrderId: 1 });
 TransactionSchema.index({ paytmPaymentId: 1 });
 TransactionSchema.index({ easebuzzOrderId: 1 });
+TransactionSchema.index({ payuOrderId: 1 });
+TransactionSchema.index({ payuPaymentId: 1 });
 TransactionSchema.index({ easebuzzPaymentId: 1 });
 TransactionSchema.index({ sabpaisaClientTxnId: 1 });
 TransactionSchema.index({ sabpaisaPaymentId: 1 });
