@@ -15,7 +15,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:paytm": "node scripts/testPaytmPaymentLink.js",
     "init:master-admin": "node scripts/initMasterAdmin.js",
-    "flush:user-transactions": "node scripts/flushUserTransactions.js"
+    "flush:user-transactions": "node scripts/flushUserTransactions.js",
+    "sync:database": "node scripts/syncDatabase.js"
   },
   "keywords": [],
   "author": "",

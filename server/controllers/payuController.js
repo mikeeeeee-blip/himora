@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Settings = require('../models/Settings');
 const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
+const { generatePayUCheckoutHTML, generatePayUCheckoutHTMLWithForm, formatCountdown } = require('./payuCheckoutTemplate');
 
 // PayU Configuration
 const PAYU_KEY = process.env.PAYU_KEY;
@@ -20,7 +21,31 @@ const PAYU_BASE_URL = PAYU_ENVIRONMENT === 'sandbox'
     : 'https://secure.payu.in';
 
 const PAYU_PAYMENT_URL = `${PAYU_BASE_URL}/_payment`;
-const PAYU_S2S_API_URL = `${PAYU_BASE_URL}/merchant/postservice?form=2`; // S2S API endpoint
+// PayU S2S API endpoint for UPI Intent
+// Reference: https://docs.payu.in/docs/upi-intent-server-to-server
+const PAYU_S2S_API_URL = `${PAYU_BASE_URL}/merchant/postservice?form=2`;
+
+// PayU Generate UPI Intent API
+// Reference: https://docs.payu.in/v2/reference/v2-generate-upi-intent-api
+// Note: UPI Intent API might not be available in test/sandbox mode
+// Endpoints to try (in order of preference)
+const PAYU_INTENT_API_ENDPOINTS = PAYU_ENVIRONMENT === 'sandbox'
+    ? [
+        'https://test.payu.in/info/v1/intent',
+        'http://test.payu.in/info/v1/intent',
+        'https://info.payu.in/info/v1/intent',  // Try production endpoint as fallback
+        'https://info.payu.in/v1/intent'
+      ]
+    : [
+        'https://info.payu.in/info/v1/intent',  // Try with /info/ path first
+        'https://info.payu.in/v1/intent',        // Original endpoint
+        'https://secure.payu.in/info/v1/intent', // Alternative endpoint
+        'https://secure.payu.in/v1/intent'       // Another alternative
+      ];
+
+// PayU Merchant ID (mid) - required for Intent API
+// If not set, will try to extract from PAYU_KEY or use default
+const PAYU_MERCHANT_ID = process.env.PAYU_MERCHANT_ID || process.env.PAYU_MID || '2';
 
 // Configuration loaded
 
@@ -142,6 +167,7 @@ function generatePayUS2SHash(params) {
 // ============ CREATE PAYU PAYMENT LINK ============
 exports.createPayuPaymentLink = async (req, res) => {
     let transactionId = null;
+    let orderId = null;
     
     try {
         const {
@@ -226,7 +252,7 @@ exports.createPayuPaymentLink = async (req, res) => {
 
         // Generate unique IDs
         transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        const orderId = `ORDER_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        orderId = `ORDER_${Date.now()}_${Math.random().toString(36).substring(7)}`;
         const referenceId = `REF_${Date.now()}`;
 
         // Get merchant's configured URLs or use provided ones
@@ -238,192 +264,56 @@ exports.createPayuPaymentLink = async (req, res) => {
         // PayU callback URL - points to our callback handler
         const payuCallbackUrl = `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/payu/callback?transaction_id=${transactionId}`;
 
-        // Prepare PayU payment parameters for S2S UPI Intent
+        // Prepare amount for PayU Generate UPI Intent API
         // Important: Amount must be formatted correctly (2 decimal places)
         const amountFormatted = parseFloat(amount).toFixed(2);
         
-        // Clean and prepare parameters - PayU is very strict about format
-        const productInfo = (description || `Payment for ${merchantName}`).trim().substring(0, 100);
-        const firstName = (customer_name.split(' ')[0] || customer_name).trim().substring(0, 60);
-        const email = customer_email.trim();
-
-        // Get client IP and user agent from request
-        const clientIp = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || '127.0.0.1';
-        const userAgent = req.headers['user-agent'] || 'Unknown';
-
-        // Prepare S2S UPI Intent parameters as per PayU documentation
-        // Reference: https://docs.payu.in/docs/upi-intent-server-to-server
-        const s2sParams = {
-            key: PAYU_KEY.trim(),
-            txnid: orderId,
-            amount: amountFormatted,
-            productinfo: productInfo,
-            firstname: firstName,
-            email: email,
-            phone: customer_phone.trim(),
-            surl: (success_url || finalCallbackUrl).trim(),
-            furl: (failure_url || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`).trim(),
-            curl: payuCallbackUrl.trim(),
-            txn_s2s_flow: '4', // Required for S2S UPI Intent
-            s2s_client_ip: clientIp,
-            s2s_device_info: userAgent.substring(0, 255), // Max 255 chars
-            upiAppName: 'genericintent' // Will be selected by user on checkout page
-        };
-
-        // Generate S2S hash (includes additional S2S fields)
-        const hashParams = {
-            txnid: s2sParams.txnid,
-            amount: s2sParams.amount,
-            productinfo: s2sParams.productinfo,
-            firstname: s2sParams.firstname,
-            email: s2sParams.email,
-            txn_s2s_flow: s2sParams.txn_s2s_flow,
-            s2s_client_ip: s2sParams.s2s_client_ip,
-            s2s_device_info: s2sParams.s2s_device_info,
-            upiAppName: s2sParams.upiAppName
-        };
+        // Generate PayU UPI Intent using Generate UPI Intent API - REQUIRED, NO FALLBACK
+        // Reference: https://docs.payu.in/v2/reference/v2-generate-upi-intent-api
+        const expiryTime = 900; // 15 minutes in seconds
+        const refUrl = finalCallbackUrl;
         
-        const hash = generatePayUS2SHash(hashParams);
-        s2sParams.hash = hash;
-
-        // Call PayU S2S API to initiate UPI Intent payment
-        let s2sResponse;
-        try {
-            const formData = new URLSearchParams();
-            Object.keys(s2sParams).forEach(key => {
-                if (s2sParams[key] !== undefined && s2sParams[key] !== null) {
-                    formData.append(key, String(s2sParams[key]));
-                }
-            });
-
-            const apiResponse = await axios.post(PAYU_S2S_API_URL, formData.toString(), {
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Accept': 'application/json'
-                },
-                timeout: 30000
-            });
-
-            // Parse response - PayU S2S returns form-encoded or JSON
-            let responseData = apiResponse.data;
-            if (typeof responseData === 'string') {
-                // Try to parse as JSON first
-                try {
-                    responseData = JSON.parse(responseData);
-                } catch (e) {
-                    // If not JSON, parse as form-encoded
-                    const params = new URLSearchParams(responseData);
-                    responseData = {};
-                    for (const [key, value] of params.entries()) {
-                        responseData[key] = value;
-                    }
-                }
-            }
-
-            s2sResponse = responseData;
-
-            // Check for errors in response
-            if (responseData.status === 'failure' || responseData.status === 'error' || responseData.error || responseData.errorCode) {
-                const errorMsg = responseData.error || responseData.message || responseData.errorMessage || 'PayU S2S API returned an error';
-                throw new Error(errorMsg);
-            }
-
-        } catch (apiError) {
-            console.error('❌ PayU S2S API Error:', apiError.response?.data || apiError.message);
-            console.error('❌ Full error:', JSON.stringify(apiError.response?.data || apiError.message, null, 2));
-            
-            // Even if S2S fails, create transaction and show custom checkout
-            // We'll use a generic approach for UPI deep links
-            const transaction = new Transaction({
-                transactionId: transactionId,
-                orderId: orderId,
-                merchantId: merchantId,
-                merchantName: merchantName,
-                customerId: `CUST_${customer_phone}_${Date.now()}`,
-                customerName: customer_name,
-                customerEmail: customer_email,
-                customerPhone: customer_phone,
-                amount: parseFloat(amount),
-                currency: 'INR',
-                description: description || `Payment for ${merchantName}`,
-                status: 'created',
-                paymentGateway: 'payu',
-                payuOrderId: orderId,
-                payuReferenceId: referenceId,
-                callbackUrl: finalCallbackUrl,
-                successUrl: success_url,
-                failureUrl: failure_url,
-                // Store fallback UPI Intent data (will use orderId as reference)
-                payuIntentData: {
-                    merchantVPA: null, // Will be set by PayU when user selects
-                    merchantName: merchantName,
-                    referenceId: orderId, // Use orderId as fallback reference
-                    useFormBased: true // Flag to use form-based fallback
-                },
-                createdAt: new Date(),
-                updatedAt: new Date()
-            });
-
-            await transaction.save();
-
-            const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
-            const checkoutPageUrl = `${baseUrl}/api/payu/checkout/${transactionId}`;
-
-            // Even if S2S fails, return checkout page URL
-            // The checkout page will handle form-based payment
-            res.json({
-                success: true,
-                transaction_id: transactionId,
-                payment_link_id: orderId,
-                payment_url: checkoutPageUrl,
-                checkout_page: checkoutPageUrl,
-                order_id: orderId,
-                order_amount: parseFloat(amount),
-                order_currency: 'INR',
-                merchant_id: merchantId.toString(),
-                merchant_name: merchantName,
-                reference_id: referenceId,
-                callback_url: finalCallbackUrl,
-                // UPI deep links not available (S2S failed)
-                upi_deep_link: null,
-                phonepe_deep_link: null,
-                gpay_deep_link: null,
-                gpay_intent: null,
-                paytm_deep_link: null,
-                bhim_deep_link: null,
-                cred_deep_link: null,
-                amazonpay_deep_link: null,
-                note: 'S2S API call failed, using form-based payment with custom checkout',
-                message: 'Payment link created successfully. Share this URL with customer.'
-            });
-            return;
+        console.log('🔄 Generating PayU UPI Intent for order:', orderId);
+        console.log('   Amount:', amountFormatted);
+        console.log('   Expiry Time:', expiryTime, 'seconds');
+        console.log('   Reference URL:', refUrl);
+        
+        // This will throw an error if Intent API fails - NO FALLBACK
+        const intentData = await generatePayUUPIIntent(
+            orderId,
+            amountFormatted,
+            expiryTime,
+            refUrl,
+            '01' // category
+        );
+        
+        if (!intentData || !intentData.intentUri) {
+            throw new Error('PayU Intent API returned invalid response: missing intentUri');
         }
-
-        // Extract IntentURIData from response
-        // PayU returns: merchantVPA, merchantName, referenceId, IntentURIData
-        const merchantVPA = s2sResponse.merchantVPA || s2sResponse.merchant_vpa || s2sResponse.vpa || s2sResponse.merchantVpa;
-        const merchantVpaName = s2sResponse.merchantName || s2sResponse.merchant_name || merchantName;
-        const payuReferenceId = s2sResponse.referenceId || s2sResponse.reference_id || referenceId;
-        const intentURIData = s2sResponse.IntentURIData || s2sResponse.intent_uri_data || s2sResponse.intentUriData || s2sResponse.intentURIData;
-
-        // Generate UPI deep links that directly open UPI apps
-        const upiAmountFormatted = parseFloat(amount).toFixed(2);
-        const upiParams = {
-            pa: merchantVPA,
-            pn: merchantVpaName,
-            tr: payuReferenceId,
-            am: upiAmountFormatted,
-            cu: 'INR'
-        };
         
-        // Build query string for UPI deep link
-        const upiQuery = Object.keys(upiParams)
-            .map(key => `${key}=${encodeURIComponent(upiParams[key])}`)
-            .join('&');
+        console.log('✅ PayU UPI Intent generated successfully');
+        console.log('   Intent URI:', intentData.intentUri);
+        console.log('   Intent URL:', intentData.intentUrl);
         
-        // Generate UPI deep links for different apps
+        // Extract UPI parameters from PayU Intent API response
+        const intentUri = intentData.intentUri;
+        const queryString = intentUri.split('?')[1] || '';
+        
+        // Parse query string to extract reference ID
+        const urlParams = {};
+        if (queryString) {
+            queryString.split('&').forEach(param => {
+                const [key, value] = param.split('=');
+                if (key && value) {
+                    urlParams[key] = decodeURIComponent(value);
+                }
+            });
+        }
+        
+        // Build UPI deep links from PayU's intentUri
+        const upiQuery = queryString; // Use the query string from PayU's intentUri directly
         const upiDeepLinks = {
-            generic: `upi://pay?${upiQuery}`,
+            generic: intentUri,  // Use PayU's intentUri directly
             phonepe: `phonepe://pay?${upiQuery}`,
             googlepay: `tez://pay?${upiQuery}`,
             gpay_intent: `intent://pay?${upiQuery}#Intent;package=com.google.android.apps.nbu.paisa.user;scheme=upi;end`,
@@ -432,9 +322,12 @@ exports.createPayuPaymentLink = async (req, res) => {
             cred: `credpay://pay?${upiQuery}`,
             amazonpay: `amazonpay://pay?${upiQuery}`
         };
+        
+        // Extract reference ID from intentUri (tr parameter)
+        const payuReferenceId = urlParams.tr || orderId;
 
         // Save transaction to database
-        const transaction = new Transaction({
+        const transactionData = {
             transactionId: transactionId,
             orderId: orderId,
             merchantId: merchantId,
@@ -453,25 +346,32 @@ exports.createPayuPaymentLink = async (req, res) => {
             callbackUrl: finalCallbackUrl,
             successUrl: success_url,
             failureUrl: failure_url,
-            // Store UPI Intent data
-            payuIntentData: {
-                merchantVPA: merchantVPA,
-                merchantName: merchantVpaName,
-                referenceId: payuReferenceId,
-                intentURIData: intentURIData
-            },
             createdAt: new Date(),
             updatedAt: new Date()
-        });
+        };
+        
+        // Store UPI Intent data from PayU Intent API (REQUIRED)
+        transactionData.payuIntentData = {
+            intentId: intentData.intentId,
+            intentUri: intentData.intentUri,
+            intentUrl: intentData.intentUrl,
+            intentUrlWithQR: intentData.intentUrlWithQR,
+            transactionId: intentData.transactionId,
+            expiryTime: intentData.expiryTime,
+            referenceId: payuReferenceId,
+            intentApiAvailable: true
+        };
+        
+        const transaction = new Transaction(transactionData);
 
         await transaction.save();
 
-        // Create checkout page URL with UPI Intent data
+        // Create checkout page URL - this will use the modern checkout page with PayU Intent API
         const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
         const checkoutPageUrl = `${baseUrl}/api/payu/checkout/${transactionId}`;
 
-        // Return response with UPI deep links (similar to Razorpay/PhonePe)
-        res.json({
+        // Build response with Intent API data (REQUIRED)
+        const response = {
             success: true,
             transaction_id: transactionId,
             payment_link_id: orderId,
@@ -484,7 +384,7 @@ exports.createPayuPaymentLink = async (req, res) => {
             merchant_name: merchantName,
             reference_id: payuReferenceId,
             callback_url: finalCallbackUrl,
-            // UPI Deep Links - directly open UPI apps
+            // UPI Deep Links from PayU Intent API
             upi_deep_link: upiDeepLinks.generic,
             phonepe_deep_link: upiDeepLinks.phonepe,
             gpay_deep_link: upiDeepLinks.googlepay,
@@ -493,15 +393,21 @@ exports.createPayuPaymentLink = async (req, res) => {
             bhim_deep_link: upiDeepLinks.bhim,
             cred_deep_link: upiDeepLinks.cred,
             amazonpay_deep_link: upiDeepLinks.amazonpay,
-            // UPI Intent data for reference
+            // UPI Intent data from PayU API
             upi_intent: {
-                merchant_vpa: merchantVPA,
-                merchant_name: merchantVpaName,
+                intent_id: intentData.intentId,
+                intent_uri: intentData.intentUri,
+                intent_url: intentData.intentUrl,
+                intent_url_with_qr: intentData.intentUrlWithQR,
                 reference_id: payuReferenceId,
-                amount: upiAmountFormatted
+                amount: amountFormatted,
+                expiry_time: intentData.expiryTime,
+                bank_accounts: intentData.bankAccounts || []
             },
-            message: 'Payment link created successfully. Use UPI deep links to directly open UPI apps.'
-        });
+            message: 'Payment link created successfully using PayU Generate UPI Intent API. Use the checkout_page URL to access the modern payment interface with UPI deep links.'
+        };
+        
+        res.json(response);
 
     } catch (error) {
         console.error('❌ Create PayU Payment Link Error:', error);
@@ -509,13 +415,48 @@ exports.createPayuPaymentLink = async (req, res) => {
             message: error.message,
             error: error.response?.data || error.error,
             statusCode: error.response?.status || error.statusCode,
+            errorCode: error.errorCode,
+            isAccountRestriction: error.isAccountRestriction,
             stack: error.stack
         });
 
-        res.status(error.response?.status || error.statusCode || 500).json({
+        // Handle specific PayU account restriction errors
+        if (error.isAccountRestriction && error.errorCode === 'E2016') {
+            return res.status(403).json({
+                success: false,
+                error: 'PayU UPI Intent feature is disabled',
+                message: error.message || 'The Generate UPI Intent API feature is not enabled for your PayU merchant account.',
+                details: {
+                    description: 'PayU UPI Intent API feature is disabled at account level',
+                    code: 'E2016',
+                    payu_message: error.payuMessage || 'Payment option is disabled. Please contact your account manager.',
+                    solution: 'Contact your PayU account manager to enable the Generate UPI Intent API feature for your merchant account.',
+                    documentation: 'https://docs.payu.in/v2/reference/v2-generate-upi-intent-api',
+                    troubleshooting: [
+                        '1. Contact your PayU account manager',
+                        '2. Request to enable the "Generate UPI Intent API" feature',
+                        '3. Verify your PayU merchant account has UPI Intent permissions',
+                        '4. Check if your account type supports this feature'
+                    ]
+                },
+                transaction_id: transactionId,
+                order_id: orderId || 'N/A'
+            });
+        }
+
+        // Handle other errors
+        const statusCode = error.response?.status || error.statusCode || 500;
+        res.status(statusCode).json({
             success: false,
             error: error.message || 'Failed to create payment link',
-            details: error.response?.data || { message: error.message }
+            details: {
+                description: error.response?.data?.message || error.message,
+                code: error.errorCode || 'PAYU_API_ERROR',
+                payu_response: error.response?.data || {},
+                status_code: statusCode
+            },
+            transaction_id: transactionId,
+            order_id: orderId || 'N/A'
         });
     }
 };
@@ -1009,16 +950,216 @@ async function handlePayuPaymentFailed(transaction, payload) {
     }
 }
 
+// ============ GENERATE PAYU UPI INTENT ============
+/**
+ * Generate PayU UPI Intent using PayU Generate UPI Intent API
+ * Reference: https://docs.payu.in/v2/reference/v2-generate-upi-intent-api
+ * 
+ * @param {string} transactionId - Unique transaction identifier
+ * @param {string} transactionAmount - Amount in format "XX.XX"
+ * @param {number} expiryTime - Expiry time in seconds
+ * @param {string} refUrl - Optional reference URL
+ * @param {string} category - Optional category code
+ * @returns {Promise<Object>} PayU Intent response with intentUri, intentUrl, etc.
+ */
+async function generatePayUUPIIntent(transactionId, transactionAmount, expiryTime = 900, refUrl = null, category = null) {
+    // Use the endpoints array defined at the top
+    const endpointsToTry = PAYU_INTENT_API_ENDPOINTS;
+    
+    let lastError = null;
+    
+    // Try different authentication methods
+    const authMethods = [];
+    
+    // Method 1: Try PAYU_SALT (standard PayU secret)
+    if (PAYU_SALT) {
+        authMethods.push({ secret: PAYU_SALT, name: 'PAYU_SALT' });
+    }
+    
+    // Method 2: Try PAYU_CLIENT_SECRET (if different from SALT)
+    if (PAYU_CLIENT_SECRET && PAYU_CLIENT_SECRET !== PAYU_SALT) {
+        authMethods.push({ secret: PAYU_CLIENT_SECRET, name: 'PAYU_CLIENT_SECRET' });
+    }
+    
+    if (authMethods.length === 0) {
+        throw new Error('PayU merchant secret not configured. Please set PAYU_SALT or PAYU_CLIENT_SECRET in environment variables.');
+    }
+    
+    // Try different mid values
+    const midValues = [
+        PAYU_MERCHANT_ID,  // User configured
+        PAYU_KEY,          // Try using PAYU_KEY as mid
+        '2'                // Default fallback
+    ].filter((v, i, arr) => v && arr.indexOf(v) === i); // Remove duplicates
+    
+    for (const endpoint of endpointsToTry) {
+        for (const authMethod of authMethods) {
+            for (const midValue of midValues) {
+                try {
+                    if (endpoint === endpointsToTry[0] && authMethod === authMethods[0] && midValue === midValues[0]) {
+                        console.log(`🔄 Trying PayU Intent API endpoint: ${endpoint}`);
+                    }
+                    
+                    // Prepare request body
+                    const requestBody = {
+                        transactionId: transactionId,
+                        transactionAmount: String(transactionAmount),
+                        expiryTime: String(expiryTime)
+                    };
+                    
+                    if (refUrl) {
+                        requestBody.refUrl = refUrl;
+                    }
+                    if (category) {
+                        requestBody.category = category;
+                    }
+                    
+                    const bodyData = JSON.stringify(requestBody);
+                    
+                    // Generate date header (RFC 7231 format)
+                    const date = new Date().toUTCString();
+                    
+                    // Generate authorization header
+                    // Hash format: sha512(Body data + '|' + date + '|' + merchant_secret)
+                    const hashString = bodyData + '|' + date + '|' + authMethod.secret;
+                    const hash = crypto.createHash('sha512').update(hashString, 'utf8').digest('hex');
+                    
+                    const authorization = `hmac username="${PAYU_KEY}", algorithm="sha512", headers="date", signature="${hash}"`;
+                    
+                    // Prepare headers - PayU Intent API requires 'mid' header
+                    const headers = {
+                        'Content-Type': 'application/json',
+                        'date': date,
+                        'authorization': authorization,
+                        'mid': String(midValue)  // Merchant ID header
+                    };
+                    
+                    // Log authentication method on first attempt
+                    if (endpoint === endpointsToTry[0] && authMethod === authMethods[0] && midValue === midValues[0]) {
+                        console.log(`   Trying authentication: ${authMethod.name}, mid: ${midValue}`);
+                        console.log(`   Request Body:`, requestBody);
+                    }
+                    
+                    // Make API request
+                    const response = await axios.post(endpoint, bodyData, {
+                        headers: headers,
+                        timeout: 30000,
+                        validateStatus: function (status) {
+                            return status >= 200 && status < 600;
+                        }
+                    });
+                    
+                    // Check response
+                    if (response.status === 404) {
+                        console.warn(`   ⚠️ Endpoint returned 404: ${endpoint}`);
+                        lastError = new Error(`PayU Intent API endpoint not found: ${endpoint}`);
+                        lastError.response = response;
+                        break; // Try next endpoint
+                    }
+                    
+                    if (response.status === 401) {
+                        // Authentication failed - try next auth method
+                        if (authMethod === authMethods[authMethods.length - 1] && midValue === midValues[midValues.length - 1]) {
+                            // Last auth method and mid value - try next endpoint
+                            console.warn(`   ⚠️ Authentication failed (401) with ${authMethod.name}, mid: ${midValue}`);
+                            lastError = new Error(`PayU Intent API authentication failed: ${JSON.stringify(response.data)}`);
+                            lastError.response = response;
+                            break; // Try next endpoint
+                        }
+                        continue; // Try next auth method or mid value
+                    }
+                    
+                    const responseData = response.data || {};
+                    
+                    // Check for errors in response data first (even if status is 200)
+                    if (responseData.status === 0 || responseData.status === 'failure' || responseData.error || response.status !== 200) {
+                        // Handle specific error code E2016: Payment option disabled
+                        if (responseData.errorCode === 'E2016' || (response.status === 400 && responseData.errorCode === 'E2016')) {
+                            const error = new Error(`PayU UPI Intent feature is disabled for your merchant account. Please contact your PayU account manager to enable the Generate UPI Intent API feature.`);
+                            error.response = response;
+                            error.errorCode = 'E2016';
+                            error.isAccountRestriction = true;
+                            error.payuMessage = responseData.message || 'Payment option is disabled. Please contact your account manager.';
+                            throw error;
+                        }
+                        
+                        // Handle other errors
+                        if (response.status !== 200) {
+                            const error = new Error(`PayU Intent API returned status ${response.status}: ${responseData.message || JSON.stringify(responseData)}`);
+                            error.response = response;
+                            error.errorCode = responseData.errorCode;
+                            throw error;
+                        }
+                        
+                        const error = new Error(responseData.message || responseData.error || 'PayU Intent API returned an error');
+                        error.response = response;
+                        error.errorCode = responseData.errorCode;
+                        throw error;
+                    }
+                    
+                    // Success - return intent data
+                    console.log(`✅ PayU Intent API success!`);
+                    console.log(`   Endpoint: ${endpoint}`);
+                    console.log(`   Auth method: ${authMethod.name}`);
+                    console.log(`   Mid: ${midValue}`);
+                    return {
+                        success: true,
+                        intentId: responseData.result?.intentId,
+                        intentUri: responseData.result?.intentUri,
+                        intentUrl: responseData.result?.intentUrl,
+                        intentUrlWithQR: responseData.result?.intentUrlWithQR,
+                        transactionId: responseData.result?.transactionId,
+                        expiryTime: responseData.result?.expiryTime,
+                        bankAccounts: responseData.result?.bankAccounts || []
+                    };
+                    
+                } catch (error) {
+                    // Only log if it's not a 401 (we'll try other auth methods)
+                    if (error.response?.status !== 401) {
+                        console.error(`❌ PayU Intent API Error:`, error.message);
+                        if (error.response) {
+                            console.error(`   Status: ${error.response.status}`);
+                            console.error(`   Response:`, error.response.data);
+                        }
+                    }
+                    lastError = error;
+                    
+                    // If it's not a 401 or 404, don't try other methods
+                    if (error.response?.status !== 401 && error.response?.status !== 404) {
+                        throw error;
+                    }
+                }
+            }
+        }
+    }
+    
+    // All endpoints and auth methods failed
+    console.error('❌ All PayU Intent API authentication methods failed');
+    console.error('   Tried endpoints:', endpointsToTry);
+    console.error('   Tried auth methods:', authMethods.map(m => m.name));
+    console.error('   Tried mid values:', midValues);
+    console.error('   Last error:', lastError?.message);
+    console.error('   Last response status:', lastError?.response?.status);
+    console.error('   Last response data:', lastError?.response?.data);
+    
+    const errorMessage = lastError?.message || 'PayU Intent API authentication failed';
+    const detailedError = new Error(`${errorMessage}. Tried ${endpointsToTry.length} endpoint(s), ${authMethods.length} auth method(s), and ${midValues.length} mid value(s). Please verify: 1) PAYU_SALT or PAYU_CLIENT_SECRET is correct, 2) PAYU_KEY is correct, 3) PAYU_MERCHANT_ID is set correctly, 4) Your PayU account has the Generate UPI Intent API feature enabled. Contact PayU support if the issue persists.`);
+    detailedError.endpointsTried = endpointsToTry;
+    detailedError.authMethodsTried = authMethods.map(m => m.name);
+    detailedError.midValuesTried = midValues;
+    detailedError.lastResponse = lastError?.response?.data;
+    detailedError.lastStatus = lastError?.response?.status;
+    throw detailedError;
+}
+
 // ============ PAYU CHECKOUT PAGE ============
 /**
- * PayU Checkout Page - Auto-submits form to PayU
- * PayU requires POST form submission, not GET with query parameters
+ * PayU Checkout Page - Modern UI similar to Cashfree checkout
+ * Uses PayU Generate UPI Intent API to create payment options
  */
 exports.getPayuCheckoutPage = async (req, res) => {
     try {
         const { transactionId } = req.params;
-
-        // Find transaction
 
         // Find transaction
         const transaction = await Transaction.findOne({ transactionId: transactionId });
@@ -1074,517 +1215,110 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 .replace(/'/g, '&#039;');
         };
 
-        // Check if we have UPI Intent data from S2S
-        const intentData = transaction.payuIntentData;
+        // Get or generate PayU UPI Intent - REQUIRED, NO FALLBACK
+        let intentData = null;
+        const storedIntentData = transaction.payuIntentData;
         
-        // Always show custom checkout page - either with S2S data or form-based
-        if (intentData && intentData.referenceId) {
-            // If we have merchantVPA from S2S, use it; otherwise use form-based approach
-            const hasMerchantVPA = intentData.merchantVPA && !intentData.useFormBased;
-            
-            if (hasMerchantVPA) {
-            // S2S UPI Intent flow - show UPI app selection with direct deep links
-            const merchantVPA = intentData.merchantVPA;
-            const merchantName = intentData.merchantName || transaction.merchantName;
-            const referenceId = intentData.referenceId;
-            const amount = transaction.amount.toFixed(2);
-            
-            // Build UPI deep link URL as per NPCI guidelines
-            // Format: upi://pay?pa=merchantVPA&pn=merchantName&tr=referenceId&am=amount
-            const upiParams = {
-                pa: merchantVPA,
-                pn: merchantName,
-                tr: referenceId,
-                am: amount,
-                cu: 'INR'
+        if (storedIntentData && storedIntentData.intentUri) {
+            // Use stored intent data
+            console.log('✅ Using stored PayU UPI Intent data from transaction');
+            intentData = {
+                intentId: storedIntentData.intentId,
+                intentUri: storedIntentData.intentUri,
+                intentUrl: storedIntentData.intentUrl,
+                intentUrlWithQR: storedIntentData.intentUrlWithQR,
+                transactionId: storedIntentData.transactionId,
+                expiryTime: storedIntentData.expiryTime || 900
             };
-            
-            // Build query string for UPI deep link
-            const upiQuery = Object.keys(upiParams)
-                .map(key => `${key}=${encodeURIComponent(upiParams[key])}`)
-                .join('&');
-            
-            const upiDeepLink = `upi://pay?${upiQuery}`;
-            
-            // UPI App specific deep links - these directly open the respective UPI apps
-            const upiApps = {
-                phonepe: `phonepe://pay?${upiQuery}`,
-                googlepay: `tez://pay?${upiQuery}`,
-                paytm: `paytmmp://pay?${upiQuery}`,
-                bhim: `bhim://pay?${upiQuery}`,
-                cred: `credpay://pay?${upiQuery}`,
-                amazonpay: `amazonpay://pay?${upiQuery}`,
-                whatsapp: `whatsapp://pay?${upiQuery}`,
-                generic: upiDeepLink
-            };
-            
-            // Android Intent URL for Google Pay (more reliable on Android)
-            const gpayIntent = `intent://pay?${upiQuery}#Intent;package=com.google.android.apps.nbu.paisa.user;scheme=upi;end`;
-
-            // Create custom checkout page with UPI app selection
-            const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pay with UPI</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 500px;
-            width: 100%;
-            padding: 40px 30px;
-            text-align: center;
-        }
-        .amount {
-            font-size: 48px;
-            font-weight: bold;
-            color: #667eea;
-            margin: 20px 0;
-        }
-        .merchant {
-            color: #666;
-            font-size: 16px;
-            margin-bottom: 30px;
-        }
-        .upi-apps {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-top: 30px;
-        }
-        .upi-btn {
-            background: #f8f9fa;
-            border: 2px solid #e9ecef;
-            border-radius: 12px;
-            padding: 20px;
-            text-decoration: none;
-            color: #333;
-            font-weight: 600;
-            font-size: 16px;
-            transition: all 0.3s;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-        }
-        .upi-btn:hover {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-        .upi-icon {
-            font-size: 32px;
-            margin-bottom: 5px;
-        }
-        .info {
-            background: #e7f3ff;
-            border-left: 4px solid #667eea;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            text-align: left;
-            font-size: 14px;
-            color: #555;
-        }
-        @media (max-width: 480px) {
-            .upi-apps {
-                grid-template-columns: 1fr;
-            }
-            .amount {
-                font-size: 36px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1 style="color: #333; margin-bottom: 10px;">Pay with UPI</h1>
-        <div class="amount">₹${amount}</div>
-        <div class="merchant">${escapeHtml(merchantName)}</div>
-        <p style="color: #666; margin-bottom: 20px;">Choose your UPI app to pay</p>
-        
-        <div class="upi-apps">
-            <a href="${upiApps.phonepe}" class="upi-btn" onclick="openUPIApp('phonepe', '${upiApps.phonepe}'); return false;">
-                <div class="upi-icon">📱</div>
-                <span>PhonePe</span>
-            </a>
-            <a href="${gpayIntent}" class="upi-btn" onclick="openUPIApp('googlepay', '${gpayIntent}', '${upiApps.googlepay}'); return false;">
-                <div class="upi-icon">💳</div>
-                <span>Google Pay</span>
-            </a>
-            <a href="${upiApps.paytm}" class="upi-btn" onclick="openUPIApp('paytm', '${upiApps.paytm}'); return false;">
-                <div class="upi-icon">💵</div>
-                <span>Paytm</span>
-            </a>
-            <a href="${upiApps.bhim}" class="upi-btn" onclick="openUPIApp('bhim', '${upiApps.bhim}'); return false;">
-                <div class="upi-icon">🏦</div>
-                <span>BHIM</span>
-            </a>
-            <a href="${upiApps.cred}" class="upi-btn" onclick="openUPIApp('cred', '${upiApps.cred}'); return false;">
-                <div class="upi-icon">💎</div>
-                <span>CRED</span>
-            </a>
-            <a href="${upiApps.generic}" class="upi-btn" onclick="openUPIApp('generic', '${upiApps.generic}'); return false;">
-                <div class="upi-icon">🔗</div>
-                <span>Any UPI App</span>
-            </a>
-        </div>
-        
-        <div class="info">
-            <strong>💡 How to pay:</strong><br>
-            1. Click on your preferred UPI app button<br>
-            2. Your UPI app will open directly<br>
-            3. Complete the payment in the app<br>
-            4. You'll be redirected automatically after payment
-        </div>
-        
-        <div style="margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 8px; text-align: left; font-size: 12px;">
-            <strong>📋 UPI Intent Link:</strong>
-            <div style="word-break: break-all; margin-top: 5px; font-family: monospace; color: #666;">
-                ${upiDeepLink}
-            </div>
-        </div>
-    </div>
-    
-    <script>
-        // Function to open UPI app with fallback
-        function openUPIApp(appName, primaryUrl, fallbackUrl) {
-            console.log('Opening UPI app:', appName);
-            
-            // Try to open the primary URL
-            try {
-                // For Android devices, try intent URL first if available
-                if (primaryUrl && primaryUrl.startsWith('intent://')) {
-                    window.location.href = primaryUrl;
-                    return;
-                }
-                
-                // For other URLs, try direct navigation
-                if (primaryUrl) {
-                    window.location.href = primaryUrl;
-                    
-                    // Fallback after 2 seconds if app doesn't open
-                    setTimeout(function() {
-                        if (fallbackUrl && fallbackUrl !== primaryUrl) {
-                            console.log('Trying fallback URL for', appName);
-                            window.location.href = fallbackUrl;
-                        } else {
-                            // Try generic UPI intent
-                            window.location.href = '${upiApps.generic}';
-                        }
-                    }, 2000);
-                    return;
-                }
-            } catch (e) {
-                console.error('Error opening UPI app:', e);
-            }
-            
-            // Final fallback to generic UPI intent
-            if (fallbackUrl) {
-                window.location.href = fallbackUrl;
-            } else {
-                window.location.href = '${upiApps.generic}';
-            }
-        }
-        
-        // Auto-detect mobile and show appropriate message
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        if (!isMobile) {
-            console.log('Desktop detected - UPI apps may not open directly');
-        }
-    </script>
-</body>
-</html>`;
-
-            return res.send(html);
-            } else {
-                // S2S failed but we still show custom checkout with form-based payment
-                // Show UPI app selection that will submit form to PayU
-                const amount = transaction.amount.toFixed(2);
-                const merchantName = transaction.merchantName;
-                
-                // Build form parameters
-                const amountFormatted = transaction.amount.toFixed(2);
-                const productInfo = (transaction.description || `Payment for ${merchantName}`).trim().substring(0, 100);
-                const firstName = (transaction.customerName.split(' ')[0] || transaction.customerName).trim().substring(0, 60);
-                const email = transaction.customerEmail.trim();
-                
-                const payuParams = {
-                    key: PAYU_KEY.trim(),
-                    txnid: transaction.payuOrderId || transaction.orderId,
-                    amount: amountFormatted,
-                    productinfo: productInfo,
-                    firstname: firstName,
-                    email: email,
-                    phone: transaction.customerPhone.trim(),
-                    surl: (transaction.successUrl || transaction.callbackUrl || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`).trim(),
-                    furl: (transaction.failureUrl || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`).trim(),
-                    curl: `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/payu/callback?transaction_id=${transactionId}`.trim(),
-                    service_provider: 'payu_paisa',
-                    pg: 'UPI'
-                };
-                
-                const hashParams = {
-                    txnid: payuParams.txnid,
-                    amount: payuParams.amount,
-                    productinfo: payuParams.productinfo,
-                    firstname: payuParams.firstname,
-                    email: payuParams.email
-                };
-                
-                payuParams.hash = generatePayUHash(hashParams);
-                
-                // Build hidden form
-                const formInputs = Object.keys(payuParams).map(key => {
-                    const value = payuParams[key] || '';
-                    return `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}" id="form_${key}" />`;
-                }).join('\n        ');
-
-                // Show custom checkout with form submission option
-                const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pay with UPI</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 500px;
-            width: 100%;
-            padding: 40px 30px;
-            text-align: center;
-        }
-        .amount {
-            font-size: 48px;
-            font-weight: bold;
-            color: #667eea;
-            margin: 20px 0;
-        }
-        .merchant {
-            color: #666;
-            font-size: 16px;
-            margin-bottom: 30px;
-        }
-        .upi-apps {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-top: 30px;
-        }
-        .upi-btn {
-            background: #f8f9fa;
-            border: 2px solid #e9ecef;
-            border-radius: 12px;
-            padding: 20px;
-            text-decoration: none;
-            color: #333;
-            font-weight: 600;
-            font-size: 16px;
-            transition: all 0.3s;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-        }
-        .upi-btn:hover {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-        .upi-icon {
-            font-size: 32px;
-            margin-bottom: 5px;
-        }
-        .info {
-            background: #e7f3ff;
-            border-left: 4px solid #667eea;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            text-align: left;
-            font-size: 14px;
-            color: #555;
-        }
-        .intent-link {
-            background: #f0f0f0;
-            padding: 10px;
-            border-radius: 8px;
-            margin: 10px 0;
-            word-break: break-all;
-            font-size: 12px;
-            font-family: monospace;
-            color: #333;
-        }
-        @media (max-width: 480px) {
-            .upi-apps {
-                grid-template-columns: 1fr;
-            }
-            .amount {
-                font-size: 36px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1 style="color: #333; margin-bottom: 10px;">Pay with UPI</h1>
-        <div class="amount">₹${amount}</div>
-        <div class="merchant">${escapeHtml(merchantName)}</div>
-        <p style="color: #666; margin-bottom: 20px;">Choose your UPI app to pay</p>
-        
-        <form id="payuForm" method="POST" action="${PAYU_PAYMENT_URL}" style="display:none;">
-            ${formInputs}
-        </form>
-        
-        <div class="upi-apps">
-            <a href="phonepe://pay" class="upi-btn" onclick="submitForm('phonepe'); return false;">
-                <div class="upi-icon">📱</div>
-                <span>PhonePe</span>
-            </a>
-            <a href="tez://pay" class="upi-btn" onclick="submitForm('googlepay'); return false;">
-                <div class="upi-icon">💳</div>
-                <span>Google Pay</span>
-            </a>
-            <a href="paytmmp://pay" class="upi-btn" onclick="submitForm('paytm'); return false;">
-                <div class="upi-icon">💵</div>
-                <span>Paytm</span>
-            </a>
-            <a href="bhim://pay" class="upi-btn" onclick="submitForm('bhim'); return false;">
-                <div class="upi-icon">🏦</div>
-                <span>BHIM</span>
-            </a>
-            <a href="credpay://pay" class="upi-btn" onclick="submitForm('cred'); return false;">
-                <div class="upi-icon">💎</div>
-                <span>CRED</span>
-            </a>
-            <a href="#" class="upi-btn" onclick="submitForm('any'); return false;">
-                <div class="upi-icon">🔗</div>
-                <span>Any UPI App</span>
-            </a>
-        </div>
-        
-        <div class="info">
-            <strong>💡 How to pay:</strong><br>
-            1. Click on your preferred UPI app<br>
-            2. You'll be redirected to PayU payment page<br>
-            3. Complete the payment there
-        </div>
-        
-        <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; text-align: left;">
-            <strong>📋 Intent Link (for reference):</strong>
-            <div class="intent-link">Form will submit to: ${PAYU_PAYMENT_URL}</div>
-            <div class="intent-link">Transaction ID: ${transactionId}</div>
-            <div class="intent-link">Order ID: ${transaction.payuOrderId || transaction.orderId}</div>
-        </div>
-    </div>
-    
-    <script>
-        function submitForm(appName) {
-            console.log('Submitting form for app:', appName);
-            document.getElementById('payuForm').submit();
-        }
-    </script>
-</body>
-</html>`;
-
-                return res.send(html);
-            }
         } else {
-            // No intent data at all - use form-based payment
+            // Generate new PayU UPI Intent using Generate UPI Intent API - REQUIRED
             const amountFormatted = transaction.amount.toFixed(2);
-            const productInfo = (transaction.description || `Payment for ${transaction.merchantName}`).trim().substring(0, 100);
-            const firstName = (transaction.customerName.split(' ')[0] || transaction.customerName).trim().substring(0, 60);
-            const email = transaction.customerEmail.trim();
+            const expiryTime = 900; // 15 minutes in seconds
+            const refUrl = transaction.callbackUrl || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
             
-            const payuParams = {
-                key: PAYU_KEY.trim(),
-                txnid: transaction.payuOrderId || transaction.orderId,
-                amount: amountFormatted,
-                productinfo: productInfo,
-                firstname: firstName,
-                email: email,
-                phone: transaction.customerPhone.trim(),
-                surl: (transaction.successUrl || transaction.callbackUrl || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`).trim(),
-                furl: (transaction.failureUrl || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`).trim(),
-                curl: `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/payu/callback?transaction_id=${transactionId}`.trim(),
-                service_provider: 'payu_paisa',
-                pg: 'UPI'
-            };
+            console.log('🔄 Generating new PayU UPI Intent for transaction:', transactionId);
+            console.log('   This is REQUIRED - no fallback available');
             
-            const hashParams = {
-                txnid: payuParams.txnid,
-                amount: payuParams.amount,
-                productinfo: payuParams.productinfo,
-                firstname: payuParams.firstname,
-                email: payuParams.email
-            };
+            // This will throw an error if Intent API fails - NO FALLBACK
+            intentData = await generatePayUUPIIntent(
+                transaction.payuOrderId || transaction.orderId,
+                amountFormatted,
+                expiryTime,
+                refUrl,
+                '01' // category
+            );
             
-            payuParams.hash = generatePayUHash(hashParams);
-            
-            const formInputs = Object.keys(payuParams).map(key => {
-                const value = payuParams[key] || '';
-                return `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}" />`;
-            }).join('\n        ');
-
-            const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redirecting to PayU...</title>
-</head>
-<body>
-    <form id="payuForm" method="POST" action="${PAYU_PAYMENT_URL}">
-        ${formInputs}
-    </form>
-    <script>
-        (function() {
-            var form = document.getElementById('payuForm');
-            if (form) {
-                form.submit();
+            if (!intentData || !intentData.intentUri) {
+                throw new Error('PayU Intent API returned invalid response: missing intentUri');
             }
-        })();
-    </script>
-    <noscript>
-        <meta http-equiv="refresh" content="0">
-        <p>Please enable JavaScript to continue.</p>
-    </noscript>
-</body>
-</html>`;
-
-            return res.send(html);
+            
+            console.log('✅ PayU UPI Intent generated successfully');
+            console.log('   Intent URI:', intentData.intentUri);
+            console.log('   Intent URL:', intentData.intentUrl);
+            
+            // Update transaction with new intent data
+            transaction.payuIntentData = {
+                intentId: intentData.intentId,
+                intentUri: intentData.intentUri,
+                intentUrl: intentData.intentUrl,
+                intentUrlWithQR: intentData.intentUrlWithQR,
+                transactionId: intentData.transactionId,
+                expiryTime: intentData.expiryTime,
+                referenceId: transaction.payuReferenceId,
+                intentApiAvailable: true
+            };
+            await transaction.save();
         }
+
+        // Use PayU Intent API data (REQUIRED - no fallback)
+        if (!intentData || !intentData.intentUri) {
+            throw new Error('PayU UPI Intent data is required but not available');
+        }
+        
+        // Parse intentUri to extract UPI parameters
+        // Use the intentUri directly from PayU API response
+        // Format: upi://pay?pa=payumoney@hdfcbank&pn=PayUMoney&tr=0fd9829f68&am=190.00&cu=INR&mc=5411&tn=Payment%20to%20Merchant
+        const intentUri = intentData.intentUri;
+        
+        // Extract query string from intentUri for building app-specific deep links
+        const queryString = intentUri.split('?')[1] || '';
+        
+        // Build UPI deep links for different apps using the query string from PayU intentUri
+        // Reference: https://docs.payu.in/v2/reference/v2-generate-upi-intent-api
+        const upiApps = {
+            // Generic UPI - use PayU's intentUri directly
+            generic: intentUri,
+            // PhonePe deep link
+            phonepe: `phonepe://pay?${queryString}`,
+            // Google Pay deep link (tez://)
+            googlepay: `tez://pay?${queryString}`,
+            // Paytm deep link
+            paytm: `paytmmp://pay?${queryString}`,
+            // BHIM UPI deep link
+            bhim: `bhim://pay?${queryString}`,
+            // CRED deep link
+            cred: `credpay://pay?${queryString}`,
+            // Amazon Pay deep link
+            amazonpay: `amazonpay://pay?${queryString}`
+        };
+        
+        // Android Intent URL for Google Pay (for better Android support)
+        // Format: intent://pay?{query}#Intent;package=com.google.android.apps.nbu.paisa.user;scheme=upi;end
+        const gpayIntent = `intent://pay?${queryString}#Intent;package=com.google.android.apps.nbu.paisa.user;scheme=upi;end`;
+        
+        // Calculate countdown timer from PayU response (expiryTime in seconds)
+        const countdownSeconds = intentData.expiryTime || 900;
+        
+        console.log('✅ Using PayU Intent API data:');
+        console.log('   Intent URI:', intentUri);
+        console.log('   Intent URL:', intentData.intentUrl);
+        console.log('   UPI Apps:', Object.keys(upiApps));
+        console.log('   Countdown:', countdownSeconds, 'seconds');
+        
+        // Generate checkout page using template with PayU Intent API data (REQUIRED)
+        const html = generatePayUCheckoutHTML(transaction, intentData, upiApps, gpayIntent, countdownSeconds);
+        
+        return res.send(html);
 
     } catch (error) {
         console.error('❌ PayU Checkout Page Error:', error);
