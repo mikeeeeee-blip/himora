@@ -18,6 +18,7 @@ export default function SuperadminLayout() {
           <Stack.Screen name="dashboard" />
           <Stack.Screen name="transactions" />
           <Stack.Screen name="payouts" />
+          <Stack.Screen name="payout-detail" />
           <Stack.Screen name="merchants" />
           <Stack.Screen name="settings" />
         </Stack>

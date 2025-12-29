@@ -291,22 +291,6 @@ export default function SuperadminDashboard() {
   };
 
   const formatCurrency = (amount: number) => {
-    const num = parseFloat(String(amount || 0));
-    // For very large numbers, use compact notation
-    if (num >= 10000000) {
-      return `₹${(num / 10000000).toFixed(2)}Cr`;
-    } else if (num >= 100000) {
-      return `₹${(num / 100000).toFixed(2)}L`;
-    } else if (num >= 1000) {
-      return `₹${(num / 1000).toFixed(2)}K`;
-    }
-    return `₹${num.toLocaleString('en-IN', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  };
-
-  const formatCurrencyFull = (amount: number) => {
     return `₹${parseFloat(String(amount || 0)).toLocaleString('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -314,14 +298,7 @@ export default function SuperadminDashboard() {
   };
 
   const formatNumber = (num: number) => {
-    const number = parseFloat(String(num || 0));
-    // For very large numbers, use compact notation
-    if (number >= 1000000) {
-      return `${(number / 1000000).toFixed(1)}M`;
-    } else if (number >= 1000) {
-      return `${(number / 1000).toFixed(1)}K`;
-    }
-    return number.toLocaleString('en-IN');
+    return parseFloat(String(num || 0)).toLocaleString('en-IN');
   };
 
   const formatDateDisplay = (dateString: string) => {
@@ -514,10 +491,10 @@ export default function SuperadminDashboard() {
 
           {/* Loading State */}
           {(!authChecked || loading) && !stats ? (
-          <View style={styles.loadingContainer}>
+            <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={Colors.accent} />
               <Text style={styles.loadingText}>Loading dashboard...</Text>
-          </View>
+            </View>
           ) : stats ? (
             <>
               {/* Platform Overview - Total Payin and Total Payout */}
@@ -525,43 +502,33 @@ export default function SuperadminDashboard() {
                 <Text style={styles.sectionTitle}>Platform Overview</Text>
                 <View style={styles.platformOverviewGrid}>
                   <View style={[styles.platformCard, styles.payinCard]}>
-                    <View style={styles.platformCardContent}>
+                    <View style={styles.platformCardHeader}>
                       <View style={[styles.platformIcon, styles.payinIcon]}>
-                        <Ionicons name="arrow-up" size={28} color={Colors.success} />
+                        <Ionicons name="arrow-up" size={24} color={Colors.success} />
                       </View>
-                      <View style={styles.platformCardText}>
+                      <View style={styles.platformCardContent}>
                         <Text style={styles.platformCardTitle}>Total Payin</Text>
-                        <Text 
-                          style={styles.platformCardValue}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit={true}
-                          minimumFontScale={0.7}
-                        >
-                          {formatCurrencyFull(stats.revenue?.total || 0)}
+                        <Text style={styles.platformCardValue}>
+                          {formatCurrency(stats.revenue?.total || 0)}
                         </Text>
-                        <Text style={styles.platformCardSubtext} numberOfLines={1}>
+                        <Text style={styles.platformCardSubtext}>
                           {formatNumber(stats.transactions?.paid || 0)} paid transactions
                         </Text>
                       </View>
                     </View>
-              </View>
+                  </View>
 
                   <View style={[styles.platformCard, styles.platformPayoutCard]}>
-                    <View style={styles.platformCardContent}>
+                    <View style={styles.platformCardHeader}>
                       <View style={[styles.platformIcon, styles.payoutIcon]}>
-                        <Ionicons name="arrow-down" size={28} color={Colors.info} />
+                        <Ionicons name="arrow-down" size={24} color={Colors.info} />
                       </View>
-                      <View style={styles.platformCardText}>
+                      <View style={styles.platformCardContent}>
                         <Text style={styles.platformCardTitle}>Total Payout</Text>
-                        <Text 
-                          style={styles.platformCardValue}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit={true}
-                          minimumFontScale={0.7}
-                        >
-                          {formatCurrencyFull(stats.payouts?.total_completed || 0)}
+                        <Text style={styles.platformCardValue}>
+                          {formatCurrency(stats.payouts?.total_completed || 0)}
                         </Text>
-                        <Text style={styles.platformCardSubtext} numberOfLines={1}>
+                        <Text style={styles.platformCardSubtext}>
                           {formatNumber(stats.payouts?.completed || 0)} completed payouts
                         </Text>
                       </View>
@@ -580,7 +547,7 @@ export default function SuperadminDashboard() {
                       <View style={styles.leaderboardHeader}>
                         <Ionicons name="arrow-up" size={16} color={Colors.success} />
                         <Text style={styles.leaderboardTitle}>Top Payin Merchants</Text>
-              </View>
+                      </View>
                       <Text style={styles.leaderboardSubtitle}>Ranked by total revenue</Text>
                       {loadingMerchants ? (
                         <ActivityIndicator size="small" color={Colors.accent} style={styles.leaderboardLoading} />
@@ -600,28 +567,19 @@ export default function SuperadminDashboard() {
                                 <View style={styles.leaderboardItemLeft}>
                                   <View style={[styles.leaderboardRank, styles.payinRank]}>
                                     <Text style={styles.leaderboardRankText}>{index + 1}</Text>
-              </View>
+                                  </View>
                                   <View style={styles.leaderboardItemInfo}>
-                                    <Text 
-                                      style={styles.leaderboardItemName} 
-                                      numberOfLines={1}
-                                      ellipsizeMode="tail"
-                                    >
+                                    <Text style={styles.leaderboardItemName} numberOfLines={1}>
                                       {info.business_name || info.name || 'Unknown'}
                                     </Text>
-                                    <Text style={styles.leaderboardItemSubtext} numberOfLines={1}>
+                                    <Text style={styles.leaderboardItemSubtext}>
                                       {txn.total_transactions || 0} transactions
                                     </Text>
                                   </View>
                                 </View>
                                 <View style={styles.leaderboardItemRight}>
-                                  <Text 
-                                    style={styles.leaderboardItemValue}
-                                    numberOfLines={1}
-                                    adjustsFontSizeToFit={true}
-                                    minimumFontScale={0.7}
-                                  >
-                                    {formatCurrencyFull(rev.total_revenue || 0)}
+                                  <Text style={styles.leaderboardItemValue}>
+                                    {formatCurrency(rev.total_revenue || 0)}
                                   </Text>
                                   <Text style={styles.leaderboardItemSubtext}>
                                     {txn.by_status?.paid || 0} paid
@@ -632,7 +590,7 @@ export default function SuperadminDashboard() {
                           })}
                         </View>
                       )}
-            </View>
+                    </View>
 
                     {/* Top Payout Merchants */}
                     <View style={styles.leaderboardCard}>
@@ -650,7 +608,7 @@ export default function SuperadminDashboard() {
                             const payout = m.payout_summary || {};
                             
                             return (
-              <TouchableOpacity
+                              <TouchableOpacity
                                 key={m.merchant_id}
                                 style={styles.leaderboardItem}
                                 onPress={() => router.push(`/(superadmin)/merchants`)}
@@ -660,26 +618,17 @@ export default function SuperadminDashboard() {
                                     <Text style={styles.leaderboardRankText}>{index + 1}</Text>
                                   </View>
                                   <View style={styles.leaderboardItemInfo}>
-                                    <Text 
-                                      style={styles.leaderboardItemName} 
-                                      numberOfLines={1}
-                                      ellipsizeMode="tail"
-                                    >
+                                    <Text style={styles.leaderboardItemName} numberOfLines={1}>
                                       {info.business_name || info.name || 'Unknown'}
                                     </Text>
-                                    <Text style={styles.leaderboardItemSubtext} numberOfLines={1}>
+                                    <Text style={styles.leaderboardItemSubtext}>
                                       {payout.total_payouts || 0} payout requests
                                     </Text>
                                   </View>
                                 </View>
                                 <View style={styles.leaderboardItemRight}>
-                                  <Text 
-                                    style={styles.leaderboardItemValue}
-                                    numberOfLines={1}
-                                    adjustsFontSizeToFit={true}
-                                    minimumFontScale={0.7}
-                                  >
-                                    {formatCurrencyFull(payout.total_completed || 0)}
+                                  <Text style={styles.leaderboardItemValue}>
+                                    {formatCurrency(payout.total_completed || 0)}
                                   </Text>
                                   <Text style={styles.leaderboardItemSubtext}>
                                     {payout.completed_count || 0} completed
@@ -699,13 +648,8 @@ export default function SuperadminDashboard() {
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Revenue</Text>
-                  <Text 
-                    style={styles.sectionValue}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit={true}
-                    minimumFontScale={0.7}
-                  >
-                    {formatCurrencyFull(stats.revenue?.total || 0)}
+                  <Text style={styles.sectionValue}>
+                    {formatCurrency(stats.revenue?.total || 0)}
                   </Text>
                 </View>
                 <View style={styles.revenueGrid}>
@@ -714,13 +658,8 @@ export default function SuperadminDashboard() {
                       <Ionicons name="cash-outline" size={20} color={Colors.textLight} />
                       <View style={styles.revenueCardText}>
                         <Text style={styles.revenueCardTitle}>Total Revenue</Text>
-                        <Text 
-                          style={styles.revenueCardValue}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit={true}
-                          minimumFontScale={0.7}
-                        >
-                          {formatCurrencyFull(stats.revenue?.total || 0)}
+                        <Text style={styles.revenueCardValue}>
+                          {formatCurrency(stats.revenue?.total || 0)}
                         </Text>
                         <Text style={styles.revenueCardSubtext}>
                           Avg: {formatCurrency(stats.revenue?.average_transaction || 0)} per txn
@@ -734,13 +673,8 @@ export default function SuperadminDashboard() {
                       <Ionicons name="trending-up" size={20} color={Colors.success} />
                       <View style={styles.revenueCardText}>
                         <Text style={styles.revenueCardTitle}>Commission (3.8%)</Text>
-                        <Text 
-                          style={styles.revenueCardValue}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit={true}
-                          minimumFontScale={0.7}
-                        >
-                          {formatCurrencyFull(stats.revenue?.commission_earned || 0)}
+                        <Text style={styles.revenueCardValue}>
+                          {formatCurrency(stats.revenue?.commission_earned || 0)}
                         </Text>
                       </View>
                     </View>
@@ -751,13 +685,8 @@ export default function SuperadminDashboard() {
                       <Ionicons name="card-outline" size={20} color={Colors.textLight} />
                       <View style={styles.revenueCardText}>
                         <Text style={styles.revenueCardTitle}>Net Revenue</Text>
-                        <Text 
-                          style={styles.revenueCardValue}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit={true}
-                          minimumFontScale={0.7}
-                        >
-                          {formatCurrencyFull(stats.revenue?.net_revenue || 0)}
+                        <Text style={styles.revenueCardValue}>
+                          {formatCurrency(stats.revenue?.net_revenue || 0)}
                         </Text>
                       </View>
                     </View>
@@ -769,13 +698,8 @@ export default function SuperadminDashboard() {
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Commission Breakdown</Text>
-                  <Text 
-                    style={styles.sectionValue}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit={true}
-                    minimumFontScale={0.7}
-                  >
-                    Today: {formatCurrencyFull(stats.commission?.today_total || 0)}
+                  <Text style={styles.sectionValue}>
+                    Today: {formatCurrency(stats.commission?.today_total || 0)}
                   </Text>
                 </View>
                 
@@ -788,13 +712,8 @@ export default function SuperadminDashboard() {
                       </View>
                       <View style={styles.commissionCardContent}>
                         <Text style={styles.commissionCardTitle}>Today's Payin Commission</Text>
-                        <Text 
-                          style={styles.commissionCardValue}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit={true}
-                          minimumFontScale={0.7}
-                        >
-                          {formatCurrencyFull(stats.commission?.today_payin || 0)}
+                        <Text style={styles.commissionCardValue}>
+                          {formatCurrency(stats.commission?.today_payin || 0)}
                         </Text>
                         <Text style={styles.commissionCardSubtext}>From paid transactions</Text>
                       </View>
@@ -808,13 +727,8 @@ export default function SuperadminDashboard() {
                       </View>
                       <View style={styles.commissionCardContent}>
                         <Text style={styles.commissionCardTitle}>Today's Payout Commission</Text>
-                        <Text 
-                          style={styles.commissionCardValue}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit={true}
-                          minimumFontScale={0.7}
-                        >
-                          {formatCurrencyFull(stats.commission?.today_payout || 0)}
+                        <Text style={styles.commissionCardValue}>
+                          {formatCurrency(stats.commission?.today_payout || 0)}
                         </Text>
                         <Text style={styles.commissionCardSubtext}>From payout requests</Text>
                       </View>
@@ -828,13 +742,8 @@ export default function SuperadminDashboard() {
                       </View>
                       <View style={styles.commissionCardContent}>
                         <Text style={styles.commissionCardTitle}>Today's Total Commission</Text>
-                        <Text 
-                          style={styles.commissionCardValue}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit={true}
-                          minimumFontScale={0.7}
-                        >
-                          {formatCurrencyFull(stats.commission?.today_total || 0)}
+                        <Text style={styles.commissionCardValue}>
+                          {formatCurrency(stats.commission?.today_total || 0)}
                         </Text>
                         <Text style={styles.commissionCardSubtext}>Payin + Payout</Text>
                       </View>
@@ -851,13 +760,8 @@ export default function SuperadminDashboard() {
                       </View>
                       <View style={styles.commissionCardContent}>
                         <Text style={styles.commissionCardTitle}>Total Commission (All Time)</Text>
-                        <Text 
-                          style={styles.commissionCardValue}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit={true}
-                          minimumFontScale={0.7}
-                        >
-                          {formatCurrencyFull(stats.commission?.total_all || 0)}
+                        <Text style={styles.commissionCardValue}>
+                          {formatCurrency(stats.commission?.total_all || 0)}
                         </Text>
                         <Text style={styles.commissionCardSubtext}>Payin + Payout fees (unfiltered)</Text>
                       </View>
@@ -871,13 +775,8 @@ export default function SuperadminDashboard() {
                       </View>
                       <View style={styles.commissionCardContent}>
                         <Text style={styles.commissionCardTitle}>Total Payin Commission</Text>
-                        <Text 
-                          style={styles.commissionCardValue}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit={true}
-                          minimumFontScale={0.7}
-                        >
-                          {formatCurrencyFull(stats.commission?.total_payin || 0)}
+                        <Text style={styles.commissionCardValue}>
+                          {formatCurrency(stats.commission?.total_payin || 0)}
                         </Text>
                         <Text style={styles.commissionCardSubtext}>3.8% of all paid transactions</Text>
                       </View>
@@ -891,13 +790,8 @@ export default function SuperadminDashboard() {
                       </View>
                       <View style={styles.commissionCardContent}>
                         <Text style={styles.commissionCardTitle}>Total Payout Commission</Text>
-                        <Text 
-                          style={styles.commissionCardValue}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit={true}
-                          minimumFontScale={0.7}
-                        >
-                          {formatCurrencyFull(stats.commission?.total_payout || 0)}
+                        <Text style={styles.commissionCardValue}>
+                          {formatCurrency(stats.commission?.total_payout || 0)}
                         </Text>
                         <Text style={styles.commissionCardSubtext}>From all payout requests</Text>
                       </View>
@@ -917,24 +811,19 @@ export default function SuperadminDashboard() {
                 <View style={styles.transactionsGrid}>
                   <TouchableOpacity
                     style={styles.transactionCard}
-                onPress={() => router.push('/(superadmin)/transactions')}
-              >
+                    onPress={() => router.push('/(superadmin)/transactions')}
+                  >
                     <Ionicons name="receipt-outline" size={20} color={Colors.textLight} />
                     <View style={styles.transactionCardContent}>
                       <Text style={styles.transactionCardTitle}>Total Transactions</Text>
-                      <Text 
-                        style={styles.transactionCardValue}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit={true}
-                        minimumFontScale={0.7}
-                      >
+                      <Text style={styles.transactionCardValue}>
                         {formatNumber(stats.transactions?.total || 0)}
                       </Text>
                       <Text style={styles.transactionCardSubtext}>
                         Success Rate: {stats.transactions?.success_rate || 0}%
                       </Text>
                     </View>
-              </TouchableOpacity>
+                  </TouchableOpacity>
 
                   <View style={styles.transactionCard}>
                     <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
@@ -989,18 +878,18 @@ export default function SuperadminDashboard() {
               </View>
 
               {/* Payouts Section */}
-              {/* <View style={styles.section}>
+              <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Payouts</Text>
-                  <Text style={styles.sectionBadge}> */}
-                    {/* {formatNumber(stats.payouts?.total_requests || 0)} Requests
-                  </Text> */}
-                {/* </View> */}
-                {/* <View style={styles.payoutsGrid}>
-              <TouchableOpacity
+                  <Text style={styles.sectionBadge}>
+                    {formatNumber(stats.payouts?.total_requests || 0)} Requests
+                  </Text>
+                </View>
+                <View style={styles.payoutsGrid}>
+                  <TouchableOpacity
                     style={styles.payoutCard}
-                onPress={() => router.push('/(superadmin)/payouts')}
-              >
+                    onPress={() => router.push('/(superadmin)/payouts')}
+                  >
                     <Ionicons name="cash-outline" size={20} color={Colors.textLight} />
                     <View style={styles.payoutCardContent}>
                       <Text style={styles.payoutCardTitle}>Total Requests</Text>
@@ -1011,7 +900,7 @@ export default function SuperadminDashboard() {
                         {formatCurrency(stats.payouts?.total_amount_requested || 0)}
                       </Text>
                     </View>
-              </TouchableOpacity>
+                  </TouchableOpacity>
 
                   <View style={[styles.payoutCard, notificationCount > 0 && styles.payoutCardHighlight]}>
                     <Ionicons name="alert-circle" size={20} color={Colors.warning} />
@@ -1055,17 +944,12 @@ export default function SuperadminDashboard() {
                     <Ionicons name="cash-outline" size={20} color={Colors.textLight} />
                     <View style={styles.payoutCardContent}>
                       <Text style={styles.payoutCardTitle}>Commission Earned</Text>
-                      <Text 
-                        style={styles.payoutCardValue}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit={true}
-                        minimumFontScale={0.7}
-                      >
-                        {formatCurrencyFull(stats.payouts?.commission_earned || 0)}
+                      <Text style={styles.payoutCardValue}>
+                        {formatCurrency(stats.payouts?.commission_earned || 0)}
                       </Text>
                     </View>
                   </View>
-                </View> */}
+                </View>
 
                 {/* Today's Requests */}
                 <View style={styles.todayRequestsCard}>
@@ -1074,7 +958,7 @@ export default function SuperadminDashboard() {
                     {formatNumber(stats.payouts?.today || 0)}
                   </Text>
                 </View>
-              {/* </View> */}
+              </View>
             </>
           ) : null}
         </View>
@@ -1123,7 +1007,7 @@ export default function SuperadminDashboard() {
               </View>
 
               <View style={styles.modalActions}>
-              <TouchableOpacity
+                <TouchableOpacity
                   onPress={handleDateRangeApply}
                   disabled={!dateRange.start || !dateRange.end}
                   style={[styles.modalButton, styles.modalButtonPrimary, (!dateRange.start || !dateRange.end) && styles.modalButtonDisabled]}
@@ -1138,8 +1022,8 @@ export default function SuperadminDashboard() {
                   style={[styles.modalButton, styles.modalButtonSecondary]}
                 >
                   <Text style={styles.modalButtonText}>Clear</Text>
-              </TouchableOpacity>
-            </View>
+                </TouchableOpacity>
+              </View>
 
               <TouchableOpacity
                 onPress={() => {
@@ -1196,22 +1080,17 @@ const styles = StyleSheet.create({
   mainCard: {
     backgroundColor: Colors.bgSecondary,
     borderRadius: 12,
-    padding: 18,
+    padding: 16,
     marginHorizontal: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
   },
   headerSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   headerTitle: {
     fontSize: 24,
@@ -1300,14 +1179,14 @@ const styles = StyleSheet.create({
     color: Colors.textSubtleLight,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 32,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingBottom: 8,
+    marginBottom: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
@@ -1317,11 +1196,9 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
   },
   sectionValue: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     color: Colors.success,
-    flexShrink: 1,
-    maxWidth: 150,
   },
   sectionBadge: {
     fontSize: 12,
@@ -1333,103 +1210,90 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   subsectionTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
     color: Colors.textSubtleLight,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   // Platform Overview Styles
   platformOverviewGrid: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 6,
-    alignItems: 'stretch',
+    gap: 12,
   },
   platformCard: {
     flex: 1,
     borderRadius: 12,
-    padding: 14,
+    padding: 16,
     borderWidth: 1,
     borderColor: Colors.border,
-    minHeight: 130,
-    maxHeight: 150,
   },
   payinCard: {
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
-    borderLeftWidth: 5,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderLeftWidth: 4,
     borderLeftColor: Colors.success,
   },
   platformPayoutCard: {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    borderLeftWidth: 5,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderLeftWidth: 4,
     borderLeftColor: Colors.info,
+  },
+  platformCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  platformIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  payinIcon: {
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+  },
+  payoutIcon: {
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
   },
   platformCardContent: {
     flex: 1,
-    justifyContent: 'flex-start',
-    minHeight: 0,
-  },
-  platformCardText: {
-    marginTop: 8,
-    flex: 1,
-    minWidth: 0, // Important for text wrapping
-  },
-  platformIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  payinIcon: {
-    backgroundColor: 'rgba(34, 197, 94, 0.25)',
-  },
-  payoutIcon: {
-    backgroundColor: 'rgba(59, 130, 246, 0.25)',
   },
   platformCardTitle: {
     fontSize: 12,
-    fontWeight: '600',
     color: Colors.textSubtleLight,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    marginBottom: 4,
   },
   platformCardValue: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: Colors.textLight,
     marginBottom: 4,
-    lineHeight: 24,
   },
   platformCardSubtext: {
     fontSize: 10,
     color: Colors.textSubtleLight,
-    lineHeight: 14,
   },
   // Leaderboard Styles
   leaderboardGrid: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
     flexWrap: 'wrap',
   },
   leaderboardCard: {
     flex: 1,
     minWidth: '48%',
     backgroundColor: Colors.bgTertiary,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.border,
     overflow: 'hidden',
-    maxHeight: 320,
   },
   leaderboardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: Colors.bgSecondary,
-    padding: 10,
+    padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
@@ -1448,24 +1312,21 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   leaderboardList: {
-    paddingVertical: 2,
-    maxHeight: 280,
+    paddingVertical: 4,
   },
   leaderboardItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 10,
+    padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.05)',
-    minHeight: 55,
   },
   leaderboardItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
     gap: 12,
-    minWidth: 0, // Important for text truncation
   },
   leaderboardRank: {
     width: 32,
@@ -1487,14 +1348,12 @@ const styles = StyleSheet.create({
   },
   leaderboardItemInfo: {
     flex: 1,
-    minWidth: 0, // Important for text truncation
   },
   leaderboardItemName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
     color: Colors.textLight,
     marginBottom: 2,
-    flexShrink: 1,
   },
   leaderboardItemSubtext: {
     fontSize: 10,
@@ -1502,32 +1361,27 @@ const styles = StyleSheet.create({
   },
   leaderboardItemRight: {
     alignItems: 'flex-end',
-    flexShrink: 0,
-    marginLeft: 8,
   },
   leaderboardItemValue: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.success,
     marginBottom: 2,
-    textAlign: 'right',
-    maxWidth: 110,
   },
   // Revenue Styles
   revenueGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 12,
   },
   revenueCard: {
     flex: 1,
     minWidth: '48%',
     backgroundColor: Colors.bgTertiary,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    minHeight: 75,
   },
   revenueCardLarge: {
     minWidth: '100%',
@@ -1539,7 +1393,6 @@ const styles = StyleSheet.create({
   },
   revenueCardText: {
     flex: 1,
-    minWidth: 0, // Important for text wrapping
   },
   revenueCardTitle: {
     fontSize: 10,
@@ -1547,7 +1400,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   revenueCardValue: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '600',
     color: Colors.textLight,
   },
@@ -1560,17 +1413,16 @@ const styles = StyleSheet.create({
   commissionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
+    gap: 12,
+    marginBottom: 12,
   },
   commissionCard: {
     flex: 1,
     minWidth: '48%',
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     borderWidth: 1,
     borderColor: Colors.border,
-    minHeight: 85,
   },
   commissionCardPayin: {
     backgroundColor: 'rgba(34, 197, 94, 0.1)',
@@ -1611,7 +1463,6 @@ const styles = StyleSheet.create({
   },
   commissionCardContent: {
     flex: 1,
-    minWidth: 0, // Important for text wrapping
   },
   commissionCardTitle: {
     fontSize: 10,
@@ -1619,7 +1470,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   commissionCardValue: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '600',
     color: Colors.textLight,
   },
@@ -1631,14 +1482,14 @@ const styles = StyleSheet.create({
   commissionAllTimeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 12,
   },
   commissionAllTimeCard: {
     flex: 1,
     minWidth: '48%',
     backgroundColor: Colors.bgTertiary,
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     borderLeftWidth: 4,
     borderLeftColor: '#a855f7',
     borderWidth: 1,
@@ -1651,32 +1502,30 @@ const styles = StyleSheet.create({
   transactionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
+    gap: 12,
+    marginBottom: 16,
   },
   transactionCard: {
     flex: 1,
     minWidth: '48%',
     backgroundColor: Colors.bgTertiary,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    minHeight: 85,
-    marginBottom: 0,
+    minHeight: 100,
+    marginBottom: 4,
   },
   transactionCardContent: {
-    marginTop: 6,
-    flex: 1,
-    minWidth: 0, // Important for text wrapping
+    marginTop: 8,
   },
   transactionCardTitle: {
-    fontSize: 9,
+    fontSize: 10,
     color: Colors.textSubtleLight,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   transactionCardValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: Colors.textLight,
   },
@@ -1689,36 +1538,34 @@ const styles = StyleSheet.create({
   payoutsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
+    gap: 12,
+    marginBottom: 16,
   },
   payoutCard: {
     flex: 1,
     minWidth: '48%',
     backgroundColor: Colors.bgTertiary,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    minHeight: 85,
-    marginBottom: 0,
+    minHeight: 100,
+    marginBottom: 4,
   },
   payoutCardHighlight: {
     borderColor: Colors.warning,
     borderWidth: 2,
   },
   payoutCardContent: {
-    marginTop: 6,
-    flex: 1,
-    minWidth: 0, // Important for text wrapping
+    marginTop: 8,
   },
   payoutCardTitle: {
-    fontSize: 9,
+    fontSize: 10,
     color: Colors.textSubtleLight,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   payoutCardValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: Colors.textLight,
   },
@@ -1745,22 +1592,22 @@ const styles = StyleSheet.create({
   },
   todayRequestsCard: {
     backgroundColor: Colors.bgTertiary,
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     borderLeftWidth: 4,
     borderLeftColor: Colors.accent,
     borderWidth: 1,
     borderColor: Colors.border,
-    marginTop: 8,
-    marginBottom: 0,
+    marginTop: 16,
+    marginBottom: 8,
   },
   todayRequestsTitle: {
-    fontSize: 9,
+    fontSize: 10,
     color: Colors.textSubtleLight,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   todayRequestsValue: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '600',
     color: Colors.textLight,
   },

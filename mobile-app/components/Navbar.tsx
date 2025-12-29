@@ -7,6 +7,7 @@ import {
   TextInput,
   Modal,
   ScrollView,
+  Image,
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +30,7 @@ export default function Navbar() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [businessName, setBusinessName] = useState('User');
+  const [navItems, setNavItems] = useState<NavItem[]>([]);
 
   React.useEffect(() => {
     const loadBusinessName = async () => {
@@ -42,6 +44,32 @@ export default function Navbar() {
     loadBusinessName();
   }, []);
 
+  React.useEffect(() => {
+    const loadNavItems = async () => {
+      const role = await authService.getRole();
+      
+      if (role === USER_ROLES.SUPERADMIN) {
+        setNavItems([
+          { path: '/(superadmin)/dashboard', label: 'Home', icon: 'home-outline' },
+          { path: '/(superadmin)/merchants', label: 'Merchants', icon: 'people-outline' },
+          { path: '/(superadmin)/payouts', label: 'Payouts', icon: 'arrow-down-outline' },
+          { path: '/(superadmin)/transactions', label: 'Transactions', icon: 'receipt-outline' },
+          { path: '/(superadmin)/settings', label: 'Settings', icon: 'settings-outline' },
+        ]);
+      } else {
+        setNavItems([
+          { path: '/(admin)/dashboard', label: 'Home', icon: 'home-outline' },
+          { path: '/(admin)/payments', label: 'Payin', icon: 'cash-outline' },
+          { path: '/(admin)/payouts', label: 'Payout', icon: 'arrow-down-outline' },
+          { path: '/(admin)/transactions', label: 'Transactions', icon: 'receipt-outline' },
+          { path: '/(admin)/api', label: 'API', icon: 'key-outline' },
+          { path: '/(admin)/webhooks', label: 'Webhooks', icon: 'link-outline' },
+        ]);
+      }
+    };
+    loadNavItems();
+  }, [pathname]);
+
   const isActive = (path: string) => {
     if (path === '/(admin)/dashboard' || path === '/(superadmin)/dashboard') {
       return pathname === path;
@@ -49,19 +77,6 @@ export default function Navbar() {
     return pathname.startsWith(path);
   };
 
-  const getNavItems = (): NavItem[] => {
-    // This will be determined by user role - for now return admin items
-    return [
-      { path: '/(admin)/dashboard', label: 'Home', icon: 'home-outline' },
-      { path: '/(admin)/payments', label: 'Payin', icon: 'cash-outline' },
-      { path: '/(admin)/payouts', label: 'Payout', icon: 'arrow-down-outline' },
-      { path: '/(admin)/transactions', label: 'Transactions', icon: 'receipt-outline' },
-      { path: '/(admin)/api', label: 'API', icon: 'key-outline' },
-      { path: '/(admin)/webhooks', label: 'Webhooks', icon: 'link-outline' },
-    ];
-  };
-
-  const navItems = getNavItems();
   const userInitials = businessName.substring(0, 2).toUpperCase();
 
   const handleLogout = async () => {
@@ -82,6 +97,11 @@ export default function Navbar() {
           </TouchableOpacity>
 
           <View style={styles.logoContainer}>
+            <Image
+              source={require('../assets/images/X.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <Text style={styles.logoText}>
               NineX<Text style={styles.logoAccent}>Group</Text>
             </Text>
@@ -237,6 +257,11 @@ const styles = StyleSheet.create({
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  logoImage: {
+    width: 32,
+    height: 32,
   },
   logoText: {
     fontSize: 18,

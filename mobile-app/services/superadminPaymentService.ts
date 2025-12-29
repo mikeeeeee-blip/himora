@@ -18,7 +18,7 @@ class SuperadminPaymentService {
     }
   }
 
-  async getDashboardStats() {
+  async getDashboardStats(params: any = {}) {
     try {
       const token = await authService.getToken();
       if (!token) {
@@ -28,6 +28,10 @@ class SuperadminPaymentService {
       const response = await apiClient.get(API_ENDPOINTS.DASHBOARD_STATS, {
         headers: {
           'x-auth-token': token,
+        },
+        params: {
+          startDate: params.startDate || undefined,
+          endDate: params.endDate || undefined,
         },
       });
 
@@ -52,6 +56,8 @@ class SuperadminPaymentService {
           merchantId: params.merchantId || undefined,
           status: params.status || undefined,
           includeInactive: params.includeInactive === true ? 'true' : undefined,
+          startDate: params.startDate || undefined,
+          endDate: params.endDate || undefined,
         },
       });
 
