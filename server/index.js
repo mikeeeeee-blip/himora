@@ -40,13 +40,31 @@ const checkMongoConnection = (req, res, next) => {
     next();
 };
 
-// Enable CORS - Allow all origins
+// Enable CORS - Allow all origins with full permissions
 app.use(cors({
     origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    credentials: false
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+    allowedHeaders: ['*'],
+    exposedHeaders: ['*'],
+    credentials: false,
+    preflightContinue: false,
+    optionsSuccessStatus: 204
 }));
+
+// Additional CORS headers middleware as backup (applies to all routes)
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
+    res.header('Access-Control-Allow-Headers', '*');
+    res.header('Access-Control-Expose-Headers', '*');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+    }
+    
+    next();
+});
 
 // Parse bodies
 app.use(express.urlencoded({ extended: true }));
