@@ -135,6 +135,20 @@ export default function SuperadminDashboard() {
         return;
       }
       
+      // ✅ Ensure device is registered for push notifications
+      try {
+        const userId = await authService.getUserId();
+        if (userId) {
+          const { setupPushNotificationsForSuperAdmin } = await import('@/services/pushNotificationService');
+          console.log('📱 Attempting to register device for push notifications...');
+          await setupPushNotificationsForSuperAdmin(userId);
+        } else {
+          console.warn('⚠️ No userId found, cannot register device');
+        }
+      } catch (error) {
+        console.error('❌ Error setting up push notifications on dashboard load:', error);
+      }
+      
       setAuthChecked(true);
       loadDashboardData();
       loadMerchantsData();
@@ -480,18 +494,44 @@ export default function SuperadminDashboard() {
               <Text style={styles.headerTitle}>Superadmin Dashboard</Text>
               <Text style={styles.headerSubtitle}>Complete overview of platform operations</Text>
             </View>
-            <TouchableOpacity
-              onPress={handleRefresh}
-              disabled={loading}
-              style={styles.refreshButton}
-            >
-              <Ionicons
-                name="refresh"
-                size={20}
-                color={Colors.textLight}
-                style={loading && styles.refreshSpinning}
-              />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                onPress={async () => {
+                  try {
+                    const userId = await authService.getUserId();
+                    if (!userId) {
+                      Alert.alert('Error', 'User ID not found');
+                      return;
+                    }
+                    Alert.alert('Registering Device', 'Please wait...');
+                    const { setupPushNotificationsForSuperAdmin } = await import('@/services/pushNotificationService');
+                    await setupPushNotificationsForSuperAdmin(userId);
+                    Alert.alert('Success', 'Device registration completed. Check console logs for details.');
+                  } catch (error: any) {
+                    Alert.alert('Error', error.message || 'Failed to register device');
+                  }
+                }}
+                style={[styles.refreshButton, { backgroundColor: Colors.accent }]}
+              >
+                <Ionicons
+                  name="notifications"
+                  size={18}
+                  color={Colors.textLight}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleRefresh}
+                disabled={loading}
+                style={styles.refreshButton}
+              >
+                <Ionicons
+                  name="refresh"
+                  size={20}
+                  color={Colors.textLight}
+                  style={loading && styles.refreshSpinning}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Date Filter Controls */}

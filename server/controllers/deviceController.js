@@ -9,8 +9,15 @@ exports.registerDevice = async (req, res) => {
   try {
     const { userId, pushToken, role, platform, deviceId, appVersion } = req.body;
 
+    console.log('📱 Device registration request received:');
+    console.log('   userId:', userId);
+    console.log('   role:', role);
+    console.log('   platform:', platform);
+    console.log('   pushToken:', pushToken ? `${pushToken.substring(0, 30)}...` : 'missing');
+
     // Validation
     if (!userId || !pushToken || !role) {
+      console.error('❌ Missing required fields:', { userId: !!userId, pushToken: !!pushToken, role: !!role });
       return res.status(400).json({
         success: false,
         error: 'userId, pushToken, and role are required'
@@ -18,6 +25,7 @@ exports.registerDevice = async (req, res) => {
     }
 
     if (!['admin', 'superAdmin'].includes(role)) {
+      console.error('❌ Invalid role:', role);
       return res.status(400).json({
         success: false,
         error: 'Invalid role. Must be admin or superAdmin'
@@ -27,13 +35,17 @@ exports.registerDevice = async (req, res) => {
     // Verify user exists and role matches
     const user = await User.findById(userId);
     if (!user) {
+      console.error('❌ User not found:', userId);
       return res.status(404).json({
         success: false,
         error: 'User not found'
       });
     }
 
+    console.log('   User found:', user.email, 'User role:', user.role);
+
     if (user.role !== role) {
+      console.error('❌ Role mismatch:', { userRole: user.role, providedRole: role });
       return res.status(403).json({
         success: false,
         error: 'User role does not match provided role'
@@ -42,6 +54,7 @@ exports.registerDevice = async (req, res) => {
 
     // Check if device with this token already exists
     let device = await Device.findOne({ pushToken });
+    console.log('   Existing device found:', !!device);
 
     if (device) {
       // Update existing device
@@ -54,7 +67,7 @@ exports.registerDevice = async (req, res) => {
       device.lastUsedAt = new Date();
       await device.save();
 
-      console.log(`✅ Device updated: ${pushToken.substring(0, 20)}... for user ${userId}`);
+      console.log(`✅ Device updated: ${pushToken.substring(0, 20)}... for user ${userId}, role: ${role}`);
     } else {
       // Create new device
       device = new Device({
@@ -69,8 +82,18 @@ exports.registerDevice = async (req, res) => {
       });
       await device.save();
 
-      console.log(`✅ Device registered: ${pushToken.substring(0, 20)}... for user ${userId}`);
+      console.log(`✅ Device registered: ${pushToken.substring(0, 20)}... for user ${userId}, role: ${role}`);
     }
+
+    // Verify device was saved correctly
+    const savedDevice = await Device.findById(device._id);
+    console.log('   Saved device details:', {
+      id: savedDevice._id,
+      userId: savedDevice.userId.toString(),
+      role: savedDevice.role,
+      platform: savedDevice.platform,
+      isActive: savedDevice.isActive
+    });
 
     return res.json({
       success: true,
@@ -85,6 +108,7 @@ exports.registerDevice = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Device registration error:', error);
+    console.error('   Error stack:', error.stack);
     return res.status(500).json({
       success: false,
       error: 'Failed to register device',
@@ -130,22 +154,38 @@ exports.getAllDevices = async (req, res) => {
   try {
     const { role, userId, isActive } = req.query;
     
+    console.log('📱 Fetching devices with query:', { role, userId, isActive });
+    
     const query = {};
     if (role) query.role = role;
     if (userId) query.userId = userId;
     if (isActive !== undefined) query.isActive = isActive === 'true';
+
+    console.log('   MongoDB query:', JSON.stringify(query));
+
+    // First, get all devices to see what's in the database
+    const allDevices = await Device.find({}).select('userId role isActive').limit(10);
+    console.log(`   Total devices in DB: ${allDevices.length}`);
+    allDevices.forEach((d, i) => {
+      console.log(`   Device ${i + 1}: userId=${d.userId}, role=${d.role}, isActive=${d.isActive}`);
+    });
 
     const devices = await Device.find(query)
       .select('userId role pushToken platform deviceId appVersion isActive createdAt lastUsedAt')
       .populate('userId', 'name email role')
       .sort({ createdAt: -1 });
 
+    console.log(`   Devices matching query: ${devices.length}`);
+
     return res.json({
       success: true,
       count: devices.length,
+      query: query,
       devices: devices.map(device => ({
         id: device._id,
-        userId: device.userId,
+        userId: device.userId?._id || device.userId,
+        userEmail: device.userId?.email || null,
+        userRole: device.userId?.role || null,
         role: device.role,
         platform: device.platform,
         deviceId: device.deviceId,

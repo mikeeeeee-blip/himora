@@ -43,6 +43,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
         });
       } catch (error) {
@@ -65,38 +67,55 @@ configureNotificationHandler().catch(() => {
  */
 export async function registerForPushNotifications(): Promise<string | null> {
   try {
+    console.log('📱 Checking notification availability...');
     const available = await ensureNotificationsAvailable();
     if (!available || !Notifications) {
       console.warn('⚠️ Push notifications not available in this environment');
+      console.warn('   This might be because you are using Expo Go or notifications are not supported');
       return null;
     }
 
+    console.log('📱 Requesting notification permissions...');
     // Request permissions
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
+    console.log('   Current permission status:', existingStatus);
 
     if (existingStatus !== 'granted') {
+      console.log('   Requesting permissions...');
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
+      console.log('   Permission request result:', status);
     }
 
     if (finalStatus !== 'granted') {
-      console.warn('⚠️ Push notification permission not granted');
+      console.warn('⚠️ Push notification permission not granted. Status:', finalStatus);
+      console.warn('   Please grant notification permissions in device settings');
       return null;
     }
 
+    console.log('📱 Getting Expo push token...');
     // Get Expo push token
     const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
+    console.log('   Project ID:', projectId || 'not found');
+    
     const tokenData = await Notifications.getExpoPushTokenAsync(
       projectId ? { projectId } : undefined
     );
 
     const pushToken = tokenData.data;
-    console.log('✅ Push token obtained:', pushToken.substring(0, 20) + '...');
+    console.log('✅ Push token obtained:', pushToken.substring(0, 30) + '...');
+    console.log('   Full token length:', pushToken.length);
 
     return pushToken;
-  } catch (error) {
-    console.warn('⚠️ Error registering for push notifications:', error);
+  } catch (error: any) {
+    console.error('❌ Error registering for push notifications:', error);
+    if (error.message) {
+      console.error('   Error message:', error.message);
+    }
+    if (error.stack) {
+      console.error('   Stack:', error.stack);
+    }
     return null;
   }
 }
@@ -118,6 +137,13 @@ export async function registerDeviceToken(
 
     const platform = Platform.OS === 'ios' ? 'ios' : 'android';
 
+    console.log(`📤 Registering device: userId=${userId}, role=${role}, platform=${platform}`);
+    console.log(`   Push token: ${pushToken.substring(0, 30)}...`);
+
+    console.log(`   API Endpoint: ${API_ENDPOINTS.DEVICE_REGISTER}`);
+    console.log(`   Auth token: ${token.substring(0, 20)}...`);
+    
+    // Note: apiClient interceptor already adds x-auth-token, but we can also add it explicitly
     const response = await apiClient.post(
       API_ENDPOINTS.DEVICE_REGISTER,
       {
@@ -127,22 +153,31 @@ export async function registerDeviceToken(
         platform,
         deviceId: Platform.OS === 'android' ? 'android' : 'ios',
         appVersion: '1.0.0', // You can get this from expo-constants if needed
-      },
-      {
-        headers: {
-          'x-auth-token': token,
-        },
       }
+      // Headers are added by apiClient interceptor
     );
+    
+    console.log('   Response status:', response.status);
+    console.log('   Response data:', JSON.stringify(response.data));
 
     if (response.data?.success) {
-      console.log('✅ Device registered successfully');
+      console.log('✅ Device registered successfully with backend');
+      console.log('   Device ID:', response.data?.device?.id);
       return true;
+    } else {
+      console.error('❌ Device registration failed:', response.data?.error || 'Unknown error');
+      return false;
     }
-
-    return false;
   } catch (error: any) {
     console.error('❌ Error registering device:', error);
+    if (error.response) {
+      console.error('   Response status:', error.response.status);
+      console.error('   Response data:', error.response.data);
+    } else if (error.request) {
+      console.error('   No response received:', error.request);
+    } else {
+      console.error('   Error message:', error.message);
+    }
     return false;
   }
 }
@@ -180,14 +215,20 @@ export async function unregisterDeviceToken(pushToken: string): Promise<boolean>
 export async function setupPushNotificationsForSuperAdmin(userId: string): Promise<void> {
   try {
     console.log('📱 Setting up push notifications for superadmin...');
+    console.log('   User ID:', userId);
 
     // Register for push notifications
     const pushToken = await registerForPushNotifications();
 
     if (!pushToken) {
-      console.warn('⚠️ Could not obtain push token');
+      console.warn('⚠️ Could not obtain push token. This might be because:');
+      console.warn('   1. Notification permissions not granted');
+      console.warn('   2. Running in Expo Go (not supported)');
+      console.warn('   3. Push notification service not available');
       return;
     }
+
+    console.log('✅ Push token obtained, registering with backend...');
 
     // Register device with backend
     const registered = await registerDeviceToken(userId, 'superAdmin', pushToken);
@@ -196,9 +237,17 @@ export async function setupPushNotificationsForSuperAdmin(userId: string): Promi
       console.log('✅ Push notifications setup complete');
     } else {
       console.warn('⚠️ Failed to register device with backend');
+      console.warn('   Please check:');
+      console.warn('   1. Backend API is accessible');
+      console.warn('   2. Authentication token is valid');
+      console.warn('   3. Backend logs for errors');
     }
   } catch (error) {
     console.error('❌ Error setting up push notifications:', error);
+    if (error instanceof Error) {
+      console.error('   Error message:', error.message);
+      console.error('   Stack:', error.stack);
+    }
   }
 }
 

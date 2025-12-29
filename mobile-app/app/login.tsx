@@ -94,16 +94,17 @@ export default function LoginScreen() {
 
       console.log('Login complete, redirecting to dashboard. Token available:', !!token);
 
-      // ✅ Setup push notifications for superadmin
+      // ✅ Setup push notifications for superadmin (wait for completion)
       if (role === USER_ROLES.SUPERADMIN && userId) {
         try {
           const { setupPushNotificationsForSuperAdmin } = await import('../services/pushNotificationService');
-          // Setup push notifications in background (don't wait)
-          setupPushNotificationsForSuperAdmin(userId).catch(err => {
-            console.error('Failed to setup push notifications:', err);
-          });
+          console.log('📱 Setting up push notifications after login...');
+          // Wait for push notification setup to complete
+          await setupPushNotificationsForSuperAdmin(userId);
+          console.log('✅ Push notification setup completed');
         } catch (pushError) {
-          console.error('Error importing push notification service:', pushError);
+          console.error('❌ Failed to setup push notifications:', pushError);
+          // Don't block login if push notifications fail
         }
       }
 
