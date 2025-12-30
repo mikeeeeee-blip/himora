@@ -58,6 +58,7 @@ exports.registerDevice = async (req, res) => {
 
     if (device) {
       // Update existing device
+      const wasActive = device.isActive;
       device.userId = userId;
       device.role = role;
       device.platform = platform || device.platform || 'android';
@@ -68,6 +69,7 @@ exports.registerDevice = async (req, res) => {
       await device.save();
 
       console.log(`✅ Device updated: ${pushToken.substring(0, 20)}... for user ${userId}, role: ${role}`);
+      console.log(`   Device was ${wasActive ? 'already active' : 'inactive, now activated'}`);
     } else {
       // Create new device
       device = new Device({
@@ -94,6 +96,23 @@ exports.registerDevice = async (req, res) => {
       platform: savedDevice.platform,
       isActive: savedDevice.isActive
     });
+
+    // ✅ SUCCESS LOG - Device registered successfully
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('✅ DEVICE REGISTERED SUCCESSFULLY');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('   Device ID:', savedDevice._id.toString());
+    console.log('   User ID:', savedDevice.userId.toString());
+    console.log('   User Email:', user.email);
+    console.log('   Role:', savedDevice.role);
+    console.log('   Platform:', savedDevice.platform);
+    console.log('   Push Token:', pushToken.substring(0, 30) + '...');
+    console.log('   Device ID (client):', deviceId || 'N/A');
+    console.log('   App Version:', appVersion || 'N/A');
+    console.log('   Is Active:', savedDevice.isActive);
+    console.log('   Registered At:', savedDevice.createdAt);
+    console.log('   Last Used At:', savedDevice.lastUsedAt);
+    console.log('═══════════════════════════════════════════════════════════');
 
     return res.json({
       success: true,

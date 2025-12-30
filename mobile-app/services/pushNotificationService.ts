@@ -1,8 +1,12 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from './apiService';
 import { API_ENDPOINTS } from '@/constants/api';
 import authService from './authService';
+
+const NOTIFICATIONS_ENABLED_KEY = 'notifications_enabled';
+const PUSH_TOKEN_KEY = 'push_token';
 
 // Lazy import notifications to avoid errors in Expo Go
 let Notifications: typeof import('expo-notifications') | null = null;
@@ -11,29 +15,66 @@ let Notifications: typeof import('expo-notifications') | null = null;
 async function ensureNotificationsAvailable(): Promise<boolean> {
   try {
     const executionEnvironment = Constants.executionEnvironment;
-    console.log('   Execution environment:', executionEnvironment);
+    const appOwnership = Constants.appOwnership;
+    const isDevice = Constants.isDevice;
     
-    // Only block if we're definitely in Expo Go (storeClient)
-    // For standalone builds, bare projects, or unknown environments, try to proceed
-    if (executionEnvironment === 'storeClient') {
+    console.log('   Execution environment:', executionEnvironment);
+    console.log('   App ownership:', appOwnership);
+    console.log('   Is device:', isDevice);
+    
+    // Check multiple indicators to determine if we're in a real build
+    // appOwnership: 'expo' = Expo Go, 'standalone' = standalone build, null = development
+    // isDevice: true = real device, false = simulator/emulator
+    const isStandalone = appOwnership === 'standalone' || 
+                        (appOwnership === null && isDevice) ||
+                        (executionEnvironment !== 'storeClient' && isDevice);
+    
+    if (executionEnvironment === 'storeClient' && !isStandalone) {
       console.warn('⚠️ Detected Expo Go environment - push notifications may not work');
       console.warn('   Attempting anyway in case this is a misdetection...');
-      // Don't return false immediately - try to proceed
+      // Don't return false - try to proceed and let permissions check determine if it works
+    } else {
+      console.log('   ✅ Detected standalone/development build - notifications should work');
     }
 
     // Try to import and use notifications
     if (!Notifications) {
       console.log('   Importing expo-notifications...');
-      Notifications = await import('expo-notifications');
-      console.log('   ✅ expo-notifications imported successfully');
+      try {
+        // Suppress Expo Go warnings - we'll handle them gracefully
+        const originalWarn = console.warn;
+        console.warn = (...args: any[]) => {
+          const message = args.join(' ');
+          // Suppress Expo Go push notification warnings since we're checking permissions anyway
+          if (message.includes('expo-notifications') && 
+              (message.includes('Expo Go') || message.includes('SDK 53'))) {
+            // Suppress this specific warning
+            return;
+          }
+          originalWarn.apply(console, args);
+        };
+        
+        Notifications = await import('expo-notifications');
+        
+        // Restore original console.warn
+        console.warn = originalWarn;
+        console.log('   ✅ expo-notifications imported successfully');
+      } catch (importError) {
+        console.error('   ❌ Failed to import expo-notifications:', importError);
+        throw importError;
+      }
     }
 
     // Try to check permissions to verify notifications are available
     console.log('   Checking notification permissions...');
     const permissions = await Notifications.getPermissionsAsync();
     console.log('   ✅ Permissions check successful:', permissions.status);
+    
+    // If we can check permissions, notifications module is working
+    // Even if permissions are denied, the module is available
     return true;
   } catch (error: any) {
+    // If we can't even import or check permissions, notifications aren't available
     console.error('❌ Push notifications not available:', error);
     console.error('   Error message:', error.message);
     console.error('   This usually means:');
@@ -119,6 +160,13 @@ export async function registerForPushNotifications(): Promise<string | null> {
     console.log('✅ Push token obtained:', pushToken.substring(0, 30) + '...');
     console.log('   Full token length:', pushToken.length);
 
+    // Store token for later use (e.g., unregistering)
+    try {
+      await AsyncStorage.setItem(PUSH_TOKEN_KEY, pushToken);
+    } catch (error) {
+      console.warn('⚠️ Failed to store push token:', error);
+    }
+
     return pushToken;
   } catch (error: any) {
     console.error('❌ Error registering for push notifications:', error);
@@ -141,63 +189,91 @@ export async function registerDeviceToken(
   pushToken: string
 ): Promise<boolean> {
   try {
+    // Ensure auth is loaded
+    await authService.ensureAuthLoaded();
     const token = await authService.getToken();
+    
     if (!token) {
       console.error('❌ No auth token available');
+      console.error('   Cannot register device without authentication');
       return false;
     }
 
     const platform = Platform.OS === 'ios' ? 'ios' : 'android';
+    const trimmedToken = token.trim();
 
-    console.log(`📤 Registering device: userId=${userId}, role=${role}, platform=${platform}`);
+    console.log(`📤 Registering device with backend...`);
+    console.log(`   User ID: ${userId}`);
+    console.log(`   Role: ${role}`);
+    console.log(`   Platform: ${platform}`);
     console.log(`   Push token: ${pushToken.substring(0, 30)}...`);
-
+    console.log(`   Token length: ${pushToken.length}`);
     console.log(`   API Endpoint: ${API_ENDPOINTS.DEVICE_REGISTER}`);
-    console.log(`   Auth token: ${token.substring(0, 20)}...`);
-    console.log(`   Request payload:`, {
+    console.log(`   Auth token: ${trimmedToken.substring(0, 20)}...`);
+    
+    const requestPayload = {
       userId,
+      pushToken,
       role,
       platform,
-      pushTokenLength: pushToken.length,
-      deviceId: Platform.OS === 'android' ? 'android' : 'ios'
+      deviceId: Platform.OS === 'android' ? 'android' : 'ios',
+      appVersion: Constants.expoConfig?.version || '1.0.0',
+    };
+    
+    console.log(`   Request payload:`, {
+      ...requestPayload,
+      pushToken: `${pushToken.substring(0, 30)}...`,
     });
     
-    // Note: apiClient interceptor already adds x-auth-token, but we can also add it explicitly
+    // Make the request with explicit headers
     const response = await apiClient.post(
       API_ENDPOINTS.DEVICE_REGISTER,
+      requestPayload,
       {
-        userId,
-        pushToken,
-        role,
-        platform,
-        deviceId: Platform.OS === 'android' ? 'android' : 'ios',
-        appVersion: '1.0.0', // You can get this from expo-constants if needed
+        headers: {
+          'x-auth-token': trimmedToken,
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000, // 30 second timeout
       }
-      // Headers are added by apiClient interceptor
     );
     
+    console.log('   ✅ Response received');
     console.log('   Response status:', response.status);
-    console.log('   Response data:', JSON.stringify(response.data));
+    console.log('   Response data:', JSON.stringify(response.data, null, 2));
 
     if (response.data?.success) {
       console.log('✅ Device registered successfully with backend');
       console.log('   Device ID:', response.data?.device?.id);
+      console.log('   User ID:', response.data?.device?.userId);
+      console.log('   Role:', response.data?.device?.role);
       return true;
     } else {
-      console.error('❌ Device registration failed:', response.data?.error || 'Unknown error');
+      console.error('❌ Device registration failed');
+      console.error('   Response success:', response.data?.success);
+      console.error('   Error:', response.data?.error || 'Unknown error');
       return false;
     }
   } catch (error: any) {
     console.error('❌ Error registering device:', error);
+    
     if (error.response) {
       console.error('   Response status:', error.response.status);
       console.error('   Response statusText:', error.response.statusText);
-      console.error('   Response data:', JSON.stringify(error.response.data));
-      console.error('   Response headers:', error.response.headers);
+      console.error('   Response data:', JSON.stringify(error.response.data, null, 2));
+      
+      if (error.response.status === 401) {
+        console.error('   ❌ Authentication failed - token may be invalid or expired');
+      } else if (error.response.status === 400) {
+        console.error('   ❌ Bad request - check request payload');
+      } else if (error.response.status === 500) {
+        console.error('   ❌ Server error - check backend logs');
+      }
     } else if (error.request) {
       console.error('   ❌ No response received from server');
       console.error('   Request URL:', error.config?.url);
       console.error('   Request method:', error.config?.method);
+      console.error('   Request payload:', JSON.stringify(error.config?.data, null, 2));
       console.error('   This usually means:');
       console.error('     1. Server is not reachable');
       console.error('     2. Network connection issue');
@@ -214,27 +290,76 @@ export async function registerDeviceToken(
 /**
  * Unregister device push token
  */
-export async function unregisterDeviceToken(pushToken: string): Promise<boolean> {
+export async function unregisterDeviceToken(pushToken?: string): Promise<boolean> {
   try {
-    const token = await authService.getToken();
-    if (!token) {
+    // Get push token from parameter or storage
+    let tokenToUnregister = pushToken;
+    if (!tokenToUnregister) {
+      try {
+        tokenToUnregister = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+      } catch (error) {
+        console.warn('⚠️ Could not retrieve stored push token:', error);
+      }
+    }
+
+    if (!tokenToUnregister) {
+      console.warn('⚠️ No push token available to unregister');
       return false;
     }
 
+    await authService.ensureAuthLoaded();
+    const token = await authService.getToken();
+    if (!token) {
+      console.error('❌ No auth token available for unregistering');
+      return false;
+    }
+
+    console.log('📤 Unregistering device...');
+    console.log('   Push token:', tokenToUnregister.substring(0, 30) + '...');
+
     const response = await apiClient.post(
       API_ENDPOINTS.DEVICE_UNREGISTER,
-      { pushToken },
+      { pushToken: tokenToUnregister },
       {
         headers: {
-          'x-auth-token': token,
+          'x-auth-token': token.trim(),
+          'Content-Type': 'application/json',
         },
       }
     );
 
-    return response.data?.success || false;
-  } catch (error) {
-    console.error('❌ Error unregistering device:', error);
+    if (response.data?.success) {
+      console.log('✅ Device unregistered successfully');
+      // Clear stored token
+      try {
+        await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
+      } catch (error) {
+        console.warn('⚠️ Failed to clear stored push token:', error);
+      }
+      return true;
+    }
+
     return false;
+  } catch (error: any) {
+    console.error('❌ Error unregistering device:', error);
+    if (error.response) {
+      console.error('   Response status:', error.response.status);
+      console.error('   Response data:', JSON.stringify(error.response.data));
+    }
+    return false;
+  }
+}
+
+/**
+ * Check if notifications are enabled in user preferences
+ */
+async function areNotificationsEnabled(): Promise<boolean> {
+  try {
+    const stored = await AsyncStorage.getItem(NOTIFICATIONS_ENABLED_KEY);
+    return stored !== null ? stored === 'true' : true; // Default to enabled
+  } catch (error) {
+    console.error('Error checking notification preference:', error);
+    return true; // Default to enabled on error
   }
 }
 
@@ -243,6 +368,13 @@ export async function unregisterDeviceToken(pushToken: string): Promise<boolean>
  */
 export async function setupPushNotificationsForSuperAdmin(userId: string): Promise<void> {
   try {
+    // Check if notifications are enabled
+    const enabled = await areNotificationsEnabled();
+    if (!enabled) {
+      console.log('📱 Push notifications are disabled in settings. Skipping registration.');
+      return;
+    }
+
     console.log('📱 Setting up push notifications for superadmin...');
     console.log('   User ID:', userId);
 
@@ -258,18 +390,55 @@ export async function setupPushNotificationsForSuperAdmin(userId: string): Promi
     }
 
     console.log('✅ Push token obtained, registering with backend...');
+    console.log('   Token preview:', pushToken.substring(0, 30) + '...');
 
     // Register device with backend
     const registered = await registerDeviceToken(userId, 'superAdmin', pushToken);
 
     if (registered) {
       console.log('✅ Push notifications setup complete');
+      console.log('   Device successfully registered with backend');
+      
+      // Verify device was actually saved by trying to fetch it
+      try {
+        const token = await authService.getToken();
+        if (token) {
+          const verifyResponse = await apiClient.get(
+            `${API_ENDPOINTS.DEVICE_LIST}?role=superAdmin&userId=${userId}`,
+            {
+              headers: {
+                'x-auth-token': token.trim(),
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+          
+          if (verifyResponse.data?.success && verifyResponse.data?.devices?.length > 0) {
+            const foundDevice = verifyResponse.data.devices.find(
+              (d: any) => d.pushTokenPreview?.includes(pushToken.substring(0, 20))
+            );
+            if (foundDevice) {
+              console.log('✅ Device verification successful - device found in backend');
+              console.log('   Device ID:', foundDevice.id);
+              console.log('   Is Active:', foundDevice.isActive);
+            } else {
+              console.warn('⚠️ Device registered but not found in verification query');
+            }
+          } else {
+            console.warn('⚠️ Device verification query returned no devices');
+          }
+        }
+      } catch (verifyError) {
+        console.warn('⚠️ Could not verify device registration:', verifyError);
+        // Don't fail the whole process if verification fails
+      }
     } else {
-      console.warn('⚠️ Failed to register device with backend');
-      console.warn('   Please check:');
-      console.warn('   1. Backend API is accessible');
-      console.warn('   2. Authentication token is valid');
-      console.warn('   3. Backend logs for errors');
+      console.error('❌ Failed to register device with backend');
+      console.error('   Please check:');
+      console.error('   1. Backend API is accessible');
+      console.error('   2. Authentication token is valid');
+      console.error('   3. Backend logs for errors');
+      console.error('   4. API endpoint: ' + API_ENDPOINTS.DEVICE_REGISTER);
     }
   } catch (error) {
     console.error('❌ Error setting up push notifications:', error);

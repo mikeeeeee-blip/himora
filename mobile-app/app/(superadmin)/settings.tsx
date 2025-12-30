@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '@/services/apiService';
 import authService from '@/services/authService';
 import { API_ENDPOINTS } from '@/constants/api';
@@ -26,15 +27,20 @@ interface GatewaySettings {
   phonepe?: { enabled: boolean };
 }
 
+const NOTIFICATIONS_ENABLED_KEY = 'notifications_enabled';
+
 export default function SettingsScreen() {
   const [settings, setSettings] = useState<GatewaySettings>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationLoading, setNotificationLoading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     loadSettings();
+    loadNotificationPreference();
   }, []);
 
   const loadSettings = async () => {
@@ -67,6 +73,67 @@ export default function SettingsScreen() {
   const handleRefresh = () => {
     setRefreshing(true);
     loadSettings();
+    loadNotificationPreference();
+  };
+
+  const loadNotificationPreference = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(NOTIFICATIONS_ENABLED_KEY);
+      const enabled = stored !== null ? stored === 'true' : true; // Default to enabled
+      setNotificationsEnabled(enabled);
+    } catch (error) {
+      console.error('Error loading notification preference:', error);
+      setNotificationsEnabled(true); // Default to enabled on error
+    }
+  };
+
+  const toggleNotifications = async (enabled: boolean) => {
+    try {
+      setNotificationLoading(true);
+      
+      // Save preference
+      await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, enabled.toString());
+      setNotificationsEnabled(enabled);
+
+      if (enabled) {
+        // Enable notifications - register device
+        const userId = await authService.getUserId();
+        if (userId) {
+          try {
+            const { setupPushNotificationsForSuperAdmin } = await import('@/services/pushNotificationService');
+            await setupPushNotificationsForSuperAdmin(userId);
+            Alert.alert('Success', 'Push notifications enabled. Device registered successfully.');
+          } catch (error: any) {
+            console.error('Error enabling notifications:', error);
+            Alert.alert(
+              'Warning',
+              'Notifications enabled but device registration failed. Please try again later.'
+            );
+          }
+        }
+      } else {
+        // Disable notifications - unregister device
+        try {
+          const { unregisterDeviceToken } = await import('@/services/pushNotificationService');
+          const unregistered = await unregisterDeviceToken();
+          if (unregistered) {
+            Alert.alert('Success', 'Push notifications disabled. Device unregistered.');
+          } else {
+            Alert.alert('Success', 'Push notifications disabled.');
+          }
+        } catch (error: any) {
+          console.error('Error disabling notifications:', error);
+          Alert.alert('Warning', 'Notifications disabled but device unregistration failed.');
+        }
+      }
+    } catch (error: any) {
+      console.error('Error toggling notifications:', error);
+      Alert.alert('Error', 'Failed to update notification settings. Please try again.');
+      // Revert on error
+      loadNotificationPreference();
+    } finally {
+      setNotificationLoading(false);
+    }
   };
 
   const toggleGateway = async (gateway: string, enabled: boolean) => {
@@ -149,6 +216,47 @@ export default function SettingsScreen() {
           </View>
         ) : (
           <View style={styles.settingsContainer}>
+            {/* Notifications Section */}
+            <View style={styles.sectionHeader}>
+              <Ionicons name="notifications-outline" size={20} color={Colors.textLight} />
+              <Text style={styles.sectionTitle}>Notifications</Text>
+            </View>
+            <View style={styles.gatewayCard}>
+              <View style={styles.gatewayHeader}>
+                <View style={[styles.gatewayIcon, notificationsEnabled && styles.gatewayIconEnabled]}>
+                  <Ionicons
+                    name="notifications"
+                    size={24}
+                    color={notificationsEnabled ? Colors.success : Colors.textSubtleLight}
+                  />
+                </View>
+                <View style={styles.gatewayInfo}>
+                  <Text style={styles.gatewayName}>Push Notifications</Text>
+                  <Text style={styles.gatewayDescription}>
+                    {notificationsEnabled
+                      ? 'Receive push notifications for payout requests and updates'
+                      : 'Notifications are disabled'}
+                  </Text>
+                </View>
+              </View>
+              {notificationLoading ? (
+                <ActivityIndicator size="small" color={Colors.accent} />
+              ) : (
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={toggleNotifications}
+                  trackColor={{ false: Colors.bgTertiary, true: Colors.success }}
+                  thumbColor={Colors.textLight}
+                  disabled={notificationLoading}
+                />
+              )}
+            </View>
+
+            {/* Payment Gateways Section */}
+            <View style={styles.sectionHeader}>
+              <Ionicons name="card-outline" size={20} color={Colors.textLight} />
+              <Text style={styles.sectionTitle}>Payment Gateways</Text>
+            </View>
             {gateways.map((gateway) => {
               const isEnabled = settings[gateway.key as keyof GatewaySettings]?.enabled || false;
               const isSaving = saving === gateway.key;
@@ -262,6 +370,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.textLight,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 24,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.textLight,
+  },
+  gatewayInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  gatewayDescription: {
+    fontSize: 12,
+    color: Colors.textSubtleLight,
+    marginTop: 2,
   },
 });
 

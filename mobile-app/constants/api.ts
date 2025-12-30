@@ -95,6 +95,7 @@ export const API_ENDPOINTS = {
   // ============ DEVICE REGISTRATION (Push Notifications) ============
   DEVICE_REGISTER: `${BASE_URL}/device/register`,
   DEVICE_UNREGISTER: `${BASE_URL}/device/unregister`,
+  DEVICE_LIST: `${BASE_URL}/device/list`,
 };
 
 export const USER_ROLES = {
