@@ -10,24 +10,36 @@ let Notifications: typeof import('expo-notifications') | null = null;
 // Check if notifications are available
 async function ensureNotificationsAvailable(): Promise<boolean> {
   try {
-    // Check if we're in Expo Go (where push notifications aren't supported)
     const executionEnvironment = Constants.executionEnvironment;
+    console.log('   Execution environment:', executionEnvironment);
+    
+    // Only block if we're definitely in Expo Go (storeClient)
+    // For standalone builds, bare projects, or unknown environments, try to proceed
     if (executionEnvironment === 'storeClient') {
-      // Expo Go - notifications not fully supported
-      console.warn('⚠️ Push notifications are not fully supported in Expo Go. Use a development build for full functionality.');
-      return false;
+      console.warn('⚠️ Detected Expo Go environment - push notifications may not work');
+      console.warn('   Attempting anyway in case this is a misdetection...');
+      // Don't return false immediately - try to proceed
     }
 
     // Try to import and use notifications
     if (!Notifications) {
+      console.log('   Importing expo-notifications...');
       Notifications = await import('expo-notifications');
+      console.log('   ✅ expo-notifications imported successfully');
     }
 
     // Try to check permissions to verify notifications are available
-    await Notifications.getPermissionsAsync();
+    console.log('   Checking notification permissions...');
+    const permissions = await Notifications.getPermissionsAsync();
+    console.log('   ✅ Permissions check successful:', permissions.status);
     return true;
-  } catch (error) {
-    console.warn('⚠️ Push notifications not available:', error);
+  } catch (error: any) {
+    console.error('❌ Push notifications not available:', error);
+    console.error('   Error message:', error.message);
+    console.error('   This usually means:');
+    console.error('     1. Running in Expo Go (not supported)');
+    console.error('     2. expo-notifications not properly installed');
+    console.error('     3. Native modules not linked correctly');
     return false;
   }
 }

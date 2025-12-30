@@ -269,3 +269,51 @@ exports.unregisterDevice = async (req, res) => {
   }
 };
 
+/**
+ * Delete/flush devices (SuperAdmin only)
+ * DELETE /api/device/flush?role=superAdmin&userId=xxx
+ * If no query params, deletes ALL devices
+ */
+exports.flushDevices = async (req, res) => {
+  try {
+    const { role, userId } = req.query;
+    
+    console.log('🗑️  Flush devices request:', { role, userId });
+    
+    const query = {};
+    if (role) query.role = role;
+    if (userId) query.userId = userId;
+
+    // Count devices before deletion
+    const countBefore = await Device.countDocuments(query);
+    console.log(`   Devices to delete: ${countBefore}`);
+
+    if (countBefore === 0) {
+      return res.json({
+        success: true,
+        message: 'No devices found to delete',
+        deletedCount: 0,
+        query: query
+      });
+    }
+
+    // Delete devices
+    const result = await Device.deleteMany(query);
+    console.log(`✅ Deleted ${result.deletedCount} device(s)`);
+
+    return res.json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} device(s)`,
+      deletedCount: result.deletedCount,
+      query: query
+    });
+  } catch (error) {
+    console.error('❌ Error flushing devices:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to flush devices',
+      details: error.message
+    });
+  }
+};
+

@@ -214,3 +214,43 @@ Create a payout request as admin - superadmin should receive notification.
 4. Add notification tap handler to navigate to payout details
 5. Add notification badge count management
 
+
+
+
+
+# View all devices
+curl -X GET "https://himora.art/api/device/list" \
+  -H "x-auth-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNjkzYmFjZDBhNGQ3OWU1NTk0MTcxYzRlIiwicm9sZSI6InN1cGVyQWRtaW4ifSwiaWF0IjoxNzY3MDcxOTczLCJleHAiOjE3Njc2NzY3NzN9.X-bt2HJ4u4rnQoMCxwQ0XmzOF18_13ZN1ODzGJpvdkQ"
+
+# View devices by role
+curl -X GET "https://himora.art/api/device/list?role=superAdmin" \
+  -H "x-auth-token: YOUR_SUPERADMIN_JWT_TOKEN"
+
+# View devices by role and active status
+curl -X GET "https://himora.art/api/device/list?role=superAdmin&isActive=true" \
+  -H "x-auth-token: YOUR_SUPERADMIN_JWT_TOKEN"
+
+# View devices for a specific user
+curl -X GET "https://himora.art/api/device/list?userId=USER_ID_HERE" \
+  -H "x-auth-token: YOUR_SUPERADMIN_JWT_TOKEN"
+
+
+
+
+
+
+# Delete ALL devices (⚠️ DANGEROUS - deletes everything)
+curl -X DELETE "https://himora.art/api/device/flush" \
+  -H "x-auth-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNjkzYmFjZDBhNGQ3OWU1NTk0MTcxYzRlIiwicm9sZSI6InN1cGVyQWRtaW4ifSwiaWF0IjoxNzY3MDcxOTczLCJleHAiOjE3Njc2NzY3NzN9.X-bt2HJ4u4rnQoMCxwQ0XmzOF18_13ZN1ODzGJpvdkQ"
+
+# Delete all devices for a specific role
+curl -X DELETE "https://himora.art/api/device/flush?role=superAdmin" \
+  -H "x-auth-token: YOUR_SUPERADMIN_JWT_TOKEN"
+
+# Delete all devices for a specific user
+curl -X DELETE "https://himora.art/api/device/flush?userId=USER_ID_HERE" \
+  -H "x-auth-token: YOUR_SUPERADMIN_JWT_TOKEN"
+
+# Delete devices for a specific role and user
+curl -X DELETE "https://himora.art/api/device/flush?role=superAdmin&userId=USER_ID_HERE" \
+  -H "x-auth-token: YOUR_SUPERADMIN_JWT_TOKEN"
