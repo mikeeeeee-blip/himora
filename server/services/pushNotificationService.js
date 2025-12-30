@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { getDeviceTokensByRole } = require('../controllers/deviceController');
+const Device = require('../models/Device');
 
 // Expo Push Notification API endpoint
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
@@ -203,77 +204,121 @@ async function sendPushNotification(pushTokens, notification) {
           
           console.log(`   Found ${projectNames.length} project(s): ${projectNames.join(', ')}`);
           
-          // Group messages by project
-          const projectMessages = {};
-          projectNames.forEach(projectName => {
-            projectMessages[projectName] = [];
-          });
+          // Filter out old project (@mayank_1734/payments) - only keep @pranjalbirla101/payments-ninex
+          const OLD_PROJECT = '@mayank_1734/payments';
+          const CURRENT_PROJECT = '@pranjalbirla101/payments-ninex';
           
-          // Create a map of token to project
-          const tokenToProject = new Map();
-          projectNames.forEach(projectName => {
-            const tokens = projectGroups[projectName];
-            tokens.forEach(token => {
-              tokenToProject.set(token, projectName);
-            });
-          });
+          const oldProjectTokens = projectGroups[OLD_PROJECT] || [];
+          const currentProjectTokens = projectGroups[CURRENT_PROJECT] || [];
           
-          // Group messages by their project
-          messages.forEach(message => {
-            const project = tokenToProject.get(message.to);
-            if (project) {
-              projectMessages[project].push(message);
-            } else {
-              // Token not in error details, might be from a different project
-              // Try to send it separately or log a warning
-              console.warn(`   ⚠️ Token ${message.to.substring(0, 50)}... not found in project groups, will try to send separately`);
-              if (!projectMessages['_unknown']) {
-                projectMessages['_unknown'] = [];
-              }
-              projectMessages['_unknown'].push(message);
-            }
-          });
-          
-          // Send separate requests for each project
-          let totalSent = 0;
-          let totalErrors = 0;
-          const allResults = [];
-          
-          for (const [projectName, projectMsgs] of Object.entries(projectMessages)) {
-            if (projectMsgs.length === 0) continue;
+          if (oldProjectTokens.length > 0) {
+            console.warn(`⚠️ Filtering out ${oldProjectTokens.length} device(s) from old project: ${OLD_PROJECT}`);
+            console.warn(`   Old tokens will be skipped and marked as inactive.`);
             
-            console.log(`📤 Sending ${projectMsgs.length} notification(s) for project: ${projectName}`);
-            
+            // Mark old project devices as inactive
             try {
-              const projectTokens = projectMsgs.map(m => m.to);
-              const batchResult = await sendBatchToExpo(projectMsgs, projectTokens);
-              
-              if (batchResult.success) {
-                totalSent += batchResult.sent || 0;
-                totalErrors += batchResult.errors || 0;
-                if (batchResult.results) {
-                  allResults.push(...batchResult.results);
+              const updateResult = await Device.updateMany(
+                { pushToken: { $in: oldProjectTokens } },
+                { 
+                  $set: { 
+                    isActive: false,
+                    updatedAt: new Date()
+                  } 
                 }
-                console.log(`   ✅ Project ${projectName}: ${batchResult.sent || 0} sent, ${batchResult.errors || 0} errors`);
-              } else {
-                totalErrors += projectMsgs.length;
-                console.error(`   ❌ Project ${projectName}: Failed to send notifications`);
-              }
-            } catch (projectError) {
-              console.error(`   ❌ Error sending to project ${projectName}:`, projectError.message);
-              totalErrors += projectMsgs.length;
+              );
+              console.log(`   ✅ Marked ${updateResult.modifiedCount} old device(s) as inactive`);
+              
+              oldProjectTokens.forEach(token => {
+                console.warn(`   - Deactivated old token: ${token.substring(0, 50)}...`);
+              });
+            } catch (cleanupError) {
+              console.error(`   ❌ Error cleaning up old devices:`, cleanupError.message);
+              oldProjectTokens.forEach(token => {
+                console.warn(`   - Skipping old token: ${token.substring(0, 50)}...`);
+              });
             }
           }
           
-          console.log(`✅ Push notification sent to multiple projects: ${totalSent} success, ${totalErrors} errors`);
+          if (currentProjectTokens.length === 0) {
+            console.error(`❌ No devices found for current project: ${CURRENT_PROJECT}`);
+            console.error(`   All devices belong to old project and will be skipped.`);
+            return {
+              success: false,
+              error: `No devices found for current project. All devices belong to old project: ${OLD_PROJECT}`,
+              sent: 0,
+              errors: messages.length,
+              filteredOut: oldProjectTokens.length
+            };
+          }
           
-          return {
-            success: totalSent > 0,
-            sent: totalSent,
-            errors: totalErrors,
-            results: allResults,
-            multiProject: true
-          };
+          // Create a set of current project tokens for quick lookup
+          const currentProjectTokenSet = new Set(currentProjectTokens);
+          
+          // Filter messages to only include current project tokens
+          const filteredMessages = messages.filter(message => {
+            return currentProjectTokenSet.has(message.to);
+          });
+          
+          console.log(`📤 Sending ${filteredMessages.length} notification(s) for current project: ${CURRENT_PROJECT}`);
+          console.log(`   Filtered out ${oldProjectTokens.length} device(s) from old project`);
+          
+          // Send notifications only to current project
+          try {
+            const filteredTokens = filteredMessages.map(m => m.to);
+            const batchResult = await sendBatchToExpo(filteredMessages, filteredTokens);
+            
+            if (batchResult.success) {
+              console.log(`   ✅ Project ${CURRENT_PROJECT}: ${batchResult.sent || 0} sent, ${batchResult.errors || 0} errors`);
+              
+              // Log detailed errors if any
+              if (batchResult.errors > 0 && batchResult.results) {
+                batchResult.results.forEach((result, index) => {
+                  if (result.status === 'error') {
+                    console.error(`   ❌ Error details for token ${index + 1}:`);
+                    console.error(`      Token: ${filteredTokens[index] ? filteredTokens[index].substring(0, 50) + '...' : 'unknown'}`);
+                    console.error(`      Error: ${result.message || 'Unknown error'}`);
+                    if (result.details) {
+                      console.error(`      Details:`, JSON.stringify(result.details, null, 2));
+                    }
+                  }
+                });
+              }
+              
+              return {
+                success: batchResult.sent > 0,
+                sent: batchResult.sent || 0,
+                errors: batchResult.errors || 0,
+                results: batchResult.results || [],
+                filteredOut: oldProjectTokens.length
+              };
+            } else {
+              console.error(`   ❌ Project ${CURRENT_PROJECT}: Failed to send notifications`);
+              console.error(`   Error: ${batchResult.error || 'Unknown error'}`);
+              if (batchResult.response) {
+                console.error(`   Response:`, JSON.stringify(batchResult.response, null, 2));
+              }
+              return {
+                success: false,
+                error: batchResult.error || 'Failed to send notifications',
+                sent: 0,
+                errors: filteredMessages.length,
+                filteredOut: oldProjectTokens.length
+              };
+            }
+          } catch (projectError) {
+            console.error(`   ❌ Error sending to project ${CURRENT_PROJECT}:`, projectError.message);
+            if (projectError.response) {
+              console.error(`   Response status:`, projectError.response.status);
+              console.error(`   Response data:`, JSON.stringify(projectError.response.data, null, 2));
+            }
+            return {
+              success: false,
+              error: projectError.message,
+              sent: 0,
+              errors: filteredMessages.length,
+              filteredOut: oldProjectTokens.length
+            };
+          }
         }
       }
       
