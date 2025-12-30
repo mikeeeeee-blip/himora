@@ -98,18 +98,105 @@ export default function SettingsScreen() {
       if (enabled) {
         // Enable notifications - register device
         const userId = await authService.getUserId();
-        if (userId) {
-          try {
-            const { setupPushNotificationsForSuperAdmin } = await import('@/services/pushNotificationService');
-            await setupPushNotificationsForSuperAdmin(userId);
-            Alert.alert('Success', 'Push notifications enabled. Device registered successfully.');
-          } catch (error: any) {
-            console.error('Error enabling notifications:', error);
+        if (!userId) {
+          Alert.alert('Error', 'User ID not found. Please login again.');
+          setNotificationLoading(false);
+          // Revert toggle
+          await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
+          setNotificationsEnabled(false);
+          return;
+        }
+
+        try {
+          console.log('📱 Enabling push notifications from settings...');
+          const { setupPushNotificationsForSuperAdmin } = await import('@/services/pushNotificationService');
+          
+          // Setup notifications
+          await setupPushNotificationsForSuperAdmin(userId);
+          
+          // Wait a moment for registration to complete
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          
+          // Verify device was actually registered
+          console.log('🔍 Verifying device registration...');
+          const token = await authService.getToken();
+          if (!token) {
+            console.error('❌ No auth token for verification');
             Alert.alert(
               'Warning',
-              'Notifications enabled but device registration failed. Please try again later.'
+              'Device registration completed but verification failed. Please check if device is registered.'
+            );
+            setNotificationLoading(false);
+            return;
+          }
+
+          try {
+            const { API_ENDPOINTS } = await import('@/constants/api');
+            const verifyResponse = await apiClient.get(
+              `${API_ENDPOINTS.DEVICE_LIST}?role=superAdmin&userId=${userId}`,
+              {
+                headers: {
+                  'x-auth-token': token,
+                  'Content-Type': 'application/json',
+                },
+                timeout: 10000,
+              }
+            );
+
+            console.log('   Verification response:', JSON.stringify(verifyResponse.data, null, 2));
+
+            if (verifyResponse.data?.success) {
+              const devices = verifyResponse.data.devices || [];
+              const activeDevices = devices.filter((d: any) => d.isActive);
+              const deviceCount = activeDevices.length;
+              
+              if (deviceCount > 0) {
+                console.log(`✅ Device verification successful - ${deviceCount} active device(s) found`);
+                Alert.alert(
+                  'Success',
+                  `Push notifications enabled.\n\nDevice registered successfully.\n\nFound ${deviceCount} active device(s).`
+                );
+              } else {
+                console.warn('⚠️ Verification found devices but none are active');
+                console.warn('   All devices:', devices);
+                Alert.alert(
+                  'Warning',
+                  'Device registration may have failed. Found devices but none are active.\n\nPlease try again or check backend logs.'
+                );
+                // Don't revert - let user try again
+              }
+            } else {
+              console.error('❌ Verification query failed:', verifyResponse.data);
+              Alert.alert(
+                'Warning',
+                'Device registration completed but verification failed.\n\nPlease check backend logs or try again.'
+              );
+            }
+          } catch (verifyError: any) {
+            console.error('❌ Verification error:', verifyError);
+            if (verifyError.response) {
+              console.error('   Response status:', verifyError.response.status);
+              console.error('   Response data:', JSON.stringify(verifyError.response.data, null, 2));
+            }
+            Alert.alert(
+              'Verification Failed',
+              'Device registration completed but verification failed.\n\nPlease check:\n1. Backend is accessible\n2. Your authentication token is valid\n3. Try checking devices manually with curl command'
             );
           }
+        } catch (error: any) {
+          console.error('❌ Error enabling notifications:', error);
+          const errorMessage = error.response?.data?.error || error.message || 'Unknown error';
+          
+          // Revert toggle on error
+          await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
+          setNotificationsEnabled(false);
+          
+          Alert.alert(
+            'Registration Failed',
+            `Failed to register device:\n\n${errorMessage}\n\nPlease check:\n1. Internet connection\n2. Backend is accessible (https://himora.art/api/device/register)\n3. Authentication token is valid\n4. Try again`
+          );
+        } finally {
+          setNotificationLoading(false);
         }
       } else {
         // Disable notifications - unregister device

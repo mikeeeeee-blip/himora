@@ -25,7 +25,7 @@ async function ensureNotificationsAvailable(): Promise<boolean> {
     // Check multiple indicators to determine if we're in a real build
     // appOwnership: 'expo' = Expo Go, 'standalone' = standalone build, null = development
     // isDevice: true = real device, false = simulator/emulator
-    const isStandalone = appOwnership === 'standalone' || 
+    const isStandalone = (appOwnership as string) === 'standalone' || 
                         (appOwnership === null && isDevice) ||
                         (executionEnvironment !== 'storeClient' && isDevice);
     
@@ -152,22 +152,56 @@ export async function registerForPushNotifications(): Promise<string | null> {
     const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
     console.log('   Project ID:', projectId || 'not found');
     
-    const tokenData = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined
-    );
-
-    const pushToken = tokenData.data;
-    console.log('✅ Push token obtained:', pushToken.substring(0, 30) + '...');
-    console.log('   Full token length:', pushToken.length);
-
-    // Store token for later use (e.g., unregistering)
     try {
-      await AsyncStorage.setItem(PUSH_TOKEN_KEY, pushToken);
-    } catch (error) {
-      console.warn('⚠️ Failed to store push token:', error);
-    }
+      const tokenData = await Notifications.getExpoPushTokenAsync(
+        projectId ? { projectId } : undefined
+      );
 
-    return pushToken;
+      const pushToken = tokenData.data;
+      console.log('✅ Push token obtained:', pushToken.substring(0, 30) + '...');
+      console.log('   Full token length:', pushToken.length);
+
+      // Store token for later use (e.g., unregistering)
+      try {
+        await AsyncStorage.setItem(PUSH_TOKEN_KEY, pushToken);
+      } catch (error) {
+        console.warn('⚠️ Failed to store push token:', error);
+      }
+
+      return pushToken;
+    } catch (error: any) {
+      // Handle Firebase initialization error
+      if (error.message && (error.message.includes('FirebaseApp') || error.message.includes('Firebase'))) {
+        console.error('');
+        console.error('═══════════════════════════════════════════════════════════');
+        console.error('❌ FIREBASE NOT CONFIGURED - Push Notifications Disabled');
+        console.error('═══════════════════════════════════════════════════════════');
+        console.error('');
+        console.error('📋 To enable push notifications, choose one option:');
+        console.error('');
+        console.error('OPTION 1: Use EAS Build (Recommended - Easiest)');
+        console.error('   EAS automatically configures Firebase for you.');
+        console.error('   Run: cd /home/pranjal/himora/mobile-app');
+        console.error('   Run: eas build --platform android --profile preview --local');
+        console.error('');
+        console.error('OPTION 2: Configure Firebase Manually');
+        console.error('   1. Go to: https://console.firebase.google.com');
+        console.error('   2. Create/select a project');
+        console.error('   3. Add Android app with package: com.payments.app');
+        console.error('   4. Download google-services.json');
+        console.error('   5. Place it at: mobile-app/android/app/google-services.json');
+        console.error('   6. Rebuild: cd android && ./gradlew clean && ./gradlew assembleRelease');
+        console.error('');
+        console.error('📖 Full guide: See mobile-app/FIREBASE_SETUP.md');
+        console.error('🔗 Expo docs: https://docs.expo.dev/push-notifications/fcm-credentials/');
+        console.error('');
+        console.error('═══════════════════════════════════════════════════════════');
+        console.error('');
+        return null;
+      }
+      // Re-throw other errors
+      throw error;
+    }
   } catch (error: any) {
     console.error('❌ Error registering for push notifications:', error);
     if (error.message) {
@@ -187,7 +221,7 @@ export async function registerDeviceToken(
   userId: string,
   role: string,
   pushToken: string
-): Promise<boolean> {
+): Promise<{ success: boolean; deviceId?: string; userId?: string; role?: string; error?: string }> {
   try {
     // Ensure auth is loaded
     await authService.ensureAuthLoaded();
@@ -196,7 +230,10 @@ export async function registerDeviceToken(
     if (!token) {
       console.error('❌ No auth token available');
       console.error('   Cannot register device without authentication');
-      return false;
+      return {
+        success: false,
+        error: 'No authentication token'
+      };
     }
 
     const platform = Platform.OS === 'ios' ? 'ios' : 'android';
@@ -247,12 +284,20 @@ export async function registerDeviceToken(
       console.log('   Device ID:', response.data?.device?.id);
       console.log('   User ID:', response.data?.device?.userId);
       console.log('   Role:', response.data?.device?.role);
-      return true;
+      return {
+        success: true,
+        deviceId: response.data?.device?.id,
+        userId: response.data?.device?.userId,
+        role: response.data?.device?.role
+      };
     } else {
       console.error('❌ Device registration failed');
       console.error('   Response success:', response.data?.success);
       console.error('   Error:', response.data?.error || 'Unknown error');
-      return false;
+      return {
+        success: false,
+        error: response.data?.error || 'Unknown error'
+      };
     }
   } catch (error: any) {
     console.error('❌ Error registering device:', error);
@@ -283,7 +328,10 @@ export async function registerDeviceToken(
       console.error('   Error message:', error.message);
       console.error('   Error stack:', error.stack);
     }
-    return false;
+    return {
+      success: false,
+      error: error.message || 'Network error'
+    };
   }
 }
 
@@ -293,10 +341,11 @@ export async function registerDeviceToken(
 export async function unregisterDeviceToken(pushToken?: string): Promise<boolean> {
   try {
     // Get push token from parameter or storage
-    let tokenToUnregister = pushToken;
+    let tokenToUnregister: string | undefined = pushToken;
     if (!tokenToUnregister) {
       try {
-        tokenToUnregister = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+        const storedToken = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+        tokenToUnregister = storedToken || undefined;
       } catch (error) {
         console.warn('⚠️ Could not retrieve stored push token:', error);
       }
@@ -393,16 +442,25 @@ export async function setupPushNotificationsForSuperAdmin(userId: string): Promi
     console.log('   Token preview:', pushToken.substring(0, 30) + '...');
 
     // Register device with backend
-    const registered = await registerDeviceToken(userId, 'superAdmin', pushToken);
+    const registrationResult = await registerDeviceToken(userId, 'superAdmin', pushToken);
 
-    if (registered) {
-      console.log('✅ Push notifications setup complete');
-      console.log('   Device successfully registered with backend');
-      
-      // Verify device was actually saved by trying to fetch it
-      try {
+    if (!registrationResult.success) {
+      console.error('❌ Device registration failed:', registrationResult.error);
+      throw new Error(registrationResult.error || 'Device registration failed');
+    }
+
+    console.log('✅ Push notifications setup complete');
+    console.log('   Device successfully registered with backend');
+    console.log('   Device ID:', registrationResult.deviceId);
+    
+    // Wait a moment for database to sync
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Verify device was actually saved by trying to fetch it
+    try {
         const token = await authService.getToken();
         if (token) {
+          console.log('🔍 Verifying device registration in backend...');
           const verifyResponse = await apiClient.get(
             `${API_ENDPOINTS.DEVICE_LIST}?role=superAdmin&userId=${userId}`,
             {
@@ -410,42 +468,73 @@ export async function setupPushNotificationsForSuperAdmin(userId: string): Promi
                 'x-auth-token': token.trim(),
                 'Content-Type': 'application/json',
               },
+              timeout: 10000, // 10 second timeout
             }
           );
           
-          if (verifyResponse.data?.success && verifyResponse.data?.devices?.length > 0) {
-            const foundDevice = verifyResponse.data.devices.find(
-              (d: any) => d.pushTokenPreview?.includes(pushToken.substring(0, 20))
-            );
-            if (foundDevice) {
-              console.log('✅ Device verification successful - device found in backend');
-              console.log('   Device ID:', foundDevice.id);
-              console.log('   Is Active:', foundDevice.isActive);
+          console.log('   Verification response status:', verifyResponse.status);
+          console.log('   Verification response data:', JSON.stringify(verifyResponse.data, null, 2));
+          
+          if (verifyResponse.data?.success) {
+            const devices = verifyResponse.data.devices || [];
+            console.log(`   Found ${devices.length} device(s) in backend`);
+            
+            if (devices.length > 0) {
+              // Try to find our device by device ID or token preview
+              const tokenStart = pushToken.substring(0, 20);
+              const foundDevice = devices.find(
+                (d: any) => d.id === registrationResult.deviceId ||
+                           d.pushTokenPreview?.includes(tokenStart)
+              );
+              
+              if (foundDevice) {
+                console.log('✅ Device verification successful - device found in backend');
+                console.log('   Device ID:', foundDevice.id);
+                console.log('   Is Active:', foundDevice.isActive);
+                console.log('   Platform:', foundDevice.platform);
+                console.log('   Registered At:', foundDevice.createdAt);
+              } else {
+                console.warn('⚠️ Device registered but not found in verification query');
+                console.warn('   Looking for device ID:', registrationResult.deviceId);
+                console.warn('   Looking for token starting with:', tokenStart);
+                console.warn('   Available devices:', devices.map((d: any) => ({
+                  id: d.id,
+                  tokenPreview: d.pushTokenPreview,
+                  isActive: d.isActive
+                })));
+              }
             } else {
-              console.warn('⚠️ Device registered but not found in verification query');
+              console.error('❌ Device verification failed - no devices found');
+              console.error('   This means the device was not saved to the database');
+              console.error('   Check backend logs for errors');
             }
           } else {
-            console.warn('⚠️ Device verification query returned no devices');
+            console.error('❌ Device verification query failed');
+            console.error('   Response:', verifyResponse.data);
           }
+        } else {
+          console.warn('⚠️ No auth token available for verification');
         }
-      } catch (verifyError) {
-        console.warn('⚠️ Could not verify device registration:', verifyError);
-        // Don't fail the whole process if verification fails
-      }
-    } else {
-      console.error('❌ Failed to register device with backend');
-      console.error('   Please check:');
-      console.error('   1. Backend API is accessible');
-      console.error('   2. Authentication token is valid');
-      console.error('   3. Backend logs for errors');
-      console.error('   4. API endpoint: ' + API_ENDPOINTS.DEVICE_REGISTER);
+      } catch (verifyError: any) {
+        console.error('❌ Could not verify device registration:', verifyError);
+        if (verifyError.response) {
+          console.error('   Verification response status:', verifyError.response.status);
+          console.error('   Verification response data:', JSON.stringify(verifyError.response.data, null, 2));
+        } else if (verifyError.request) {
+          console.error('   No response from verification request');
+          console.error('   This might indicate a network or CORS issue');
+        }
+        // Don't fail the whole process if verification fails, but log it
     }
   } catch (error) {
     console.error('❌ Error setting up push notifications:', error);
     if (error instanceof Error) {
       console.error('   Error message:', error.message);
       console.error('   Stack:', error.stack);
+      // Re-throw so caller can handle it
+      throw error;
     }
+    throw new Error('Unknown error during push notification setup');
   }
 }
 

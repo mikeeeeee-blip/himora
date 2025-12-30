@@ -142,15 +142,32 @@ exports.registerDevice = async (req, res) => {
  */
 exports.getDeviceTokensByRole = async (role) => {
   try {
+    console.log(`🔍 Querying devices with role: "${role}" and isActive: true`);
+    
     const devices = await Device.find({
       role: role,
       isActive: true
     }).select('pushToken userId platform role isActive createdAt');
 
-    console.log(`📱 Found ${devices.length} active device(s) with role: ${role}`);
+    console.log(`📱 Found ${devices.length} active device(s) with role: "${role}"`);
+    
     if (devices.length > 0) {
       devices.forEach((device, index) => {
-        console.log(`   Device ${index + 1}: userId=${device.userId}, platform=${device.platform}, registered=${device.createdAt}`);
+        console.log(`   Device ${index + 1}:`);
+        console.log(`      ID: ${device._id}`);
+        console.log(`      userId: ${device.userId}`);
+        console.log(`      platform: ${device.platform}`);
+        console.log(`      role: ${device.role}`);
+        console.log(`      isActive: ${device.isActive}`);
+        console.log(`      pushToken: ${device.pushToken ? device.pushToken.substring(0, 50) + '...' : 'MISSING'}`);
+        console.log(`      registered: ${device.createdAt}`);
+      });
+    } else {
+      // Debug: Check if devices exist with different role casing or inactive status
+      const allDevices = await Device.find({}).select('role isActive').limit(5);
+      console.log(`   Debug: Found ${allDevices.length} total device(s) in database`);
+      allDevices.forEach((d, i) => {
+        console.log(`      Device ${i + 1}: role="${d.role}", isActive=${d.isActive}`);
       });
     }
 
@@ -160,7 +177,8 @@ exports.getDeviceTokensByRole = async (role) => {
       platform: device.platform
     }));
   } catch (error) {
-    console.error('Error fetching device tokens:', error);
+    console.error('❌ Error fetching device tokens:', error);
+    console.error('   Error stack:', error.stack);
     return [];
   }
 };

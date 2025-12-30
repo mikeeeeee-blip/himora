@@ -27,17 +27,57 @@ async function sendPushNotification(pushTokens, notification) {
       return { success: false, error: 'Title and body are required' };
     }
 
-    // Prepare messages for Expo API
-    const messages = pushTokens.map(token => ({
-      to: token,
-      sound: notification.sound || 'default',
-      title: notification.title,
-      body: notification.body,
-      data: notification.data || {},
-      badge: notification.badge,
-      priority: 'high',
-      channelId: 'default', // Android notification channel
-    }));
+    // Validate and prepare messages for Expo API
+    const messages = [];
+    const invalidTokens = [];
+    
+    pushTokens.forEach((token, index) => {
+      // Validate token format
+      if (!token || typeof token !== 'string' || token.trim().length === 0) {
+        console.warn(`⚠️ Invalid token at index ${index}: empty or null`);
+        invalidTokens.push({ index, token, reason: 'empty or null' });
+        return;
+      }
+      
+      const trimmedToken = token.trim();
+      
+      // Check if token starts with ExponentPushToken[ (Expo format)
+      if (!trimmedToken.startsWith('ExponentPushToken[') && !trimmedToken.startsWith('ExpoPushToken[')) {
+        console.warn(`⚠️ Invalid token format at index ${index}: ${trimmedToken.substring(0, 50)}...`);
+        console.warn(`   Expected format: ExponentPushToken[...] or ExpoPushToken[...]`);
+        invalidTokens.push({ index, token: trimmedToken, reason: 'invalid format' });
+        return;
+      }
+      
+      messages.push({
+        to: trimmedToken,
+        sound: notification.sound || 'default',
+        title: notification.title,
+        body: notification.body,
+        data: notification.data || {},
+        badge: notification.badge,
+        priority: 'high',
+        channelId: 'default', // Android notification channel
+      });
+    });
+    
+    if (invalidTokens.length > 0) {
+      console.error(`❌ Found ${invalidTokens.length} invalid token(s):`);
+      invalidTokens.forEach(({ index, token, reason }) => {
+        console.error(`   Token ${index}: ${reason} - ${token ? token.substring(0, 50) + '...' : 'null'}`);
+      });
+    }
+    
+    if (messages.length === 0) {
+      console.error('❌ No valid messages to send after validation');
+      return {
+        success: false,
+        error: 'No valid push tokens found after validation',
+        invalidTokens: invalidTokens.length
+      };
+    }
+    
+    console.log(`📤 Prepared ${messages.length} valid message(s) for Expo API`);
 
     console.log(`📤 Sending push notification to ${pushTokens.length} device(s)`);
     console.log(`   Title: ${notification.title}`);
@@ -54,6 +94,9 @@ async function sendPushNotification(pushTokens, notification) {
     });
 
     // Check response
+    console.log('📥 Expo API response status:', response.status);
+    console.log('📥 Expo API response data:', JSON.stringify(response.data, null, 2));
+    
     if (response.data && response.data.data) {
       const results = response.data.data;
       const successCount = results.filter(r => r.status === 'ok').length;
@@ -64,7 +107,12 @@ async function sendPushNotification(pushTokens, notification) {
       // Log errors if any
       results.forEach((result, index) => {
         if (result.status === 'error') {
-          console.error(`❌ Error sending to token ${index}:`, result.message);
+          console.error(`❌ Error sending to token ${index + 1}:`);
+          console.error(`   Token: ${pushTokens[index] ? pushTokens[index].substring(0, 50) + '...' : 'unknown'}`);
+          console.error(`   Error message: ${result.message || 'Unknown error'}`);
+          console.error(`   Error details:`, JSON.stringify(result, null, 2));
+        } else if (result.status === 'ok') {
+          console.log(`✅ Successfully sent to token ${index + 1}: ${pushTokens[index] ? pushTokens[index].substring(0, 50) + '...' : 'unknown'}`);
         }
       });
 
@@ -76,13 +124,27 @@ async function sendPushNotification(pushTokens, notification) {
       };
     }
 
+    console.error('❌ Unexpected response format from Expo API');
+    console.error('   Response:', JSON.stringify(response.data, null, 2));
     return { success: false, error: 'Unexpected response from Expo API' };
   } catch (error) {
     console.error('❌ Push notification error:', error.message);
+    console.error('   Error type:', error.constructor.name);
     if (error.response) {
-      console.error('   Response data:', error.response.data);
       console.error('   Response status:', error.response.status);
+      console.error('   Response data:', JSON.stringify(error.response.data, null, 2));
+      console.error('   Response headers:', error.response.headers);
+    } else if (error.request) {
+      console.error('   No response received from Expo API');
+      console.error('   Request config:', {
+        url: error.config?.url,
+        method: error.config?.method,
+        timeout: error.config?.timeout
+      });
+    } else {
+      console.error('   Error setting up request:', error.message);
     }
+    console.error('   Full error:', error);
     return {
       success: false,
       error: error.message,
@@ -97,7 +159,12 @@ async function sendPushNotification(pushTokens, notification) {
  */
 async function notifySuperAdmins(notification) {
   try {
+    console.log('🔔 notifySuperAdmins called');
+    console.log('   Notification:', { title: notification.title, body: notification.body });
+    
     const devices = await getDeviceTokensByRole('superAdmin');
+    
+    console.log(`📱 Found ${devices.length} superadmin device(s)`);
     
     if (devices.length === 0) {
       console.warn('⚠️ No superadmin devices found for push notification');
@@ -109,11 +176,42 @@ async function notifySuperAdmins(notification) {
       };
     }
 
-    console.log(`📤 Sending notification to ${devices.length} superadmin device(s)`);
-    const pushTokens = devices.map(device => device.pushToken);
+    // Log device details
+    devices.forEach((device, index) => {
+      console.log(`   Device ${index + 1}:`);
+      console.log(`      userId: ${device.userId}`);
+      console.log(`      platform: ${device.platform}`);
+      console.log(`      pushToken: ${device.pushToken ? device.pushToken.substring(0, 50) + '...' : 'MISSING'}`);
+    });
+
+    // Filter out devices without push tokens
+    const validDevices = devices.filter(device => device.pushToken && device.pushToken.trim().length > 0);
+    
+    if (validDevices.length === 0) {
+      console.error('❌ No valid push tokens found');
+      console.error('   All devices are missing push tokens');
+      return {
+        success: false,
+        error: 'No valid push tokens found. Devices may not be properly registered.'
+      };
+    }
+
+    if (validDevices.length < devices.length) {
+      console.warn(`⚠️ Filtered out ${devices.length - validDevices.length} device(s) with missing push tokens`);
+    }
+
+    console.log(`📤 Sending notification to ${validDevices.length} superadmin device(s) with valid tokens`);
+    const pushTokens = validDevices.map(device => device.pushToken);
+    
+    // Log tokens being sent
+    pushTokens.forEach((token, index) => {
+      console.log(`   Token ${index + 1}: ${token.substring(0, 50)}...`);
+    });
+    
     return await sendPushNotification(pushTokens, notification);
   } catch (error) {
     console.error('❌ Error notifying superadmins:', error);
+    console.error('   Error stack:', error.stack);
     return { success: false, error: error.message };
   }
 }

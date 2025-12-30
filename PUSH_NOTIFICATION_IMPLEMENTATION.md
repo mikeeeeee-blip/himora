@@ -219,7 +219,7 @@ Create a payout request as admin - superadmin should receive notification.
 
 
 # View all devices
-curl -X GET "https://himora.art/api/device/list" \
+curl -X GET "http://localhost:3000/api/device/list" \
   -H "x-auth-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNjkzYmFjZDBhNGQ3OWU1NTk0MTcxYzRlIiwicm9sZSI6InN1cGVyQWRtaW4ifSwiaWF0IjoxNzY3MDcxOTczLCJleHAiOjE3Njc2NzY3NzN9.X-bt2HJ4u4rnQoMCxwQ0XmzOF18_13ZN1ODzGJpvdkQ"
 
 # View devices by role
