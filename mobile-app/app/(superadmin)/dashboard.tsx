@@ -519,18 +519,18 @@ export default function SuperadminDashboard() {
                   color={Colors.textLight}
                 />
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleRefresh}
-                disabled={loading}
-                style={styles.refreshButton}
-              >
-                <Ionicons
-                  name="refresh"
-                  size={20}
-                  color={Colors.textLight}
-                  style={loading && styles.refreshSpinning}
-                />
-              </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleRefresh}
+              disabled={loading}
+              style={styles.refreshButton}
+            >
+              <Ionicons
+                name="refresh"
+                size={20}
+                color={Colors.textLight}
+                style={loading && styles.refreshSpinning}
+              />
+            </TouchableOpacity>
             </View>
           </View>
 

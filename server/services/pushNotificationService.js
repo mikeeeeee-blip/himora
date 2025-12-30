@@ -14,6 +14,57 @@ const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
  * @param {string} notification.sound - Sound to play (default: 'default')
  * @param {number} notification.badge - Badge count (optional)
  */
+/**
+ * Send a batch of messages to Expo API
+ * @param {Array} messages - Array of notification messages
+ * @param {Array} pushTokens - Original array of push tokens (for logging)
+ * @returns {Promise<Object>} Result object
+ */
+async function sendBatchToExpo(messages, pushTokens) {
+  const response = await axios.post(EXPO_PUSH_API_URL, messages, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Accept-Encoding': 'gzip, deflate',
+    },
+    timeout: 10000, // 10 second timeout
+  });
+
+  // Check response
+  if (response.data && response.data.data) {
+    const results = response.data.data;
+    const successCount = results.filter(r => r.status === 'ok').length;
+    const errorCount = results.filter(r => r.status === 'error').length;
+
+    // Log errors if any
+    results.forEach((result, index) => {
+      if (result.status === 'error') {
+        console.error(`❌ Error sending to token ${index + 1}:`);
+        console.error(`   Token: ${pushTokens[index] ? pushTokens[index].substring(0, 50) + '...' : 'unknown'}`);
+        console.error(`   Error message: ${result.message || 'Unknown error'}`);
+        if (result.details) {
+          console.error(`   Error details:`, JSON.stringify(result.details, null, 2));
+        }
+      } else if (result.status === 'ok') {
+        console.log(`✅ Successfully sent to token ${index + 1}: ${pushTokens[index] ? pushTokens[index].substring(0, 50) + '...' : 'unknown'}`);
+      }
+    });
+
+    return {
+      success: true,
+      sent: successCount,
+      errors: errorCount,
+      results: results
+    };
+  }
+
+  return {
+    success: false,
+    error: 'Unexpected response from Expo API',
+    response: response.data
+  };
+}
+
 async function sendPushNotification(pushTokens, notification) {
   try {
     if (!pushTokens || pushTokens.length === 0) {
@@ -30,6 +81,7 @@ async function sendPushNotification(pushTokens, notification) {
     // Validate and prepare messages for Expo API
     const messages = [];
     const invalidTokens = [];
+    const tokenToIndexMap = new Map(); // Map token to original index
     
     pushTokens.forEach((token, index) => {
       // Validate token format
@@ -49,7 +101,7 @@ async function sendPushNotification(pushTokens, notification) {
         return;
       }
       
-      messages.push({
+      const message = {
         to: trimmedToken,
         sound: notification.sound || 'default',
         title: notification.title,
@@ -58,7 +110,10 @@ async function sendPushNotification(pushTokens, notification) {
         badge: notification.badge,
         priority: 'high',
         channelId: 'default', // Android notification channel
-      });
+      };
+      
+      messages.push(message);
+      tokenToIndexMap.set(trimmedToken, index);
     });
     
     if (invalidTokens.length > 0) {
@@ -78,62 +133,159 @@ async function sendPushNotification(pushTokens, notification) {
     }
     
     console.log(`📤 Prepared ${messages.length} valid message(s) for Expo API`);
-
     console.log(`📤 Sending push notification to ${pushTokens.length} device(s)`);
     console.log(`   Title: ${notification.title}`);
     console.log(`   Body: ${notification.body}`);
 
-    // Send to Expo Push Notification service
-    const response = await axios.post(EXPO_PUSH_API_URL, messages, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Accept-Encoding': 'gzip, deflate',
-      },
-      timeout: 10000, // 10 second timeout
-    });
-
-    // Check response
-    console.log('📥 Expo API response status:', response.status);
-    console.log('📥 Expo API response data:', JSON.stringify(response.data, null, 2));
-    
-    if (response.data && response.data.data) {
-      const results = response.data.data;
-      const successCount = results.filter(r => r.status === 'ok').length;
-      const errorCount = results.filter(r => r.status === 'error').length;
-
-      console.log(`✅ Push notification sent: ${successCount} success, ${errorCount} errors`);
-
-      // Log errors if any
-      results.forEach((result, index) => {
-        if (result.status === 'error') {
-          console.error(`❌ Error sending to token ${index + 1}:`);
-          console.error(`   Token: ${pushTokens[index] ? pushTokens[index].substring(0, 50) + '...' : 'unknown'}`);
-          console.error(`   Error message: ${result.message || 'Unknown error'}`);
-          console.error(`   Error details:`, JSON.stringify(result, null, 2));
-        } else if (result.status === 'ok') {
-          console.log(`✅ Successfully sent to token ${index + 1}: ${pushTokens[index] ? pushTokens[index].substring(0, 50) + '...' : 'unknown'}`);
-        }
+    // Try to send all messages in one batch
+    try {
+      const response = await axios.post(EXPO_PUSH_API_URL, messages, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip, deflate',
+        },
+        timeout: 10000, // 10 second timeout
       });
 
-      return {
-        success: true,
-        sent: successCount,
-        errors: errorCount,
-        results: results
-      };
-    }
+      // Check response
+      console.log('📥 Expo API response status:', response.status);
+      
+      if (response.data && response.data.data) {
+        const results = response.data.data;
+        const successCount = results.filter(r => r.status === 'ok').length;
+        const errorCount = results.filter(r => r.status === 'error').length;
 
-    console.error('❌ Unexpected response format from Expo API');
-    console.error('   Response:', JSON.stringify(response.data, null, 2));
-    return { success: false, error: 'Unexpected response from Expo API' };
+        console.log(`✅ Push notification sent: ${successCount} success, ${errorCount} errors`);
+
+        // Log errors if any
+        results.forEach((result, index) => {
+          if (result.status === 'error') {
+            console.error(`❌ Error sending to token ${index + 1}:`);
+            console.error(`   Token: ${pushTokens[index] ? pushTokens[index].substring(0, 50) + '...' : 'unknown'}`);
+            console.error(`   Error message: ${result.message || 'Unknown error'}`);
+            if (result.details) {
+              console.error(`   Error details:`, JSON.stringify(result.details, null, 2));
+            }
+          } else if (result.status === 'ok') {
+            console.log(`✅ Successfully sent to token ${index + 1}: ${pushTokens[index] ? pushTokens[index].substring(0, 50) + '...' : 'unknown'}`);
+          }
+        });
+
+        return {
+          success: true,
+          sent: successCount,
+          errors: errorCount,
+          results: results
+        };
+      }
+
+      console.error('❌ Unexpected response format from Expo API');
+      console.error('   Response:', JSON.stringify(response.data, null, 2));
+      return { success: false, error: 'Unexpected response from Expo API' };
+    } catch (error) {
+      // Check if this is the PUSH_TOO_MANY_EXPERIENCE_IDS error
+      if (error.response && 
+          error.response.status === 400 && 
+          error.response.data && 
+          error.response.data.errors) {
+        
+        const errors = error.response.data.errors;
+        const experienceIdError = errors.find(e => e.code === 'PUSH_TOO_MANY_EXPERIENCE_IDS');
+        
+        if (experienceIdError && experienceIdError.details) {
+          console.warn('⚠️ Detected tokens from multiple Expo projects');
+          console.warn('   Grouping tokens by project and sending separate requests...');
+          
+          // Parse the error details to get tokens grouped by project
+          const projectGroups = experienceIdError.details;
+          const projectNames = Object.keys(projectGroups);
+          
+          console.log(`   Found ${projectNames.length} project(s): ${projectNames.join(', ')}`);
+          
+          // Group messages by project
+          const projectMessages = {};
+          projectNames.forEach(projectName => {
+            projectMessages[projectName] = [];
+          });
+          
+          // Create a map of token to project
+          const tokenToProject = new Map();
+          projectNames.forEach(projectName => {
+            const tokens = projectGroups[projectName];
+            tokens.forEach(token => {
+              tokenToProject.set(token, projectName);
+            });
+          });
+          
+          // Group messages by their project
+          messages.forEach(message => {
+            const project = tokenToProject.get(message.to);
+            if (project) {
+              projectMessages[project].push(message);
+            } else {
+              // Token not in error details, might be from a different project
+              // Try to send it separately or log a warning
+              console.warn(`   ⚠️ Token ${message.to.substring(0, 50)}... not found in project groups, will try to send separately`);
+              if (!projectMessages['_unknown']) {
+                projectMessages['_unknown'] = [];
+              }
+              projectMessages['_unknown'].push(message);
+            }
+          });
+          
+          // Send separate requests for each project
+          let totalSent = 0;
+          let totalErrors = 0;
+          const allResults = [];
+          
+          for (const [projectName, projectMsgs] of Object.entries(projectMessages)) {
+            if (projectMsgs.length === 0) continue;
+            
+            console.log(`📤 Sending ${projectMsgs.length} notification(s) for project: ${projectName}`);
+            
+            try {
+              const projectTokens = projectMsgs.map(m => m.to);
+              const batchResult = await sendBatchToExpo(projectMsgs, projectTokens);
+              
+              if (batchResult.success) {
+                totalSent += batchResult.sent || 0;
+                totalErrors += batchResult.errors || 0;
+                if (batchResult.results) {
+                  allResults.push(...batchResult.results);
+                }
+                console.log(`   ✅ Project ${projectName}: ${batchResult.sent || 0} sent, ${batchResult.errors || 0} errors`);
+              } else {
+                totalErrors += projectMsgs.length;
+                console.error(`   ❌ Project ${projectName}: Failed to send notifications`);
+              }
+            } catch (projectError) {
+              console.error(`   ❌ Error sending to project ${projectName}:`, projectError.message);
+              totalErrors += projectMsgs.length;
+            }
+          }
+          
+          console.log(`✅ Push notification sent to multiple projects: ${totalSent} success, ${totalErrors} errors`);
+          
+          return {
+            success: totalSent > 0,
+            sent: totalSent,
+            errors: totalErrors,
+            results: allResults,
+            multiProject: true
+          };
+        }
+      }
+      
+      // If it's not the experience ID error, re-throw or handle normally
+      throw error;
+    }
   } catch (error) {
     console.error('❌ Push notification error:', error.message);
     console.error('   Error type:', error.constructor.name);
     if (error.response) {
       console.error('   Response status:', error.response.status);
       console.error('   Response data:', JSON.stringify(error.response.data, null, 2));
-      console.error('   Response headers:', error.response.headers);
     } else if (error.request) {
       console.error('   No response received from Expo API');
       console.error('   Request config:', {

@@ -68,7 +68,7 @@ Send a push notification to mobile app users.
 ### Send Notification to All SuperAdmins
 
 ```bash
-curl -X POST http://localhost:5001/api/superadmin/notifications/send \
+curl -X POST https://himora.art/api/superadmin/notifications/send \
   -H "Content-Type: application/json" \
   -H "x-auth-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNjkzYmFjZDBhNGQ3OWU1NTk0MTcxYzRlIiwicm9sZSI6InN1cGVyQWRtaW4ifSwiaWF0IjoxNzY3MDcxOTczLCJleHAiOjE3Njc2NzY3NzN9.X-bt2HJ4u4rnQoMCxwQ0XmzOF18_13ZN1ODzGJpvdkQ" \
   -d '{

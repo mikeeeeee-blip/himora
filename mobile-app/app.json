@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Payments",
-    "slug": "payments",
+    "slug": "payments-ninex",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.payments.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#001D22",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -64,8 +64,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "7fc96d97-5298-4beb-83f5-56b827c8350a"
+        "projectId": "f48d94ea-b165-4973-8f7b-14a2d3fb9f06"
       }
-    }
+    },
+    "owner": "pranjalbirla101"
   }
 }

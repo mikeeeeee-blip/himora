@@ -153,11 +153,11 @@ export async function registerForPushNotifications(): Promise<string | null> {
     console.log('   Project ID:', projectId || 'not found');
     
     try {
-      const tokenData = await Notifications.getExpoPushTokenAsync(
-        projectId ? { projectId } : undefined
-      );
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined
+    );
 
-      const pushToken = tokenData.data;
+    const pushToken = tokenData.data;
       console.log('✅ Push token obtained:', pushToken.substring(0, 30) + '...');
       console.log('   Full token length:', pushToken.length);
 
@@ -168,7 +168,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
         console.warn('⚠️ Failed to store push token:', error);
       }
 
-      return pushToken;
+    return pushToken;
     } catch (error: any) {
       // Handle Firebase initialization error
       if (error.message && (error.message.includes('FirebaseApp') || error.message.includes('Firebase'))) {
@@ -249,11 +249,11 @@ export async function registerDeviceToken(
     console.log(`   Auth token: ${trimmedToken.substring(0, 20)}...`);
     
     const requestPayload = {
-      userId,
-      pushToken,
-      role,
-      platform,
-      deviceId: Platform.OS === 'android' ? 'android' : 'ios',
+        userId,
+        pushToken,
+        role,
+        platform,
+        deviceId: Platform.OS === 'android' ? 'android' : 'ios',
       appVersion: Constants.expoConfig?.version || '1.0.0',
     };
     
@@ -382,7 +382,7 @@ export async function unregisterDeviceToken(pushToken?: string): Promise<boolean
       // Clear stored token
       try {
         await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
-      } catch (error) {
+  } catch (error) {
         console.warn('⚠️ Failed to clear stored push token:', error);
       }
       return true;
@@ -449,7 +449,7 @@ export async function setupPushNotificationsForSuperAdmin(userId: string): Promi
       throw new Error(registrationResult.error || 'Device registration failed');
     }
 
-    console.log('✅ Push notifications setup complete');
+      console.log('✅ Push notifications setup complete');
     console.log('   Device successfully registered with backend');
     console.log('   Device ID:', registrationResult.deviceId);
     
@@ -512,7 +512,7 @@ export async function setupPushNotificationsForSuperAdmin(userId: string): Promi
             console.error('❌ Device verification query failed');
             console.error('   Response:', verifyResponse.data);
           }
-        } else {
+    } else {
           console.warn('⚠️ No auth token available for verification');
         }
       } catch (verifyError: any) {
