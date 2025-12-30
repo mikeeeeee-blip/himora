@@ -17,6 +17,8 @@ import apiClient from '@/services/apiService';
 import authService from '@/services/authService';
 import { API_ENDPOINTS } from '@/constants/api';
 import { Colors } from '@/constants/theme';
+import Navbar from '@/components/Navbar';
+import SwipeGestureHandler from '@/components/SwipeGestureHandler';
 
 interface GatewaySettings {
   paytm?: { enabled: boolean };
@@ -277,15 +279,20 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textLight} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Payment Gateway Settings</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <Navbar />
+      <SwipeGestureHandler
+        onSwipeLeft={() => router.push('/(superadmin)/dashboard')}
+        onSwipeRight={() => router.push('/(superadmin)/payouts')}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={Colors.textLight} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Payment Gateway Settings</Text>
+          <View style={{ width: 24 }} />
+        </View>
 
-      <ScrollView
+        <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         refreshControl={
@@ -376,7 +383,8 @@ export default function SettingsScreen() {
             })}
           </View>
         )}
-      </ScrollView>
+        </ScrollView>
+      </SwipeGestureHandler>
     </View>
   );
 }
@@ -391,7 +399,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    paddingTop: 80, // Account for Navbar
+    paddingTop: 16, // Reduced since Navbar is separate
     backgroundColor: Colors.bgPrimary,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,

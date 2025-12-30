@@ -23,6 +23,8 @@ import superadminPaymentService from '@/services/superadminPaymentService';
 import authService from '@/services/authService';
 import Navbar from '@/components/Navbar';
 import MetricCard from '@/components/MetricCard';
+import NotificationPopup from '@/components/NotificationPopup';
+import SwipeGestureHandler from '@/components/SwipeGestureHandler';
 import { Colors } from '@/constants/theme';
 import { setupNotificationListeners } from '@/services/pushNotificationService';
 
@@ -122,6 +124,16 @@ export default function SuperadminDashboard() {
   // Notification state
   const [notificationCount, setNotificationCount] = useState(0);
   const [pendingPayouts, setPendingPayouts] = useState<any[]>([]);
+  const [showNotificationPopup, setShowNotificationPopup] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    title: string;
+    body: string;
+    type?: 'payout_request' | 'custom_notification';
+    data?: any;
+    timestamp: Date;
+    read?: boolean;
+  }>>([]);
 
   useEffect(() => {
     const initializeDashboard = async () => {
@@ -158,12 +170,25 @@ export default function SuperadminDashboard() {
         (notification) => {
           // Handle notification received
           const notificationType = notification.request.content.data?.type;
+          const notificationData = notification.request.content.data;
+          
+          // Add notification to list
+          const newNotification = {
+            id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            title: notification.request.content.title || 'Notification',
+            body: notification.request.content.body || '',
+            type: notificationType as 'payout_request' | 'custom_notification' | undefined,
+            data: notificationData,
+            timestamp: new Date(),
+            read: false,
+          };
+          
+          setNotifications(prev => [newNotification, ...prev]);
           
           if (notificationType === 'payout_request') {
-            const notificationData = notification.request.content.data;
             const amount = notificationData?.amount || notificationData?.grossAmount || 0;
             const merchantName = notificationData?.merchantName || 'Merchant';
-            const formattedAmount = `₹${parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            const formattedAmount = `₹${parseFloat(String(amount)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
             
             Alert.alert(
               notification.request.content.title || '💰 New Payout Request',
@@ -254,8 +279,11 @@ export default function SuperadminDashboard() {
       
       if (data) {
         setStats(data);
-        // Update notification count based on pending payouts
-        setNotificationCount(data.payouts?.requested || 0);
+        // Update notification count: combine pending payouts with unread notifications
+        const pendingPayoutCount = data.payouts?.requested || 0;
+        const unreadNotificationCount = notifications.filter(n => !n.read).length;
+        // Show the higher of the two, or combine them
+        setNotificationCount(Math.max(pendingPayoutCount, unreadNotificationCount));
       } else {
         setStats({
           merchants: { total: 0, active: 0, inactive: 0, new_this_week: 0 },
@@ -454,20 +482,60 @@ export default function SuperadminDashboard() {
     })
     .slice(0, 5);
 
+  // Update notification count whenever notifications or stats change
+  useEffect(() => {
+    const unreadCount = notifications.filter(n => !n.read).length;
+    const pendingPayoutCount = stats?.payouts?.requested || 0;
+    // Show unread notifications count, or pending payouts if higher
+    setNotificationCount(Math.max(unreadCount, pendingPayoutCount));
+  }, [notifications, stats?.payouts?.requested]);
+
+  const handleNotificationPress = (notification: typeof notifications[0]) => {
+    // Mark as read
+    setNotifications(prev =>
+      prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
+    );
+    
+    // Handle navigation based on type
+    if (notification.type === 'payout_request') {
+      setShowNotificationPopup(false);
+      router.push('/(superadmin)/payouts');
+    }
+  };
+
+  const handleMarkAllRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
   return (
     <View style={styles.container}>
-      <Navbar />
+      <Navbar 
+        notificationCount={notificationCount} 
+        onNotificationPress={() => setShowNotificationPopup(true)}
+      />
       
-      {/* Background X Graphic */}
-      <View style={styles.backgroundGraphic}>
-        <Image
-          source={require('../../assets/images/X.png')}
-          style={styles.xGraphic}
-          resizeMode="contain"
-        />
-      </View>
+      <NotificationPopup
+        visible={showNotificationPopup}
+        onClose={() => setShowNotificationPopup(false)}
+        notifications={notifications}
+        onNotificationPress={handleNotificationPress}
+        onMarkAllRead={handleMarkAllRead}
+      />
+      
+      <SwipeGestureHandler
+        onSwipeLeft={() => setShowNotificationPopup(true)}
+        onSwipeRight={() => router.push('/(superadmin)/payouts')}
+      >
+        {/* Background X Graphic */}
+        <View style={styles.backgroundGraphic}>
+          <Image
+            source={require('../../assets/images/X.png')}
+            style={styles.xGraphic}
+            resizeMode="contain"
+          />
+        </View>
 
-      <ScrollView
+        <ScrollView
         style={styles.content}
         contentContainerStyle={[
           styles.contentContainer,
@@ -1130,6 +1198,7 @@ export default function SuperadminDashboard() {
           ) : null}
         </View>
       </ScrollView>
+      </SwipeGestureHandler>
 
       {/* Date Range Picker Modal */}
       <Modal

@@ -13,6 +13,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import apiClient from '@/services/apiService';
 import { API_ENDPOINTS } from '@/constants/api';
+import Navbar from '@/components/Navbar';
+import SwipeGestureHandler from '@/components/SwipeGestureHandler';
 
 interface Transaction {
   _id: string;
@@ -93,35 +95,41 @@ export default function SuperadminTransactionsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textLight} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>All Transactions</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <Text>Loading transactions...</Text>
+      <Navbar />
+      <SwipeGestureHandler
+        onSwipeLeft={() => router.push('/(superadmin)/dashboard')}
+        onSwipeRight={() => router.push('/(superadmin)/payouts')}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={Colors.textLight} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>All Transactions</Text>
+          <View style={{ width: 24 }} />
         </View>
-      ) : (
-        <FlatList
-          data={transactions}
-          renderItem={renderTransaction}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="receipt-outline" size={64} color="#ccc" />
-              <Text style={styles.emptyText}>No transactions found</Text>
-            </View>
-          }
-        />
-      )}
+
+        {loading && !refreshing ? (
+          <View style={styles.loadingContainer}>
+            <Text>Loading transactions...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={transactions}
+            renderItem={renderTransaction}
+            keyExtractor={(item) => item._id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Ionicons name="receipt-outline" size={64} color="#ccc" />
+                <Text style={styles.emptyText}>No transactions found</Text>
+              </View>
+            }
+          />
+        )}
+      </SwipeGestureHandler>
     </View>
   );
 }
@@ -130,7 +138,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.bgPrimary,
-    paddingTop: 64, // Account for Navbar height
   },
   header: {
     flexDirection: 'row',

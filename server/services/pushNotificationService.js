@@ -104,13 +104,13 @@ async function sendPushNotification(pushTokens, notification) {
       
       const message = {
         to: trimmedToken,
-        sound: notification.sound || 'default',
-        title: notification.title,
-        body: notification.body,
-        data: notification.data || {},
-        badge: notification.badge,
-        priority: 'high',
-        channelId: 'default', // Android notification channel
+      sound: notification.sound || 'default',
+      title: notification.title,
+      body: notification.body,
+      data: notification.data || {},
+      badge: notification.badge,
+      priority: 'high',
+      channelId: 'default', // Android notification channel
       };
       
       messages.push(message);
@@ -140,28 +140,28 @@ async function sendPushNotification(pushTokens, notification) {
 
     // Try to send all messages in one batch
     try {
-      const response = await axios.post(EXPO_PUSH_API_URL, messages, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Accept-Encoding': 'gzip, deflate',
-        },
-        timeout: 10000, // 10 second timeout
-      });
+    const response = await axios.post(EXPO_PUSH_API_URL, messages, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
+      },
+      timeout: 10000, // 10 second timeout
+    });
 
-      // Check response
+    // Check response
       console.log('📥 Expo API response status:', response.status);
       
-      if (response.data && response.data.data) {
-        const results = response.data.data;
-        const successCount = results.filter(r => r.status === 'ok').length;
-        const errorCount = results.filter(r => r.status === 'error').length;
+    if (response.data && response.data.data) {
+      const results = response.data.data;
+      const successCount = results.filter(r => r.status === 'ok').length;
+      const errorCount = results.filter(r => r.status === 'error').length;
 
-        console.log(`✅ Push notification sent: ${successCount} success, ${errorCount} errors`);
+      console.log(`✅ Push notification sent: ${successCount} success, ${errorCount} errors`);
 
-        // Log errors if any
-        results.forEach((result, index) => {
-          if (result.status === 'error') {
+      // Log errors if any
+      results.forEach((result, index) => {
+        if (result.status === 'error') {
             console.error(`❌ Error sending to token ${index + 1}:`);
             console.error(`   Token: ${pushTokens[index] ? pushTokens[index].substring(0, 50) + '...' : 'unknown'}`);
             console.error(`   Error message: ${result.message || 'Unknown error'}`);
@@ -170,20 +170,20 @@ async function sendPushNotification(pushTokens, notification) {
             }
           } else if (result.status === 'ok') {
             console.log(`✅ Successfully sent to token ${index + 1}: ${pushTokens[index] ? pushTokens[index].substring(0, 50) + '...' : 'unknown'}`);
-          }
-        });
+        }
+      });
 
-        return {
-          success: true,
-          sent: successCount,
-          errors: errorCount,
-          results: results
-        };
-      }
+      return {
+        success: true,
+        sent: successCount,
+        errors: errorCount,
+        results: results
+      };
+    }
 
       console.error('❌ Unexpected response format from Expo API');
       console.error('   Response:', JSON.stringify(response.data, null, 2));
-      return { success: false, error: 'Unexpected response from Expo API' };
+    return { success: false, error: 'Unexpected response from Expo API' };
     } catch (error) {
       // Check if this is the PUSH_TOO_MANY_EXPERIENCE_IDS error
       if (error.response && 

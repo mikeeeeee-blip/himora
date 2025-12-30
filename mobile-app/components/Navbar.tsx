@@ -22,7 +22,12 @@ interface NavItem {
   icon: string;
 }
 
-export default function Navbar() {
+interface NavbarProps {
+  notificationCount?: number;
+  onNotificationPress?: () => void;
+}
+
+export default function Navbar({ notificationCount = 0, onNotificationPress }: NavbarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [searchQuery, setSearchQuery] = useState('');
@@ -124,11 +129,23 @@ export default function Navbar() {
         {/* Right Section - Actions */}
         <View style={styles.rightSection}>
           <TouchableOpacity
-            onPress={() => setShowNotifications(!showNotifications)}
+            onPress={() => {
+              if (onNotificationPress) {
+                onNotificationPress();
+              } else {
+                setShowNotifications(!showNotifications);
+              }
+            }}
             style={styles.iconButton}
           >
             <Ionicons name="notifications-outline" size={22} color={Colors.textMutedLight} />
-            <View style={styles.notificationBadge} />
+            {notificationCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {notificationCount > 99 ? '99+' : notificationCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -308,14 +325,22 @@ const styles = StyleSheet.create({
   },
   notificationBadge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: Colors.danger,
     borderWidth: 2,
     borderColor: Colors.bgPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: Colors.textLight,
+    fontSize: 10,
+    fontWeight: '700',
   },
   avatarButton: {
     padding: 4,

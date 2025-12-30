@@ -15,6 +15,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import superadminPaymentService from '@/services/superadminPaymentService';
 import { Colors } from '@/constants/theme';
+import Navbar from '@/components/Navbar';
+import SwipeGestureHandler from '@/components/SwipeGestureHandler';
 
 interface MerchantInfo {
   business_name?: string;
@@ -208,7 +210,7 @@ export default function MerchantsScreen() {
             </View>
             <View style={styles.statRow}>
               <Text style={styles.statLabel}>Success:</Text>
-              <Text style={styles.statValue}>{txn.success_rate || 0}%</Text>
+              <Text style={styles.statValue}>{String(txn.success_rate || 0)}%</Text>
             </View>
           </View>
 
@@ -460,29 +462,39 @@ export default function MerchantsScreen() {
 
   return (
     <View style={styles.container}>
-      {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.accent} />
-          <Text style={styles.loadingText}>Loading merchants...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredMerchants}
-          renderItem={renderMerchant}
-          keyExtractor={(item, index) => item.merchant_id || item._id || `merchant-${index}`}
-          ListHeaderComponent={ListHeader}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.accent} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="people-outline" size={64} color={Colors.textSubtleLight} />
-              <Text style={styles.emptyText}>No merchants found</Text>
-            </View>
-          }
-        />
-      )}
+      <Navbar />
+      <SwipeGestureHandler
+        onSwipeLeft={() => {
+          // Open notifications - would need notification state management here
+          // For now, just navigate to dashboard which has notifications
+          router.push('/(superadmin)/dashboard');
+        }}
+        onSwipeRight={() => router.push('/(superadmin)/payouts')}
+      >
+        {loading && !refreshing ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.accent} />
+            <Text style={styles.loadingText}>Loading merchants...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredMerchants}
+            renderItem={renderMerchant}
+            keyExtractor={(item, index) => item.merchant_id || item._id || `merchant-${index}`}
+            ListHeaderComponent={ListHeader}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.accent} />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Ionicons name="people-outline" size={64} color={Colors.textSubtleLight} />
+                <Text style={styles.emptyText}>No merchants found</Text>
+              </View>
+            }
+          />
+        )}
+      </SwipeGestureHandler>
     </View>
   );
 }
@@ -497,7 +509,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    paddingTop: 80, // Account for Navbar + status bar
+    paddingTop: 16, // Reduced since Navbar is now separate
     backgroundColor: Colors.bgPrimary,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,

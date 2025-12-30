@@ -91,15 +91,42 @@ async function configureNotificationHandler() {
     const available = await ensureNotificationsAvailable();
     if (available && Notifications) {
       try {
+        // Set up Android notification channel
+        if (Platform.OS === 'android') {
+          try {
+            await Notifications.setNotificationChannelAsync('default', {
+              name: 'Default',
+              importance: Notifications.AndroidImportance.MAX,
+              vibrationPattern: [0, 250, 250, 250],
+              lightColor: '#FF231F7C',
+              sound: 'default',
+              enableVibrate: true,
+              showBadge: true,
+            });
+            console.log('✅ Android notification channel configured');
+          } catch (channelError: any) {
+            console.warn('⚠️ Could not configure notification channel:', channelError.message);
+            // Continue anyway - channel might already exist
+          }
+        }
+
+        // Set notification handler to always show notifications
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
+          handleNotification: async (notification) => {
+            console.log('📬 Notification handler called:', notification.request.content.title);
+            console.log('   Notification data:', JSON.stringify(notification.request.content.data));
+            
+            // Always show notification, even when app is in foreground
+            return {
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+              shouldShowBanner: true,
+              shouldShowList: true,
+            };
+          },
         });
+        console.log('✅ Notification handler configured');
       } catch (error) {
         console.warn('⚠️ Could not configure notification handler:', error);
       }
@@ -111,8 +138,8 @@ Notifications.setNotificationHandler({
 }
 
 // Initialize on module load (fire and forget - won't block)
-configureNotificationHandler().catch(() => {
-  // Silently handle any errors during initialization
+configureNotificationHandler().catch((error) => {
+  console.warn('⚠️ Error initializing notification handler:', error);
 });
 
 /**
@@ -148,13 +175,17 @@ export async function registerForPushNotifications(): Promise<string | null> {
     }
 
     console.log('📱 Getting Expo push token...');
-    // Get Expo push token
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
+    // Get Expo push token - try multiple ways to get project ID
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId || 
+                      Constants.easConfig?.projectId ||
+                      Constants.expoConfig?.extra?.eas?.projectId ||
+                      'f48d94ea-b165-4973-8f7b-14a2d3fb9f06'; // Fallback to known project ID
     console.log('   Project ID:', projectId || 'not found');
+    console.log('   Using project ID:', projectId);
     
     try {
     const tokenData = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined
+      { projectId }
     );
 
     const pushToken = tokenData.data;
@@ -170,29 +201,33 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
     return pushToken;
     } catch (error: any) {
+      // Log the full error for debugging
+      console.error('❌ Error getting Expo push token:', error);
+      console.error('   Error type:', error.constructor?.name);
+      console.error('   Error message:', error.message);
+      console.error('   Error code:', error.code);
+      console.error('   Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      
       // Handle Firebase initialization error
-      if (error.message && (error.message.includes('FirebaseApp') || error.message.includes('Firebase'))) {
+      if (error.message && (error.message.includes('FirebaseApp') || error.message.includes('Firebase') || error.message.includes('google-services.json') || error.code === 'ERR_FIREBASE_NOT_CONFIGURED')) {
         console.error('');
         console.error('═══════════════════════════════════════════════════════════');
         console.error('❌ FIREBASE NOT CONFIGURED - Push Notifications Disabled');
         console.error('═══════════════════════════════════════════════════════════');
         console.error('');
-        console.error('📋 To enable push notifications, choose one option:');
+        console.error('📋 The google-services.json file may not be included in the APK.');
+        console.error('   Even though EAS Build should configure Firebase automatically,');
+        console.error('   sometimes the file needs to be manually added.');
         console.error('');
-        console.error('OPTION 1: Use EAS Build (Recommended - Easiest)');
-        console.error('   EAS automatically configures Firebase for you.');
-        console.error('   Run: cd /home/pranjal/himora/mobile-app');
-        console.error('   Run: eas build --platform android --profile preview --local');
+        console.error('🔧 SOLUTION: Rebuild with EAS and ensure FCM credentials are set:');
         console.error('');
-        console.error('OPTION 2: Configure Firebase Manually');
-        console.error('   1. Go to: https://console.firebase.google.com');
-        console.error('   2. Create/select a project');
-        console.error('   3. Add Android app with package: com.payments.app');
-        console.error('   4. Download google-services.json');
-        console.error('   5. Place it at: mobile-app/android/app/google-services.json');
-        console.error('   6. Rebuild: cd android && ./gradlew clean && ./gradlew assembleRelease');
+        console.error('   1. Go to: https://expo.dev/accounts/pranjalbirla101/projects/payments-ninex/credentials');
+        console.error('   2. Check if "FCM V1 service account key" is configured');
+        console.error('   3. If not, add it from Google Cloud Console');
+        console.error('   4. Rebuild: cd /home/pranjal/himora/mobile-app');
+        console.error('   5. Run: eas build --platform android --profile preview --local');
         console.error('');
-        console.error('📖 Full guide: See mobile-app/FIREBASE_SETUP.md');
+        console.error('📖 Full guide: See mobile-app/CONFIGURE_FCM_SERVER_KEY.md');
         console.error('🔗 Expo docs: https://docs.expo.dev/push-notifications/fcm-credentials/');
         console.error('');
         console.error('═══════════════════════════════════════════════════════════');

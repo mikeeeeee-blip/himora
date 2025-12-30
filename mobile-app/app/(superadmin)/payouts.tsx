@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import superadminPaymentService from '@/services/superadminPaymentService';
 import authService from '@/services/authService';
 import Navbar from '@/components/Navbar';
+import SwipeGestureHandler from '@/components/SwipeGestureHandler';
 import { Colors } from '@/constants/theme';
 
 interface Payout {
@@ -378,17 +379,22 @@ export default function SuperadminPayoutsScreen() {
   return (
     <View style={styles.container}>
       <Navbar />
-      
-      {/* Background X Graphic */}
-      <View style={styles.backgroundGraphic}>
-        <Image
-          source={require('../../assets/images/X.png')}
-          style={styles.xGraphic}
-          resizeMode="contain"
-        />
-      </View>
+      <SwipeGestureHandler
+        onSwipeLeft={() => router.push('/(superadmin)/dashboard')}
+        onSwipeRight={() => {
+          // Already on payouts, do nothing or could navigate to transactions
+        }}
+      >
+        {/* Background X Graphic */}
+        <View style={styles.backgroundGraphic}>
+          <Image
+            source={require('../../assets/images/X.png')}
+            style={styles.xGraphic}
+            resizeMode="contain"
+          />
+        </View>
 
-      <ScrollView
+        <ScrollView
         style={styles.content}
         contentContainerStyle={[
           styles.contentContainer,
@@ -565,7 +571,8 @@ export default function SuperadminPayoutsScreen() {
             </View>
           )}
         </View>
-      </ScrollView>
+        </ScrollView>
+      </SwipeGestureHandler>
 
       {/* Action Modal */}
       <Modal

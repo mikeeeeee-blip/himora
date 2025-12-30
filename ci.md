@@ -14,3 +14,13 @@ cd /home/pranjal/himora/mobile-app/android
 
 
 AIzaSyASkQgwaHD-Xrdv5P5VboU9bFkNM5spJJI
+
+
+cd /home/pranjal/himora/mobile-app && eas build --platform android --profile preview --local --non-interactive
+
+
+cd /home/pranjal/himora/mobile-app
+eas build --platform android --profile preview --local
+
+# Extract and check
+unzip -l build-*.apk | grep -i "google-services" || echo "Not found in APK"
