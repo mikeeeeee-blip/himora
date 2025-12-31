@@ -170,8 +170,19 @@ async function sendPushNotification(pushTokens, notification) {
             }
           } else if (result.status === 'ok') {
             console.log(`✅ Successfully sent to token ${index + 1}: ${pushTokens[index] ? pushTokens[index].substring(0, 50) + '...' : 'unknown'}`);
+            // Log receipt ID if available (indicates Expo accepted the notification)
+            if (result.id) {
+              console.log(`   Receipt ID: ${result.id} (Expo accepted, but delivery depends on FCM config)`);
+            }
         }
       });
+      
+      // Check for delivery warnings
+      const hasReceiptIds = results.some(r => r.status === 'ok' && r.id);
+      if (hasReceiptIds) {
+        console.log('ℹ️  Note: Expo accepted notifications, but delivery requires FCM Server Key in Expo Dashboard');
+        console.log('   If notifications are not received, check: https://expo.dev/accounts/[account]/projects/[project]/credentials');
+      }
 
       return {
         success: true,

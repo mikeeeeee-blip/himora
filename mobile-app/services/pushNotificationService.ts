@@ -94,36 +94,66 @@ async function configureNotificationHandler() {
         // Set up Android notification channel
         if (Platform.OS === 'android') {
           try {
+            // Delete existing channel if it exists (to ensure fresh configuration)
+            try {
+              await Notifications.deleteNotificationChannelAsync('default');
+            } catch (e) {
+              // Channel doesn't exist, that's fine
+            }
+            
+            // Create notification channel with MAX importance
             await Notifications.setNotificationChannelAsync('default', {
-              name: 'Default',
+              name: 'Default Notifications',
+              description: 'Default notification channel for app notifications',
               importance: Notifications.AndroidImportance.MAX,
               vibrationPattern: [0, 250, 250, 250],
               lightColor: '#FF231F7C',
               sound: 'default',
               enableVibrate: true,
               showBadge: true,
+              lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
             });
-            console.log('✅ Android notification channel configured');
+            console.log('✅ Android notification channel configured with MAX importance');
+            
+            // Verify channel was created
+            const channel = await Notifications.getNotificationChannelAsync('default');
+            if (channel) {
+              console.log('✅ Notification channel verified:', {
+                id: channel.id,
+                name: channel.name,
+                importance: channel.importance,
+                sound: channel.sound,
+                vibrationPattern: channel.vibrationPattern,
+              });
+            }
           } catch (channelError: any) {
-            console.warn('⚠️ Could not configure notification channel:', channelError.message);
+            console.error('❌ Could not configure notification channel:', channelError);
+            console.error('   Error details:', JSON.stringify(channelError, Object.getOwnPropertyNames(channelError)));
             // Continue anyway - channel might already exist
           }
         }
 
         // Set notification handler to always show notifications
-Notifications.setNotificationHandler({
+        Notifications.setNotificationHandler({
           handleNotification: async (notification) => {
-            console.log('📬 Notification handler called:', notification.request.content.title);
-            console.log('   Notification data:', JSON.stringify(notification.request.content.data));
+            console.log('📬 Notification handler called (foreground):');
+            console.log('   Title:', notification.request.content.title);
+            console.log('   Body:', notification.request.content.body);
+            console.log('   Data:', JSON.stringify(notification.request.content.data, null, 2));
+            console.log('   Identifier:', notification.request.identifier);
+            console.log('   Trigger:', JSON.stringify(notification.request.trigger));
             
             // Always show notification, even when app is in foreground
-            return {
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
+            const response = {
+              shouldShowAlert: true,
+              shouldPlaySound: true,
+              shouldSetBadge: true,
               shouldShowBanner: true,
               shouldShowList: true,
             };
+            
+            console.log('   Handler response:', JSON.stringify(response));
+            return response;
           },
         });
         console.log('✅ Notification handler configured');
@@ -138,9 +168,39 @@ Notifications.setNotificationHandler({
 }
 
 // Initialize on module load (fire and forget - won't block)
+// This ensures the notification channel is created as early as possible
+// so Firebase Messaging can use it
 configureNotificationHandler().catch((error) => {
   console.warn('⚠️ Error initializing notification handler:', error);
 });
+
+// Also create channel immediately if on Android (synchronous check)
+if (Platform.OS === 'android') {
+  // Try to create channel immediately using a promise that resolves quickly
+  ensureNotificationsAvailable().then((available) => {
+    if (available && Notifications) {
+      // Create channel immediately without waiting for full handler setup
+      Notifications.setNotificationChannelAsync('default', {
+        name: 'Default Notifications',
+        description: 'Default notification channel for app notifications',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      }).then(() => {
+        console.log('✅ Notification channel created immediately on app start');
+      }).catch((err) => {
+        // Channel might already exist, that's fine
+        console.log('ℹ️  Channel creation (may already exist):', err.message);
+      });
+    }
+  }).catch(() => {
+    // Notifications not available yet, will be created later
+  });
+}
 
 /**
  * Register for push notifications and get Expo push token
@@ -591,23 +651,81 @@ export function setupNotificationListeners(
     }
 
     try {
-  // Listener for notifications received while app is foregrounded
-      receivedListener = Notifications.addNotificationReceivedListener((notification) => {
-    console.log('📬 Notification received:', notification.request.content.title);
-    if (onNotificationReceived) {
-      onNotificationReceived(notification);
-    }
-  });
+      // Log that we're setting up listeners
+      console.log('🔔 Setting up notification listeners...');
+      console.log('   App state: checking...');
+      
+      // Check last notification (might be from background)
+      Notifications.getLastNotificationResponseAsync().then((lastResponse) => {
+        if (lastResponse) {
+          console.log('📬 Found last notification response (from background):');
+          console.log('   Title:', lastResponse.notification.request.content.title);
+          console.log('   Body:', lastResponse.notification.request.content.body);
+          console.log('   Data:', JSON.stringify(lastResponse.notification.request.content.data, null, 2));
+          
+          // Trigger callback for background notification
+          if (onNotificationReceived) {
+            console.log('   Triggering onNotificationReceived for background notification...');
+            onNotificationReceived(lastResponse.notification);
+          }
+        } else {
+          console.log('   No last notification response found');
+        }
+      }).catch((err) => {
+        console.log('   Could not check last notification:', err.message);
+      });
 
-  // Listener for when user taps on notification
-      responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
-    console.log('👆 Notification tapped:', response.notification.request.content.title);
-    if (onNotificationTapped) {
-      onNotificationTapped(response);
+      // Listener for notifications received while app is foregrounded
+      receivedListener = Notifications.addNotificationReceivedListener((notification) => {
+        console.log('📬 [LISTENER] Notification received (foreground):');
+        console.log('   Title:', notification.request.content.title);
+        console.log('   Body:', notification.request.content.body);
+        console.log('   Data:', JSON.stringify(notification.request.content.data, null, 2));
+        console.log('   Identifier:', notification.request.identifier);
+        console.log('   Channel ID:', (notification.request.content as any).android?.channelId || 'default');
+        const trigger = notification.request.trigger as any;
+        console.log('   Trigger type:', trigger?.type || 'unknown');
+        
+        if (onNotificationReceived) {
+          console.log('   Calling onNotificationReceived callback...');
+          onNotificationReceived(notification);
+        } else {
+          console.warn('   ⚠️ No onNotificationReceived callback registered');
         }
       });
+
+      // Listener for when user taps on notification (works for both foreground and background)
+      responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
+        console.log('👆 [LISTENER] Notification tapped:');
+        console.log('   Title:', response.notification.request.content.title);
+        console.log('   Body:', response.notification.request.content.body);
+        console.log('   Data:', JSON.stringify(response.notification.request.content.data, null, 2));
+        console.log('   Action Identifier:', response.actionIdentifier);
+        console.log('   User Text:', response.userText);
+        const trigger = response.notification.request.trigger as any;
+        console.log('   Trigger type:', trigger?.type || 'unknown');
+        
+        // Also trigger the received handler when notification is tapped (in case app was in background)
+        if (onNotificationReceived) {
+          console.log('   Calling onNotificationReceived callback (from tap)...');
+          onNotificationReceived(response.notification);
+        }
+        
+        if (onNotificationTapped) {
+          console.log('   Calling onNotificationTapped callback...');
+          onNotificationTapped(response);
+        } else {
+          console.warn('   ⚠️ No onNotificationTapped callback registered');
+        }
+      });
+      
+      console.log('✅ Notification listeners registered successfully');
+      console.log('   - Foreground listener: active');
+      console.log('   - Tap listener: active');
+      console.log('   - Last notification check: completed');
     } catch (error) {
       console.warn('⚠️ Error setting up notification listeners:', error);
+      console.error('   Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     }
   });
 
@@ -624,5 +742,57 @@ export function setupNotificationListeners(
       console.warn('⚠️ Error removing notification listeners:', error);
     }
   };
+}
+
+/**
+ * Debug function to check notification status
+ * Call this to verify notifications are set up correctly
+ */
+export async function debugNotificationStatus(): Promise<void> {
+  console.log('🔍 Debugging notification status...');
+  
+  try {
+    const available = await ensureNotificationsAvailable();
+    if (!available || !Notifications) {
+      console.error('❌ Notifications not available');
+      return;
+    }
+
+    // Check permissions
+    const permissions = await Notifications.getPermissionsAsync();
+    console.log('📋 Permissions:', JSON.stringify(permissions, null, 2));
+
+    // Check notification channels (Android)
+    if (Platform.OS === 'android') {
+      const channel = await Notifications.getNotificationChannelAsync('default');
+      console.log('📋 Notification channel:', channel ? {
+        id: channel.id,
+        name: channel.name,
+        importance: channel.importance,
+        sound: channel.sound,
+        vibrationPattern: channel.vibrationPattern,
+      } : 'NOT FOUND');
+    }
+
+    // Check last notification
+    const lastResponse = await Notifications.getLastNotificationResponseAsync();
+    console.log('📋 Last notification:', lastResponse ? {
+      title: lastResponse.notification.request.content.title,
+      body: lastResponse.notification.request.content.body,
+      data: lastResponse.notification.request.content.data,
+    } : 'NONE');
+
+    // Try to get push token
+    try {
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      console.log('📋 Push token:', tokenData.data.substring(0, 50) + '...');
+    } catch (error: any) {
+      console.error('❌ Could not get push token:', error.message);
+    }
+
+    console.log('✅ Debug check complete');
+  } catch (error: any) {
+    console.error('❌ Error during debug check:', error.message);
+  }
 }
 

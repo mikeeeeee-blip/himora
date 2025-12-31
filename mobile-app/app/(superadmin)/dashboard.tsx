@@ -24,6 +24,7 @@ import authService from '@/services/authService';
 import Navbar from '@/components/Navbar';
 import MetricCard from '@/components/MetricCard';
 import NotificationPopup from '@/components/NotificationPopup';
+import NotificationToast from '@/components/NotificationToast';
 import SwipeGestureHandler from '@/components/SwipeGestureHandler';
 import { Colors } from '@/constants/theme';
 import { setupNotificationListeners } from '@/services/pushNotificationService';
@@ -125,6 +126,15 @@ export default function SuperadminDashboard() {
   const [notificationCount, setNotificationCount] = useState(0);
   const [pendingPayouts, setPendingPayouts] = useState<any[]>([]);
   const [showNotificationPopup, setShowNotificationPopup] = useState(false);
+  const [currentToast, setCurrentToast] = useState<{
+    id: string;
+    title: string;
+    body: string;
+    type?: 'payout_request' | 'custom_notification';
+    data?: any;
+    timestamp: Date;
+    read?: boolean;
+  } | null>(null);
   const [notifications, setNotifications] = useState<Array<{
     id: string;
     title: string;
@@ -168,52 +178,42 @@ export default function SuperadminDashboard() {
       // Setup push notification listeners
       const removeListeners = setupNotificationListeners(
         (notification) => {
+          console.log('📬 Notification received in dashboard:', {
+            title: notification.request.content.title,
+            body: notification.request.content.body,
+            data: notification.request.content.data,
+          });
+          
           // Handle notification received
-          const notificationType = notification.request.content.data?.type;
-          const notificationData = notification.request.content.data;
+          const notificationType = notification.request.content.data?.type || 'custom_notification';
+          const notificationData = notification.request.content.data || {};
           
           // Add notification to list
           const newNotification = {
             id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             title: notification.request.content.title || 'Notification',
             body: notification.request.content.body || '',
-            type: notificationType as 'payout_request' | 'custom_notification' | undefined,
+            type: notificationType as 'payout_request' | 'custom_notification',
             data: notificationData,
             timestamp: new Date(),
             read: false,
           };
           
-          setNotifications(prev => [newNotification, ...prev]);
+          console.log('📝 Adding notification to list:', newNotification);
           
+          // Add to notifications list (prepend to show newest first)
+          setNotifications(prev => {
+            const updated = [newNotification, ...prev];
+            console.log(`📋 Total notifications in list: ${updated.length}`);
+            return updated;
+          });
+          
+          // Show toast notification
+          setCurrentToast(newNotification);
+          
+          // Refresh dashboard to show updated counts
           if (notificationType === 'payout_request') {
-            const amount = notificationData?.amount || notificationData?.grossAmount || 0;
-            const merchantName = notificationData?.merchantName || 'Merchant';
-            const formattedAmount = `₹${parseFloat(String(amount)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            
-            Alert.alert(
-              notification.request.content.title || '💰 New Payout Request',
-              `${merchantName} has created a payout request of ${formattedAmount}.\n\nPlease review and approve.`,
-              [
-                { text: 'View Later', style: 'cancel' },
-                {
-                  text: 'View Now',
-                  onPress: () => {
-                    router.push('/(superadmin)/payouts');
-                  },
-                },
-              ]
-            );
-            // Refresh dashboard to show updated counts
             loadDashboardData();
-          } else if (notificationType === 'custom_notification') {
-            // Handle custom notifications from superadmin dashboard
-            Alert.alert(
-              notification.request.content.title || '📱 Notification',
-              notification.request.content.body || '',
-              [
-                { text: 'OK', style: 'default' }
-              ]
-            );
           }
         },
         (response) => {
@@ -520,6 +520,25 @@ export default function SuperadminDashboard() {
         notifications={notifications}
         onNotificationPress={handleNotificationPress}
         onMarkAllRead={handleMarkAllRead}
+      />
+      
+      <NotificationToast
+        notification={currentToast}
+        onDismiss={() => setCurrentToast(null)}
+        onPress={(notification) => {
+          // Mark as read
+          setNotifications(prev =>
+            prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
+          );
+          
+          // Navigate based on type
+          if (notification.type === 'payout_request') {
+            setShowNotificationPopup(false);
+            router.push('/(superadmin)/payouts');
+          } else {
+            setShowNotificationPopup(true);
+          }
+        }}
       />
       
       <SwipeGestureHandler

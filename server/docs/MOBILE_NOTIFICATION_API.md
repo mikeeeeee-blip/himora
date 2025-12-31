@@ -72,8 +72,8 @@ curl -X POST https://himora.art/api/superadmin/notifications/send \
   -H "Content-Type: application/json" \
   -H "x-auth-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNjkzYmFjZDBhNGQ3OWU1NTk0MTcxYzRlIiwicm9sZSI6InN1cGVyQWRtaW4ifSwiaWF0IjoxNzY3MDcxOTczLCJleHAiOjE3Njc2NzY3NzN9.X-bt2HJ4u4rnQoMCxwQ0XmzOF18_13ZN1ODzGJpvdkQ" \
   -d '{
-    "title": "Welcome to the payment gateway",
-    "body": "System maintenance scheduled ",
+    "title": "Welcome to the ninex payment gateway",
+    "body": "Test message",
     "target": "all_superadmins"
   }'
 ```

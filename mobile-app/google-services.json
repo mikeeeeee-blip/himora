@@ -1,0 +1,31 @@
+{
+  "project_info": {
+    "project_number": "845134953350",
+    "project_id": "payments-ninex",
+    "storage_bucket": "payments-ninex.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:845134953350:android:ef2c9eeb03ffb0bd874a07",
+        "android_client_info": {
+          "package_name": "com.payments.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCqBYGF3QBeNhGjX1kjQDFT8hKsCjefn3A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+
+
