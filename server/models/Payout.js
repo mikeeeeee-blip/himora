@@ -68,6 +68,7 @@ const PayoutSchema = new mongoose.Schema({
     ,
     adminNotes: String,
     utr: String,
+    itField: String, // Optional IT field for internal tracking
 
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }

@@ -47,6 +47,7 @@ const PayoutsManagement = () => {
 
   // Form states for actions
   const [approveNotes, setApproveNotes] = useState('');
+  const [approveItField, setApproveItField] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [processUtr, setProcessUtr] = useState('');
   const [processNotes, setProcessNotes] = useState('');
@@ -109,10 +110,11 @@ const PayoutsManagement = () => {
   const handleApprovePayout = async () => {
     setActionLoading(true);
     try {
-      await superadminPaymentService.approvePayout(selectedPayout.payoutId, approveNotes); // ✅ CHANGED
+      await superadminPaymentService.approvePayout(selectedPayout.payoutId, approveNotes, approveItField);
       setToast({ message: 'Payout approved successfully!', type: 'success' });
       setShowModal(false);
       setApproveNotes('');
+      setApproveItField('');
       fetchPayouts();
     } catch (error) {
       setToast({ message: error.message, type: 'error' });
@@ -179,6 +181,7 @@ const PayoutsManagement = () => {
     setModalType('');
     setSelectedPayout(null);
     setApproveNotes('');
+    setApproveItField('');
     setRejectReason('');
     setProcessUtr('');
     setProcessNotes('');
@@ -579,7 +582,7 @@ const PayoutsManagement = () => {
                                   <span className="hidden sm:inline">View</span>
                           </button>
 
-                          {payout.status === 'requested' && (
+                          {(payout.status === 'requested' || payout.status === 'processing') && (
                             <>
                               <button
                                 onClick={() => openModal('approve', payout)}
@@ -1146,23 +1149,66 @@ const PayoutsManagement = () => {
                             </p>
                           </div>
 
-                          <div className="info-box">
+                          <div className="info-box success">
                             <div className="info-row">
                               <span className="info-label">Merchant</span>
                               <span className="info-value">{selectedPayout.merchantName}</span>
                             </div>
                             <div className="info-row">
-                              <span className="info-label">Net Amount</span>
-                              <span className="info-value highlight">{formatCurrency(selectedPayout.netAmount)}</span>
+                              <span className="info-label">Payout ID</span>
+                              <span className="info-value" style={{ fontFamily: 'monospace', fontSize: '13px' }}>
+                                {selectedPayout.payoutId}
+                              </span>
+                            </div>
+                            <div className="info-row">
+                              <span className="info-label">Gross Amount</span>
+                              <span className="info-value">{formatCurrency(selectedPayout.amount)}</span>
+                            </div>
+                            <div className="info-row">
+                              <span className="info-label">Commission</span>
+                              <span className="info-value" style={{ color: '#ef4444' }}>
+                                - {formatCurrency(selectedPayout.commission)}
+                              </span>
+                            </div>
+                            <div className="info-row" style={{ borderTop: '2px solid #10b981', paddingTop: '12px', marginTop: '8px' }}>
+                              <span className="info-label" style={{ fontWeight: 700, fontSize: '16px' }}>Net Amount</span>
+                              <span className="info-value highlight" style={{ fontSize: '20px' }}>{formatCurrency(selectedPayout.netAmount)}</span>
+                            </div>
+                            <div className="info-row">
+                              <span className="info-label">Transfer Mode</span>
+                              <span className="info-value">
+                                {selectedPayout.transferMode === 'bank_transfer' ? '🏦 Bank Transfer' : 
+                                 selectedPayout.transferMode === 'crypto' ? '₿ Crypto' : '📱 UPI'}
+                              </span>
                             </div>
                           </div>
 
                           <div className="form-group">
-                            <label>Notes (Optional)</label>
+                            <label>
+                              <FiInfo style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                              Notes (Optional)
+                            </label>
                             <textarea
                               value={approveNotes}
                               onChange={(e) => setApproveNotes(e.target.value)}
                               placeholder="Add any notes for this approval..."
+                              rows={3}
+                            />
+                          </div>
+
+                          <div className="form-group">
+                            <label>
+                              IT Field (Optional)
+                              <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 'normal', marginLeft: '6px' }}>
+                                - For internal tracking purposes
+                              </span>
+                            </label>
+                            <input
+                              type="text"
+                              value={approveItField}
+                              onChange={(e) => setApproveItField(e.target.value)}
+                              placeholder="Enter IT reference number or identifier..."
+                              style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '15px' }}
                             />
                           </div>
                         </div>

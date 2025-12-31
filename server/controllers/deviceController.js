@@ -9,11 +9,6 @@ exports.registerDevice = async (req, res) => {
   try {
     const { userId, pushToken, role, platform, deviceId, appVersion } = req.body;
 
-    console.log('📱 Device registration request received:');
-    console.log('   userId:', userId);
-    console.log('   role:', role);
-    console.log('   platform:', platform);
-    console.log('   pushToken:', pushToken ? `${pushToken.substring(0, 30)}...` : 'missing');
 
     // Validation
     if (!userId || !pushToken || !role) {
@@ -42,7 +37,6 @@ exports.registerDevice = async (req, res) => {
       });
     }
 
-    console.log('   User found:', user.email, 'User role:', user.role);
 
     if (user.role !== role) {
       console.error('❌ Role mismatch:', { userRole: user.role, providedRole: role });
@@ -54,7 +48,6 @@ exports.registerDevice = async (req, res) => {
 
     // Check if device with this token already exists
     let device = await Device.findOne({ pushToken });
-    console.log('   Existing device found:', !!device);
 
     if (device) {
       // Update existing device
@@ -68,8 +61,6 @@ exports.registerDevice = async (req, res) => {
       device.lastUsedAt = new Date();
       await device.save();
 
-      console.log(`✅ Device updated: ${pushToken.substring(0, 20)}... for user ${userId}, role: ${role}`);
-      console.log(`   Device was ${wasActive ? 'already active' : 'inactive, now activated'}`);
     } else {
       // Create new device
       device = new Device({
@@ -84,35 +75,9 @@ exports.registerDevice = async (req, res) => {
       });
       await device.save();
 
-      console.log(`✅ Device registered: ${pushToken.substring(0, 20)}... for user ${userId}, role: ${role}`);
-    }
+      }
 
-    // Verify device was saved correctly
-    const savedDevice = await Device.findById(device._id);
-    console.log('   Saved device details:', {
-      id: savedDevice._id,
-      userId: savedDevice.userId.toString(),
-      role: savedDevice.role,
-      platform: savedDevice.platform,
-      isActive: savedDevice.isActive
-    });
 
-    // ✅ SUCCESS LOG - Device registered successfully
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('✅ DEVICE REGISTERED SUCCESSFULLY');
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('   Device ID:', savedDevice._id.toString());
-    console.log('   User ID:', savedDevice.userId.toString());
-    console.log('   User Email:', user.email);
-    console.log('   Role:', savedDevice.role);
-    console.log('   Platform:', savedDevice.platform);
-    console.log('   Push Token:', pushToken.substring(0, 30) + '...');
-    console.log('   Device ID (client):', deviceId || 'N/A');
-    console.log('   App Version:', appVersion || 'N/A');
-    console.log('   Is Active:', savedDevice.isActive);
-    console.log('   Registered At:', savedDevice.createdAt);
-    console.log('   Last Used At:', savedDevice.lastUsedAt);
-    console.log('═══════════════════════════════════════════════════════════');
 
     return res.json({
       success: true,
@@ -142,34 +107,10 @@ exports.registerDevice = async (req, res) => {
  */
 exports.getDeviceTokensByRole = async (role) => {
   try {
-    console.log(`🔍 Querying devices with role: "${role}" and isActive: true`);
-    
     const devices = await Device.find({
       role: role,
       isActive: true
     }).select('pushToken userId platform role isActive createdAt');
-
-    console.log(`📱 Found ${devices.length} active device(s) with role: "${role}"`);
-    
-    if (devices.length > 0) {
-      devices.forEach((device, index) => {
-        console.log(`   Device ${index + 1}:`);
-        console.log(`      ID: ${device._id}`);
-        console.log(`      userId: ${device.userId}`);
-        console.log(`      platform: ${device.platform}`);
-        console.log(`      role: ${device.role}`);
-        console.log(`      isActive: ${device.isActive}`);
-        console.log(`      pushToken: ${device.pushToken ? device.pushToken.substring(0, 50) + '...' : 'MISSING'}`);
-        console.log(`      registered: ${device.createdAt}`);
-      });
-    } else {
-      // Debug: Check if devices exist with different role casing or inactive status
-      const allDevices = await Device.find({}).select('role isActive').limit(5);
-      console.log(`   Debug: Found ${allDevices.length} total device(s) in database`);
-      allDevices.forEach((d, i) => {
-        console.log(`      Device ${i + 1}: role="${d.role}", isActive=${d.isActive}`);
-      });
-    }
 
     return devices.map(device => ({
       pushToken: device.pushToken,
@@ -190,29 +131,17 @@ exports.getDeviceTokensByRole = async (role) => {
 exports.getAllDevices = async (req, res) => {
   try {
     const { role, userId, isActive } = req.query;
-    
-    console.log('📱 Fetching devices with query:', { role, userId, isActive });
-    
     const query = {};
     if (role) query.role = role;
     if (userId) query.userId = userId;
     if (isActive !== undefined) query.isActive = isActive === 'true';
 
-    console.log('   MongoDB query:', JSON.stringify(query));
-
-    // First, get all devices to see what's in the database
-    const allDevices = await Device.find({}).select('userId role isActive').limit(10);
-    console.log(`   Total devices in DB: ${allDevices.length}`);
-    allDevices.forEach((d, i) => {
-      console.log(`   Device ${i + 1}: userId=${d.userId}, role=${d.role}, isActive=${d.isActive}`);
-    });
 
     const devices = await Device.find(query)
       .select('userId role pushToken platform deviceId appVersion isActive createdAt lastUsedAt')
       .populate('userId', 'name email role')
       .sort({ createdAt: -1 });
 
-    console.log(`   Devices matching query: ${devices.length}`);
 
     return res.json({
       success: true,
@@ -290,7 +219,6 @@ exports.unregisterDevice = async (req, res) => {
     device.updatedAt = new Date();
     await device.save();
 
-    console.log(`✅ Device unregistered: ${pushToken.substring(0, 20)}...`);
 
     return res.json({
       success: true,
@@ -314,16 +242,12 @@ exports.unregisterDevice = async (req, res) => {
 exports.flushDevices = async (req, res) => {
   try {
     const { role, userId } = req.query;
-    
-    console.log('🗑️  Flush devices request:', { role, userId });
-    
     const query = {};
     if (role) query.role = role;
     if (userId) query.userId = userId;
 
     // Count devices before deletion
     const countBefore = await Device.countDocuments(query);
-    console.log(`   Devices to delete: ${countBefore}`);
 
     if (countBefore === 0) {
       return res.json({
@@ -336,7 +260,6 @@ exports.flushDevices = async (req, res) => {
 
     // Delete devices
     const result = await Device.deleteMany(query);
-    console.log(`✅ Deleted ${result.deletedCount} device(s)`);
 
     return res.json({
       success: true,

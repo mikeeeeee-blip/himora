@@ -58,9 +58,10 @@ const PayoutsPage = () => {
   });
 
   const [error, setError] = useState('');
-  const [showRequestForm, setShowRequestForm] = useState(false);
+  const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestLoading, setRequestLoading] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
+  const [validationError, setValidationError] = useState('');
   const [feePreview, setFeePreview] = useState({
   grossAmount: 0,
   commission: 0,
@@ -494,9 +495,10 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
         };
 
         await paymentService.requestPayout(payoutData);
-        setShowRequestForm(false);
+        setShowRequestModal(false);
         setToast({ message: 'Payout request submitted successfully!', type: 'success' });
         resetForm();
+        setValidationError('');
         // Refresh data immediately to get updated balance
         await Promise.all([
           fetchPayouts(),
@@ -538,11 +540,19 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
       },
       notes: ''
     });
+    setFeePreview({
+      grossAmount: 0,
+      commission: 0,
+      netAmount: 0,
+      note: '',
+      warning: ''
+    });
+    setValidationError('');
   };
 
 
 
-const handleInputChange = (field, value) => {
+  const handleInputChange = (field, value) => {
   if (field.includes('.')) {
     const [parent, child] = field.split('.');
     setRequestData(prev => ({
@@ -559,11 +569,27 @@ const handleInputChange = (field, value) => {
     }));
   }
 
-  // If amount changed, recompute fee preview
+  // If amount changed, recompute fee preview and validate
   if (field === 'amount') {
     const freeLeft = (balance?.merchant?.freePayoutsRemaining ?? 0);
     const preview = computePayoutCharge(value, freeLeft);
     setFeePreview(preview);
+    
+    // Real-time validation
+    const amount = parseFloat(value);
+    const availableBalance = balance?.balance?.available_balance || 0;
+    const totalRequired = amount + preview.commission;
+    
+    setValidationError('');
+    if (value && !isNaN(amount)) {
+      if (amount <= 0) {
+        setValidationError('Amount must be greater than 0');
+      } else if (totalRequired > availableBalance) {
+        setValidationError(`Insufficient balance. Required: ${formatCurrency(totalRequired)}, Available: ${formatCurrency(availableBalance)}`);
+      } else if (amount > eligibility.maximum_payout_amount) {
+        setValidationError(`Amount exceeds maximum payout limit of ${formatCurrency(eligibility.maximum_payout_amount)}`);
+      }
+    }
   }
 };
 
@@ -688,19 +714,15 @@ const handleInputChange = (field, value) => {
             )}
 
             <button
-              onClick={() => setShowRequestForm(!showRequestForm)}
+              onClick={() => {
+                setShowRequestModal(true);
+                setValidationError('');
+                setError('');
+              }}
                         className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-2.5 rounded-lg font-medium font-['Albert_Sans'] flex items-center gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!eligibility.can_request_payout}
             >
-                        {showRequestForm ? (
-                          <>
-                            <FiX /> Cancel
-                          </>
-                        ) : (
-                          <>
-                            <FiPlus /> Request Payout
-                          </>
-                        )}
+                        <FiPlus /> Request New Payout
             </button>
           </div>
         </div>
@@ -1012,23 +1034,58 @@ const handleInputChange = (field, value) => {
                   </motion.div>
           )}
 
-          {/* Request Form */}
-          {showRequestForm && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5 }}
-                    className="bg-[#122D32] border border-white/10 rounded-xl p-6 sm:p-8"
+          {/* Request Payout Modal */}
+          {showRequestModal && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => {
+              setShowRequestModal(false);
+              resetForm();
+              setValidationError('');
+            }}>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2 }}
+                className="bg-[#122D32] border border-white/20 rounded-xl p-6 sm:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <FiPlus className="text-accent text-xl" />
+                    <h3 className="text-2xl font-semibold text-white font-['Albert_Sans']">
+                      Request New Payout
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowRequestModal(false);
+                      resetForm();
+                      setValidationError('');
+                    }}
+                    className="text-white/60 hover:text-white hover:bg-white/10 rounded-lg p-2 transition-colors"
                   >
-                    <div className="flex items-center gap-3 mb-4">
-                      <FiPlus className="text-accent text-xl" />
-                      <h3 className="text-xl font-semibold text-white font-['Albert_Sans']">
-                        Request New Payout
-                      </h3>
+                    <FiX className="text-xl" />
+                  </button>
+                </div>
+
+                {/* Available Balance Display */}
+                {balance && (
+                  <div className="bg-[#263F43] border border-accent/30 rounded-lg p-4 mb-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-white/70 text-sm font-['Albert_Sans'] mb-1">Available Balance</p>
+                        <p className="text-white text-2xl font-bold font-['Albert_Sans']">
+                          {formatCurrency(balance.balance?.available_balance || 0)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-white/70 text-sm font-['Albert_Sans'] mb-1">Maximum Payout</p>
+                        <p className="text-accent text-xl font-semibold font-['Albert_Sans']">
+                          {formatCurrency(eligibility.maximum_payout_amount || 0)}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-white/70 text-sm mb-6 font-['Albert_Sans']">
-                Select a settlement date to withdraw all transactions settled on that day
-                    </p>
+                  </div>
+                )}
 
                     <form onSubmit={handleRequestPayout} className="space-y-4">
                 {requestData.amount && (
@@ -1052,13 +1109,32 @@ const handleInputChange = (field, value) => {
                             handleInputChange('amount', e.target.value)
                           }
                     required
-                          placeholder={`Max: ${formatCurrency(
-                            eligibility.maximum_payout_amount
-                          )}`}
+                          placeholder={`Enter amount (Max: ${formatCurrency(eligibility.maximum_payout_amount)})`}
                     max={eligibility.maximum_payout_amount} 
                     min="1"
-                          className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200 font-['Albert_Sans']"
+                          className={`w-full px-4 py-2.5 bg-[#263F43] border rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 transition-all duration-200 font-['Albert_Sans'] ${
+                            validationError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-white/10 focus:border-accent focus:ring-accent/20'
+                          }`}
                   />
+                  {validationError && (
+                    <p className="text-red-400 text-sm mt-2 font-['Albert_Sans'] flex items-center gap-1">
+                      <FiAlertCircle className="text-xs" />
+                      {validationError}
+                    </p>
+                  )}
+                  {requestData.amount && !validationError && balance && (
+                    <div className="mt-2 text-sm font-['Albert_Sans']">
+                      <p className="text-white/60">
+                        Total Required: <span className="text-white font-semibold">
+                          {formatCurrency((parseFloat(requestData.amount) || 0) + feePreview.commission)}
+                        </span>
+                        {' '}(Amount: {formatCurrency(parseFloat(requestData.amount) || 0)} + Fee: {formatCurrency(feePreview.commission)})
+                      </p>
+                      <p className="text-green-400 mt-1">
+                        Remaining Balance: {formatCurrency((balance.balance?.available_balance || 0) - ((parseFloat(requestData.amount) || 0) + feePreview.commission))}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                       <div>
@@ -1316,8 +1392,9 @@ const handleInputChange = (field, value) => {
                   <button
                     type="button"
                     onClick={() => {
-                      setShowRequestForm(false);
+                      setShowRequestModal(false);
                       resetForm();
+                      setValidationError('');
                     }}
                           className="px-6 py-2.5 bg-[#263F43] hover:bg-[#263F43]/80 text-white rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 border border-white/10"
                   >
@@ -1326,7 +1403,7 @@ const handleInputChange = (field, value) => {
                   <button
                     type="submit"
                           disabled={
-                            requestLoading || !eligibility.can_request_payout
+                            requestLoading || !eligibility.can_request_payout || !!validationError || !requestData.amount
                           }
                           className="px-6 py-2.5 bg-accent hover:bg-accent/90 text-white rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -1337,6 +1414,7 @@ const handleInputChange = (field, value) => {
                 </div>
               </form>
                   </motion.div>
+            </div>
           )}
 
 
@@ -1455,7 +1533,10 @@ const handleInputChange = (field, value) => {
                       No payout requests have been made yet.
                     </p>
                   <button
-                    onClick={() => setShowRequestForm(true)}
+                    onClick={() => {
+                      setShowRequestModal(true);
+                      setValidationError('');
+                    }}
                       className="bg-accent hover:bg-accent/90 text-white px-6 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!eligibility.can_request_payout}
                   >

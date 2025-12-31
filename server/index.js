@@ -19,6 +19,7 @@ const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const { initializeSettlementJob, restartSettlementJob, manualSettlement } = require('./jobs/settlementJob'); // ✅ Import settlement job functions
+const { initializePayoutStatusJob } = require('./jobs/payoutStatusJob'); // ✅ Import payout status transition job
 const Transaction = require('./models/Transaction');
 const Payout = require('./models/Payout');
 const User = require('./models/User');
@@ -484,6 +485,7 @@ async function startServer() {
         
         // Initialize and start settlement job after DB connection
         await initializeSettlementJob();
+        initializePayoutStatusJob(); // ✅ Initialize payout status transition job
         console.log('✅ Settlement cron job initialized and started');
         
         // Only listen if not in Vercel serverless environment

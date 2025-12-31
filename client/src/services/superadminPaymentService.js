@@ -367,7 +367,7 @@ async triggerManualSettlement() {
     }
   }
 
-  async approvePayout(payoutId, notes = '') {
+  async approvePayout(payoutId, notes = '', itField = '') {
     try {
       const token = authService.getToken();
       if (!token) {
@@ -378,7 +378,7 @@ async triggerManualSettlement() {
 
       const response = await axios.post(
         API_ENDPOINTS.ADMIN_PAYOUT_APPROVE(payoutId),
-        { notes },
+        { notes, itField },
         {
           headers: {
             'x-auth-token': token,

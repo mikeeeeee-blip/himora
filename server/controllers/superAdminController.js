@@ -49,7 +49,6 @@ exports.getAllPayouts = async (req, res) => {
             sortOrder = 'desc'
         } = req.query;
 
-        console.log(`📋 SuperAdmin ${req.user.name} fetching all payouts - Page ${page}`);
 
         // Build query
         let query = {};
@@ -122,8 +121,8 @@ exports.getAllPayouts = async (req, res) => {
             },
             summary: {
                 total_payout_requests: allPayouts.length,
-                requested_payouts: allPayouts.filter(p => p.status === 'requested').length,
-                pending_payouts: allPayouts.filter(p => ['pending', 'processing'].includes(p.status)).length,
+                requested_payouts: allPayouts.filter(p => p.status === 'requested' || p.status === 'processing').length,
+                pending_payouts: allPayouts.filter(p => p.status === 'pending').length,
                 completed_payouts: allPayouts.filter(p => p.status === 'completed').length,
                 failed_payouts: allPayouts.filter(p => p.status === 'failed').length,
                 rejected_payouts: allPayouts.filter(p => p.status === 'rejected').length,
@@ -134,7 +133,6 @@ exports.getAllPayouts = async (req, res) => {
             }
         });
 
-        console.log(`✅ Returned ${payouts.length} payouts to SuperAdmin`);
 
     } catch (error) {
         console.error('❌ Get All Payouts Error:', error);
@@ -148,9 +146,8 @@ exports.getAllPayouts = async (req, res) => {
 exports.approvePayout = async (req, res) => {
     try {
         const { payoutId } = req.params;
-        const { notes } = req.body;
+        const { notes, itField } = req.body;
 
-        console.log(`✅ SuperAdmin ${req.user.name} approving payout: ${payoutId}`);
 
         const payout = await Payout.findOne({ payoutId });
 
@@ -161,10 +158,10 @@ exports.approvePayout = async (req, res) => {
             });
         }
 
-        if (payout.status !== 'requested') {
+        if (payout.status !== 'processing') {
             return res.status(400).json({
                 success: false,
-                error: `Cannot approve payout with status: ${payout.status}. Only 'requested' payouts can be approved.`,
+                error: `Cannot approve payout with status: ${payout.status}. Only 'processing' payouts can be approved. Payouts automatically move to 'processing' after 30 seconds.`,
                 currentStatus: payout.status
             });
         }
@@ -175,6 +172,7 @@ exports.approvePayout = async (req, res) => {
         payout.approvedByName = req.user.name;
         payout.approvedAt = new Date();
         payout.adminNotes = notes || '';
+        payout.itField = itField || '';
 
         await payout.save();
 
@@ -189,7 +187,6 @@ exports.approvePayout = async (req, res) => {
             }
         );
 
-        console.log(`✅ Payout ${payoutId} approved and ready for processing`);
 
         res.json({
             success: true,
@@ -221,7 +218,6 @@ exports.deletePayout = async (req, res) => {
         const { payoutId } = req.params;
         const { reason } = req.query; // Get reason from query params since DELETE doesn't support body
 
-        console.log(`🗑️ SuperAdmin ${req.user.name} deleting payout: ${payoutId}`);
 
         const payout = await Payout.findOne({ payoutId });
 
@@ -248,7 +244,6 @@ exports.deletePayout = async (req, res) => {
             if (merchant) {
                 merchant.freePayoutsUnder500 += 1;
                 await merchant.save();
-                console.log(`✅ Restored 1 free payout to merchant ${merchant.name}`);
             }
         }
 
@@ -266,7 +261,6 @@ exports.deletePayout = async (req, res) => {
         // ✅ Delete the payout
         await Payout.deleteOne({ payoutId });
 
-        console.log(`✅ Payout ${payoutId} deleted successfully by ${req.user.name}`);
 
         res.json({
             success: true,
@@ -302,7 +296,6 @@ exports.rejectPayout = async (req, res) => {
             });
         }
 
-        console.log(`❌ SuperAdmin ${req.user.name} rejecting payout: ${payoutId}`);
 
         const payout = await Payout.findOne({ payoutId });
 
@@ -328,7 +321,6 @@ exports.rejectPayout = async (req, res) => {
             if (merchant) {
                 merchant.freePayoutsUnder500 += 1;
                 await merchant.save();
-                console.log(`✅ Restored 1 free payout to merchant ${merchant.name}`);
             }
         }
 
@@ -348,7 +340,6 @@ exports.rejectPayout = async (req, res) => {
             payout.approvedByName = null;
             payout.approvedAt = null;
             payout.approvalNotes = null;
-            console.log(`🔄 Clearing approval fields for payout ${payoutId} (was ${previousStatus})`);
         }
 
         await payout.save();
@@ -364,7 +355,6 @@ exports.rejectPayout = async (req, res) => {
             }
         );
 
-        console.log(`✅ Payout ${payoutId} rejected. ${updateResult.modifiedCount} transactions rolled back.`);
 
         res.json({
             success: true,
@@ -417,7 +407,6 @@ exports.processPayout = async (req, res) => {
             });
         }
 
-        console.log(`💰 SuperAdmin ${req.user.name} processing payout: ${payoutId} with ${payout.transferMode === 'crypto' ? 'Transaction Hash' : 'UTR'}: ${transactionRef}`);
 
         // ✅ Can only process 'pending' payouts (already approved)
         if (payout.status !== 'pending') {
@@ -496,7 +485,6 @@ exports.processPayout = async (req, res) => {
             }
         }
 
-        console.log("sending the payout webhook payload ", webhookPayload)
         const merchant = await User.findById(updatedPayout.merchantId)
 
         if (updatedPayout.merchantId) {
@@ -536,7 +524,6 @@ exports.revertPayout = async (req, res) => {
         const { payoutId } = req.params;
         const { reason } = req.body;
 
-        console.log(`🔄 SuperAdmin ${req.user.name} reverting payout: ${payoutId}`);
 
         const payout = await Payout.findOne({ payoutId });
 
@@ -583,7 +570,6 @@ exports.revertPayout = async (req, res) => {
             }
         );
 
-        console.log(`✅ Payout ${payoutId} reverted. ${updateResult.modifiedCount} transactions rolled back. Amount ₹${payout.netAmount} added back to merchant balance.`);
 
         // Send webhook to merchant about payout reversion
         const merchant = await User.findById(payout.merchantId);
@@ -649,7 +635,6 @@ exports.getAllTransactions = async (req, res) => {
             sortOrder = 'desc'
         } = req.query;
 
-        console.log(`📊 SuperAdmin fetching all transactions - Page ${page}`);
 
         // Build query
         let query = {};
@@ -733,7 +718,6 @@ exports.getAllTransactions = async (req, res) => {
             }
         });
 
-        console.log(`✅ Returned ${transactions.length} transactions to SuperAdmin`);
 
     } catch (error) {
         console.error('❌ Get All Transactions Error:', error);
