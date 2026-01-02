@@ -341,14 +341,17 @@ exports.createPayuPaymentLink = async (req, res) => {
         const transaction = new Transaction(transactionData);
         await transaction.save();
 
-        // Return PayU payment URL directly - no intermediate checkout page
-        // Build response with direct PayU payment URL
+        // Create checkout page URL - this will use form-based UPI payment
+        const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
+        const checkoutPageUrl = `${baseUrl}/api/payu/checkout/${transactionId}`;
+
+        // Build response with form-based payment data
         const response = {
             success: true,
             transaction_id: transactionId,
             payment_link_id: orderId,
-            payment_url: PAYU_PAYMENT_URL, // Direct PayU payment URL
-            checkout_page: PAYU_PAYMENT_URL, // Direct PayU payment URL (no intermediate page)
+            payment_url: checkoutPageUrl,
+            checkout_page: checkoutPageUrl,
             order_id: orderId,
             order_amount: parseFloat(amount),
             order_currency: 'INR',
@@ -357,9 +360,9 @@ exports.createPayuPaymentLink = async (req, res) => {
             reference_id: payuReferenceId,
             callback_url: finalCallbackUrl,
             payment_mode: 'UPI',
-            payu_params: payuParams, // Frontend can use these to submit form directly
+            payu_params: payuParams,
             payu_payment_url: PAYU_PAYMENT_URL,
-            message: 'Payment link created successfully. Submit the payu_params to PayU payment URL to complete payment.'
+            message: 'Payment link created successfully using PayU UPI Seamless (form-based). Use the checkout_page URL to access the payment interface. Customer will be redirected to PayU to complete UPI payment.'
         };
         
         res.json(response);
@@ -516,36 +519,13 @@ exports.handlePayuCallback = async (req, res) => {
             return res.redirect(`${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed?error=transaction_not_found`);
         }
 
-        // Verify hash (PayU callback hash verification)
-        // Hash format for callback: sha512(SALT|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key)
-        if (payuResponse.hash) {
-            const receivedHash = payuResponse.hash;
-            const salt = String(PAYU_SALT || '').trim();
-            const status = String(payuResponse.status || '').trim();
-            const udf5 = String(payuResponse.udf5 || '').trim();
-            const udf4 = String(payuResponse.udf4 || '').trim();
-            const udf3 = String(payuResponse.udf3 || '').trim();
-            const udf2 = String(payuResponse.udf2 || '').trim();
-            const udf1 = String(payuResponse.udf1 || '').trim();
-            const email = String(payuResponse.email || '').trim();
-            const firstname = String(payuResponse.firstname || '').trim();
-            const productinfo = String(payuResponse.productinfo || '').trim();
-            const amount = String(payuResponse.amount || '').trim();
-            const txnid = String(payuResponse.txnid || '').trim();
-            const key = String(PAYU_KEY || '').trim();
-            
-            // Build hash string in reverse order as per PayU callback format
-            const hashString = `${salt}|${status}||||||${udf5}|${udf4}|${udf3}|${udf2}|${udf1}|${email}|${firstname}|${productinfo}|${amount}|${txnid}|${key}`;
-            const calculatedHash = crypto.createHash('sha512').update(hashString, 'utf8').digest('hex');
-            
-            if (receivedHash !== calculatedHash) {
-                console.warn('❌ Invalid PayU hash in callback');
-                console.warn('   Received:', receivedHash);
-                console.warn('   Calculated:', calculatedHash);
-                // Still process but log warning - PayU sometimes sends inconsistent hashes
-            } else {
-                console.log('✅ PayU callback hash verified');
-            }
+        // Verify hash
+        const receivedHash = payuResponse.hash;
+        const calculatedHash = generatePayUHash(payuResponse);
+
+        if (receivedHash !== calculatedHash) {
+            console.warn('❌ Invalid PayU hash in callback');
+            // Still process but log warning
         }
 
         // Check payment status
@@ -1168,9 +1148,9 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 .replace(/'/g, '&#039;');
         };
 
-        // Direct redirect to PayU payment page - no intermediate checkout page
+        // Use form-based UPI payment (UPI Seamless)
         // Reference: https://docs.payu.in/docs/collect-payments-with-upi-seamless
-        console.log('🔄 Redirecting directly to PayU payment page for transaction:', transactionId);
+        console.log('🔄 Loading PayU UPI Seamless checkout page for transaction:', transactionId);
         
         // Get stored PayU parameters or generate new ones
         let payuParams = transaction.payuParams;
@@ -1220,23 +1200,97 @@ exports.getPayuCheckoutPage = async (req, res) => {
         // Build form inputs for PayU payment form
         const formInputs = Object.entries(payuParams)
             .map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(String(value))}" />`)
-            .join('\n        ');
+            .join('');
         
-        // Generate ultra-minimal HTML that submits form instantly (no white screen, maximum speed)
-        // Using immediate script execution and preload hints for fastest redirect
-        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><link rel="preconnect" href="${PAYU_BASE_URL}"><style>body{margin:0;padding:0;background:#fff}</style></head><body><form id="f" method="POST" action="${PAYU_PAYMENT_URL}">${formInputs}</form><script>(function(){var f=document.getElementById('f');if(f)f.submit();else setTimeout(arguments.callee,1);})();</script></body></html>`;
+        // Generate minimal HTML with PayU logo that auto-submits form immediately
+        // This redirects directly to PayU payment page with a brief logo display
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting to PayU...</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .logo-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+        .payu-logo {
+            max-width: 200px;
+            height: auto;
+            display: block;
+        }
+        .loading-text {
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+            opacity: 0.8;
+        }
+        #payuForm {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="logo-container">
+        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS2EMrhqFYHWyEhY8yxnScriEXG3UR6uaY-yg&s" 
+             alt="PayU" 
+             class="payu-logo" />
+        <div class="loading-text">Redirecting to PayU...</div>
+    </div>
+    <form id="payuForm" method="POST" action="${PAYU_PAYMENT_URL}">
+        ${formInputs}
+    </form>
+    <script>
+        // Auto-submit form immediately on page load
+        (function() {
+            var form = document.getElementById('payuForm');
+            if (form) {
+                // Small delay to show logo briefly (100ms)
+                setTimeout(function() {
+                    form.submit();
+                }, 100);
+            } else {
+                // Fallback: retry if form not found
+                setTimeout(function() {
+                    var form = document.getElementById('payuForm');
+                    if (form) form.submit();
+                }, 10);
+            }
+        })();
+    </script>
+</body>
+</html>`;
         
         console.log('✅ Redirecting directly to PayU payment page');
         console.log('   Payment URL:', PAYU_PAYMENT_URL);
         console.log('   Order ID:', payuParams.txnid);
         
-        // Set headers for fastest possible redirect
+        // Set headers for immediate redirect
         res.set({
             'Content-Type': 'text/html; charset=utf-8',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
-            'Expires': '0',
-            'X-Content-Type-Options': 'nosniff'
+            'Expires': '0'
         });
         
         return res.send(html);

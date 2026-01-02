@@ -552,7 +552,7 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
 
 
 
-  const handleInputChange = (field, value) => {
+const handleInputChange = (field, value) => {
   if (field.includes('.')) {
     const [parent, child] = field.split('.');
     setRequestData(prev => ({
@@ -1041,20 +1041,20 @@ const computePayoutCharge = (amount, freePayoutsRemaining) => {
               resetForm();
               setValidationError('');
             }}>
-              <motion.div
+                  <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.2 }}
                 className="bg-[#122D32] border border-white/20 rounded-xl p-6 sm:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
-              >
+                  >
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
-                    <FiPlus className="text-accent text-xl" />
+                      <FiPlus className="text-accent text-xl" />
                     <h3 className="text-2xl font-semibold text-white font-['Albert_Sans']">
-                      Request New Payout
-                    </h3>
-                  </div>
+                        Request New Payout
+                      </h3>
+                    </div>
                   <button
                     onClick={() => {
                       setShowRequestModal(false);
