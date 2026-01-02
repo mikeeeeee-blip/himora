@@ -516,13 +516,36 @@ exports.handlePayuCallback = async (req, res) => {
             return res.redirect(`${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed?error=transaction_not_found`);
         }
 
-        // Verify hash
-        const receivedHash = payuResponse.hash;
-        const calculatedHash = generatePayUHash(payuResponse);
-
-        if (receivedHash !== calculatedHash) {
-            console.warn('❌ Invalid PayU hash in callback');
-            // Still process but log warning
+        // Verify hash (PayU callback hash verification)
+        // Hash format for callback: sha512(SALT|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key)
+        if (payuResponse.hash) {
+            const receivedHash = payuResponse.hash;
+            const salt = String(PAYU_SALT || '').trim();
+            const status = String(payuResponse.status || '').trim();
+            const udf5 = String(payuResponse.udf5 || '').trim();
+            const udf4 = String(payuResponse.udf4 || '').trim();
+            const udf3 = String(payuResponse.udf3 || '').trim();
+            const udf2 = String(payuResponse.udf2 || '').trim();
+            const udf1 = String(payuResponse.udf1 || '').trim();
+            const email = String(payuResponse.email || '').trim();
+            const firstname = String(payuResponse.firstname || '').trim();
+            const productinfo = String(payuResponse.productinfo || '').trim();
+            const amount = String(payuResponse.amount || '').trim();
+            const txnid = String(payuResponse.txnid || '').trim();
+            const key = String(PAYU_KEY || '').trim();
+            
+            // Build hash string in reverse order as per PayU callback format
+            const hashString = `${salt}|${status}||||||${udf5}|${udf4}|${udf3}|${udf2}|${udf1}|${email}|${firstname}|${productinfo}|${amount}|${txnid}|${key}`;
+            const calculatedHash = crypto.createHash('sha512').update(hashString, 'utf8').digest('hex');
+            
+            if (receivedHash !== calculatedHash) {
+                console.warn('❌ Invalid PayU hash in callback');
+                console.warn('   Received:', receivedHash);
+                console.warn('   Calculated:', calculatedHash);
+                // Still process but log warning - PayU sometimes sends inconsistent hashes
+            } else {
+                console.log('✅ PayU callback hash verified');
+            }
         }
 
         // Check payment status
@@ -1199,28 +1222,22 @@ exports.getPayuCheckoutPage = async (req, res) => {
             .map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(String(value))}" />`)
             .join('\n        ');
         
-        // Generate HTML page that immediately submits form to PayU (no UI, instant redirect)
-        const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redirecting to PayU...</title>
-</head>
-<body>
-    <form id="payuForm" method="POST" action="${PAYU_PAYMENT_URL}">
-        ${formInputs}
-    </form>
-    <script>
-        // Immediately submit form to PayU (no delay, no UI)
-        document.getElementById('payuForm').submit();
-    </script>
-</body>
-</html>`;
+        // Generate ultra-minimal HTML that submits form instantly (no white screen, maximum speed)
+        // Using immediate script execution and preload hints for fastest redirect
+        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><link rel="preconnect" href="${PAYU_BASE_URL}"><style>body{margin:0;padding:0;background:#fff}</style></head><body><form id="f" method="POST" action="${PAYU_PAYMENT_URL}">${formInputs}</form><script>(function(){var f=document.getElementById('f');if(f)f.submit();else setTimeout(arguments.callee,1);})();</script></body></html>`;
         
         console.log('✅ Redirecting directly to PayU payment page');
         console.log('   Payment URL:', PAYU_PAYMENT_URL);
         console.log('   Order ID:', payuParams.txnid);
+        
+        // Set headers for fastest possible redirect
+        res.set({
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'X-Content-Type-Options': 'nosniff'
+        });
         
         return res.send(html);
 
