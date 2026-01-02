@@ -6,7 +6,10 @@ const {
     createPayuPaymentLink,
     handlePayuWebhook,
     handlePayuCallback,
-    getPayuCheckoutPage
+    getPayuCheckoutPage,
+    createMerchantHostedPayment,
+    processUPISeamless,
+    verifyPaymentStatus
 } = require('../controllers/payuController.js');
 
 // ============ MERCHANT APIs (API Key Auth) ============
@@ -29,6 +32,20 @@ router.post('/callback', handlePayuCallback);
 
 // ============ WEBHOOK (No Auth - Hash Verified) ============
 router.post('/webhook', handlePayuWebhook);
+
+// ============ MERCHANT HOSTED CHECKOUT (API Key Auth) ============
+// Create payment using Merchant Hosted Checkout
+// Reference: https://docs.payu.in/docs/custom-checkout-merchant-hosted
+router.post('/merchant-hosted/create', apiKeyAuth, createMerchantHostedPayment);
+
+// ============ UPI SEAMLESS (API Key Auth) ============
+// Process UPI payment using Server-to-Server seamless flow
+// Reference: https://docs.payu.in/docs/collect-payments-with-upi-seamless
+router.post('/upi/seamless', apiKeyAuth, processUPISeamless);
+
+// ============ VERIFY PAYMENT (API Key Auth) ============
+// Verify payment status using PayU Verify Payment API
+router.get('/verify', apiKeyAuth, verifyPaymentStatus);
 
 module.exports = router;
 

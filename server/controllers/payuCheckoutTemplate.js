@@ -605,6 +605,18 @@ function generatePayUCheckoutHTMLWithForm(transaction, payuParams, formInputs, c
                 form.submit();
             }
         }
+
+        // Auto-submit form for UPI payments (if pg is UPI)
+        window.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('payuForm');
+            const pgInput = form.querySelector('input[name="pg"]');
+            if (pgInput && pgInput.value === 'UPI') {
+                // Auto-submit after a short delay to show the page
+                setTimeout(function() {
+                    form.submit();
+                }, 1000);
+            }
+        });
     </script>
 </body>
 </html>`;

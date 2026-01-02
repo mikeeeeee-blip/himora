@@ -264,67 +264,53 @@ exports.createPayuPaymentLink = async (req, res) => {
         // PayU callback URL - points to our callback handler
         const payuCallbackUrl = `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/payu/callback?transaction_id=${transactionId}`;
 
-        // Prepare amount for PayU Generate UPI Intent API
+        // Prepare amount for PayU
         // Important: Amount must be formatted correctly (2 decimal places)
         const amountFormatted = parseFloat(amount).toFixed(2);
         
-        // Generate PayU UPI Intent using Generate UPI Intent API - REQUIRED, NO FALLBACK
-        // Reference: https://docs.payu.in/v2/reference/v2-generate-upi-intent-api
-        const expiryTime = 900; // 15 minutes in seconds
-        const refUrl = finalCallbackUrl;
-        
-        console.log('🔄 Generating PayU UPI Intent for order:', orderId);
+        // Use UPI Seamless form-based payment approach
+        // Reference: https://docs.payu.in/docs/collect-payments-with-upi-seamless
+        // This approach doesn't require UPI Intent API and works with standard PayU accounts
+        console.log('🔄 Creating PayU UPI Seamless payment for order:', orderId);
         console.log('   Amount:', amountFormatted);
-        console.log('   Expiry Time:', expiryTime, 'seconds');
-        console.log('   Reference URL:', refUrl);
+        console.log('   Using form-based UPI payment (no Intent API required)');
         
-        // This will throw an error if Intent API fails - NO FALLBACK
-        const intentData = await generatePayUUPIIntent(
-            orderId,
-            amountFormatted,
-            expiryTime,
-            refUrl,
-            '01' // category
-        );
+        // Prepare payment parameters for UPI Seamless
+        const productInfo = description || `Payment for ${merchantName}`;
+        const firstName = customer_name.split(' ')[0] || customer_name;
+        const email = customer_email.trim();
         
-        if (!intentData || !intentData.intentUri) {
-            throw new Error('PayU Intent API returned invalid response: missing intentUri');
-        }
-        
-        console.log('✅ PayU UPI Intent generated successfully');
-        console.log('   Intent URI:', intentData.intentUri);
-        console.log('   Intent URL:', intentData.intentUrl);
-        
-        // Extract UPI parameters from PayU Intent API response
-        const intentUri = intentData.intentUri;
-        const queryString = intentUri.split('?')[1] || '';
-        
-        // Parse query string to extract reference ID
-        const urlParams = {};
-        if (queryString) {
-            queryString.split('&').forEach(param => {
-                const [key, value] = param.split('=');
-                if (key && value) {
-                    urlParams[key] = decodeURIComponent(value);
-                }
-            });
-        }
-        
-        // Build UPI deep links from PayU's intentUri
-        const upiQuery = queryString; // Use the query string from PayU's intentUri directly
-        const upiDeepLinks = {
-            generic: intentUri,  // Use PayU's intentUri directly
-            phonepe: `phonepe://pay?${upiQuery}`,
-            googlepay: `tez://pay?${upiQuery}`,
-            gpay_intent: `intent://pay?${upiQuery}#Intent;package=com.google.android.apps.nbu.paisa.user;scheme=upi;end`,
-            paytm: `paytmmp://pay?${upiQuery}`,
-            bhim: `bhim://pay?${upiQuery}`,
-            cred: `credpay://pay?${upiQuery}`,
-            amazonpay: `amazonpay://pay?${upiQuery}`
+        // Standard PayU form parameters for UPI
+        const payuParams = {
+            key: PAYU_KEY.trim(),
+            txnid: orderId,
+            amount: amountFormatted,
+            productinfo: productInfo,
+            firstname: firstName,
+            email: email,
+            phone: customer_phone.trim(),
+            surl: (success_url || finalCallbackUrl).trim(),
+            furl: (failure_url || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`).trim(),
+            curl: payuCallbackUrl.trim(),
+            service_provider: 'payu_paisa',
+            pg: 'UPI',  // Payment gateway: UPI
+            bankcode: 'UPI'  // Bank code: UPI for seamless UPI payment
+            // Note: vpa (VPA/UPI ID) is optional - customer can enter it on PayU page
         };
         
-        // Extract reference ID from intentUri (tr parameter)
-        const payuReferenceId = urlParams.tr || orderId;
+        // Generate hash for payment
+        const hashParams = {
+            txnid: payuParams.txnid,
+            amount: payuParams.amount,
+            productinfo: payuParams.productinfo,
+            firstname: payuParams.firstname,
+            email: payuParams.email
+        };
+        
+        const hash = generatePayUHash(hashParams);
+        payuParams.hash = hash;
+        
+        const payuReferenceId = orderId;
 
         // Save transaction to database
         const transactionData = {
@@ -338,45 +324,31 @@ exports.createPayuPaymentLink = async (req, res) => {
             customerPhone: customer_phone,
             amount: parseFloat(amount),
             currency: 'INR',
-            description: description || `Payment for ${merchantName}`,
+            description: productInfo,
             status: 'created',
             paymentGateway: 'payu',
+            paymentMethod: 'UPI',
             payuOrderId: orderId,
             payuReferenceId: payuReferenceId,
             callbackUrl: finalCallbackUrl,
             successUrl: success_url,
             failureUrl: failure_url,
+            payuParams: payuParams, // Store params for form submission
             createdAt: new Date(),
             updatedAt: new Date()
         };
         
-        // Store UPI Intent data from PayU Intent API (REQUIRED)
-        transactionData.payuIntentData = {
-            intentId: intentData.intentId,
-            intentUri: intentData.intentUri,
-            intentUrl: intentData.intentUrl,
-            intentUrlWithQR: intentData.intentUrlWithQR,
-            transactionId: intentData.transactionId,
-            expiryTime: intentData.expiryTime,
-            referenceId: payuReferenceId,
-            intentApiAvailable: true
-        };
-        
         const transaction = new Transaction(transactionData);
-
         await transaction.save();
 
-        // Create checkout page URL - this will use the modern checkout page with PayU Intent API
-        const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
-        const checkoutPageUrl = `${baseUrl}/api/payu/checkout/${transactionId}`;
-
-        // Build response with Intent API data (REQUIRED)
+        // Return PayU payment URL directly - no intermediate checkout page
+        // Build response with direct PayU payment URL
         const response = {
             success: true,
             transaction_id: transactionId,
             payment_link_id: orderId,
-            payment_url: checkoutPageUrl,
-            checkout_page: checkoutPageUrl,
+            payment_url: PAYU_PAYMENT_URL, // Direct PayU payment URL
+            checkout_page: PAYU_PAYMENT_URL, // Direct PayU payment URL (no intermediate page)
             order_id: orderId,
             order_amount: parseFloat(amount),
             order_currency: 'INR',
@@ -384,27 +356,10 @@ exports.createPayuPaymentLink = async (req, res) => {
             merchant_name: merchantName,
             reference_id: payuReferenceId,
             callback_url: finalCallbackUrl,
-            // UPI Deep Links from PayU Intent API
-            upi_deep_link: upiDeepLinks.generic,
-            phonepe_deep_link: upiDeepLinks.phonepe,
-            gpay_deep_link: upiDeepLinks.googlepay,
-            gpay_intent: upiDeepLinks.gpay_intent,
-            paytm_deep_link: upiDeepLinks.paytm,
-            bhim_deep_link: upiDeepLinks.bhim,
-            cred_deep_link: upiDeepLinks.cred,
-            amazonpay_deep_link: upiDeepLinks.amazonpay,
-            // UPI Intent data from PayU API
-            upi_intent: {
-                intent_id: intentData.intentId,
-                intent_uri: intentData.intentUri,
-                intent_url: intentData.intentUrl,
-                intent_url_with_qr: intentData.intentUrlWithQR,
-                reference_id: payuReferenceId,
-                amount: amountFormatted,
-                expiry_time: intentData.expiryTime,
-                bank_accounts: intentData.bankAccounts || []
-            },
-            message: 'Payment link created successfully using PayU Generate UPI Intent API. Use the checkout_page URL to access the modern payment interface with UPI deep links.'
+            payment_mode: 'UPI',
+            payu_params: payuParams, // Frontend can use these to submit form directly
+            payu_payment_url: PAYU_PAYMENT_URL,
+            message: 'Payment link created successfully. Submit the payu_params to PayU payment URL to complete payment.'
         };
         
         res.json(response);
@@ -416,35 +371,10 @@ exports.createPayuPaymentLink = async (req, res) => {
             error: error.response?.data || error.error,
             statusCode: error.response?.status || error.statusCode,
             errorCode: error.errorCode,
-            isAccountRestriction: error.isAccountRestriction,
             stack: error.stack
         });
 
-        // Handle specific PayU account restriction errors
-        if (error.isAccountRestriction && error.errorCode === 'E2016') {
-            return res.status(403).json({
-                success: false,
-                error: 'PayU UPI Intent feature is disabled',
-                message: error.message || 'The Generate UPI Intent API feature is not enabled for your PayU merchant account.',
-                details: {
-                    description: 'PayU UPI Intent API feature is disabled at account level',
-                    code: 'E2016',
-                    payu_message: error.payuMessage || 'Payment option is disabled. Please contact your account manager.',
-                    solution: 'Contact your PayU account manager to enable the Generate UPI Intent API feature for your merchant account.',
-                    documentation: 'https://docs.payu.in/v2/reference/v2-generate-upi-intent-api',
-                    troubleshooting: [
-                        '1. Contact your PayU account manager',
-                        '2. Request to enable the "Generate UPI Intent API" feature',
-                        '3. Verify your PayU merchant account has UPI Intent permissions',
-                        '4. Check if your account type supports this feature'
-                    ]
-                },
-                transaction_id: transactionId,
-                order_id: orderId || 'N/A'
-            });
-        }
-
-        // Handle other errors
+        // Handle errors
         const statusCode = error.response?.status || error.statusCode || 500;
         res.status(statusCode).json({
             success: false,
@@ -1215,108 +1145,82 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 .replace(/'/g, '&#039;');
         };
 
-        // Get or generate PayU UPI Intent - REQUIRED, NO FALLBACK
-        let intentData = null;
-        const storedIntentData = transaction.payuIntentData;
+        // Direct redirect to PayU payment page - no intermediate checkout page
+        // Reference: https://docs.payu.in/docs/collect-payments-with-upi-seamless
+        console.log('🔄 Redirecting directly to PayU payment page for transaction:', transactionId);
         
-        if (storedIntentData && storedIntentData.intentUri) {
-            // Use stored intent data
-            console.log('✅ Using stored PayU UPI Intent data from transaction');
-            intentData = {
-                intentId: storedIntentData.intentId,
-                intentUri: storedIntentData.intentUri,
-                intentUrl: storedIntentData.intentUrl,
-                intentUrlWithQR: storedIntentData.intentUrlWithQR,
-                transactionId: storedIntentData.transactionId,
-                expiryTime: storedIntentData.expiryTime || 900
-            };
-        } else {
-            // Generate new PayU UPI Intent using Generate UPI Intent API - REQUIRED
+        // Get stored PayU parameters or generate new ones
+        let payuParams = transaction.payuParams;
+        
+        if (!payuParams) {
+            // Generate payment parameters if not stored
             const amountFormatted = transaction.amount.toFixed(2);
-            const expiryTime = 900; // 15 minutes in seconds
-            const refUrl = transaction.callbackUrl || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
+            const productInfo = transaction.description || `Payment for ${transaction.merchantName}`;
+            const firstName = transaction.customerName.split(' ')[0] || transaction.customerName;
+            const email = transaction.customerEmail.trim();
             
-            console.log('🔄 Generating new PayU UPI Intent for transaction:', transactionId);
-            console.log('   This is REQUIRED - no fallback available');
+            const payuCallbackUrl = `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/payu/callback?transaction_id=${transactionId}`;
             
-            // This will throw an error if Intent API fails - NO FALLBACK
-            intentData = await generatePayUUPIIntent(
-                transaction.payuOrderId || transaction.orderId,
-                amountFormatted,
-                expiryTime,
-                refUrl,
-                '01' // category
-            );
-            
-            if (!intentData || !intentData.intentUri) {
-                throw new Error('PayU Intent API returned invalid response: missing intentUri');
-            }
-            
-            console.log('✅ PayU UPI Intent generated successfully');
-            console.log('   Intent URI:', intentData.intentUri);
-            console.log('   Intent URL:', intentData.intentUrl);
-            
-            // Update transaction with new intent data
-            transaction.payuIntentData = {
-                intentId: intentData.intentId,
-                intentUri: intentData.intentUri,
-                intentUrl: intentData.intentUrl,
-                intentUrlWithQR: intentData.intentUrlWithQR,
-                transactionId: intentData.transactionId,
-                expiryTime: intentData.expiryTime,
-                referenceId: transaction.payuReferenceId,
-                intentApiAvailable: true
+            payuParams = {
+                key: PAYU_KEY.trim(),
+                txnid: transaction.payuOrderId || transaction.orderId,
+                amount: amountFormatted,
+                productinfo: productInfo,
+                firstname: firstName,
+                email: email,
+                phone: transaction.customerPhone.trim(),
+                surl: (transaction.successUrl || transaction.callbackUrl || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`).trim(),
+                furl: (transaction.failureUrl || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`).trim(),
+                curl: payuCallbackUrl.trim(),
+                service_provider: 'payu_paisa',
+                pg: 'UPI',
+                bankcode: 'UPI'
             };
+            
+            // Generate hash
+            const hashParams = {
+                txnid: payuParams.txnid,
+                amount: payuParams.amount,
+                productinfo: payuParams.productinfo,
+                firstname: payuParams.firstname,
+                email: payuParams.email
+            };
+            
+            const hash = generatePayUHash(hashParams);
+            payuParams.hash = hash;
+            
+            // Save params to transaction
+            transaction.payuParams = payuParams;
             await transaction.save();
         }
-
-        // Use PayU Intent API data (REQUIRED - no fallback)
-        if (!intentData || !intentData.intentUri) {
-            throw new Error('PayU UPI Intent data is required but not available');
-        }
         
-        // Parse intentUri to extract UPI parameters
-        // Use the intentUri directly from PayU API response
-        // Format: upi://pay?pa=payumoney@hdfcbank&pn=PayUMoney&tr=0fd9829f68&am=190.00&cu=INR&mc=5411&tn=Payment%20to%20Merchant
-        const intentUri = intentData.intentUri;
+        // Build form inputs for PayU payment form
+        const formInputs = Object.entries(payuParams)
+            .map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(String(value))}" />`)
+            .join('\n        ');
         
-        // Extract query string from intentUri for building app-specific deep links
-        const queryString = intentUri.split('?')[1] || '';
+        // Generate HTML page that immediately submits form to PayU (no UI, instant redirect)
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting to PayU...</title>
+</head>
+<body>
+    <form id="payuForm" method="POST" action="${PAYU_PAYMENT_URL}">
+        ${formInputs}
+    </form>
+    <script>
+        // Immediately submit form to PayU (no delay, no UI)
+        document.getElementById('payuForm').submit();
+    </script>
+</body>
+</html>`;
         
-        // Build UPI deep links for different apps using the query string from PayU intentUri
-        // Reference: https://docs.payu.in/v2/reference/v2-generate-upi-intent-api
-        const upiApps = {
-            // Generic UPI - use PayU's intentUri directly
-            generic: intentUri,
-            // PhonePe deep link
-            phonepe: `phonepe://pay?${queryString}`,
-            // Google Pay deep link (tez://)
-            googlepay: `tez://pay?${queryString}`,
-            // Paytm deep link
-            paytm: `paytmmp://pay?${queryString}`,
-            // BHIM UPI deep link
-            bhim: `bhim://pay?${queryString}`,
-            // CRED deep link
-            cred: `credpay://pay?${queryString}`,
-            // Amazon Pay deep link
-            amazonpay: `amazonpay://pay?${queryString}`
-        };
-        
-        // Android Intent URL for Google Pay (for better Android support)
-        // Format: intent://pay?{query}#Intent;package=com.google.android.apps.nbu.paisa.user;scheme=upi;end
-        const gpayIntent = `intent://pay?${queryString}#Intent;package=com.google.android.apps.nbu.paisa.user;scheme=upi;end`;
-        
-        // Calculate countdown timer from PayU response (expiryTime in seconds)
-        const countdownSeconds = intentData.expiryTime || 900;
-        
-        console.log('✅ Using PayU Intent API data:');
-        console.log('   Intent URI:', intentUri);
-        console.log('   Intent URL:', intentData.intentUrl);
-        console.log('   UPI Apps:', Object.keys(upiApps));
-        console.log('   Countdown:', countdownSeconds, 'seconds');
-        
-        // Generate checkout page using template with PayU Intent API data (REQUIRED)
-        const html = generatePayUCheckoutHTML(transaction, intentData, upiApps, gpayIntent, countdownSeconds);
+        console.log('✅ Redirecting directly to PayU payment page');
+        console.log('   Payment URL:', PAYU_PAYMENT_URL);
+        console.log('   Order ID:', payuParams.txnid);
         
         return res.send(html);
 
@@ -1339,6 +1243,627 @@ exports.getPayuCheckoutPage = async (req, res) => {
             </body>
             </html>
         `);
+    }
+};
+
+// ============ MERCHANT HOSTED CHECKOUT - CREATE PAYMENT ============
+/**
+ * Create payment using Merchant Hosted Checkout
+ * Reference: https://docs.payu.in/docs/custom-checkout-merchant-hosted
+ * 
+ * This allows merchants to collect payment details on their own website
+ * Supports: Cards, Net Banking, EMI, UPI, Wallets, BNPL
+ * 
+ * Note: Requires PCI DSS compliance for card payments
+ */
+exports.createMerchantHostedPayment = async (req, res) => {
+    let transactionId = null;
+    let orderId = null;
+    
+    try {
+        const {
+            amount,
+            customer_name,
+            customer_email,
+            customer_phone,
+            description,
+            payment_mode, // 'CC', 'DC', 'NB', 'UPI', 'WALLET', 'EMI', etc.
+            card_details, // For card payments: { card_number, card_name, expiry_month, expiry_year, cvv }
+            bank_code, // For net banking
+            emi_plan_id, // For EMI
+            upi_id, // For UPI seamless
+            wallet_code, // For wallets
+            callback_url,
+            success_url,
+            failure_url
+        } = req.body;
+
+        // Get merchant info from apiKeyAuth middleware
+        const merchantId = req.merchantId;
+        const merchantName = req.merchantName;
+
+        // Check if PayU is enabled
+        const settings = await Settings.getSettings();
+        if (!settings.paymentGateways.payu?.enabled) {
+            return res.status(403).json({
+                success: false,
+                error: 'PayU payment gateway is not enabled'
+            });
+        }
+
+        // Validate credentials
+        if (!PAYU_KEY || !PAYU_SALT) {
+            return res.status(500).json({
+                success: false,
+                error: 'PayU credentials not configured'
+            });
+        }
+
+        // Validate input
+        if (!amount || !customer_name || !customer_email || !customer_phone || !payment_mode) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: amount, customer_name, customer_email, customer_phone, payment_mode'
+            });
+        }
+
+        // Validate payment mode specific fields
+        if (payment_mode === 'CC' || payment_mode === 'DC') {
+            if (!card_details || !card_details.card_number || !card_details.card_name || 
+                !card_details.expiry_month || !card_details.expiry_year || !card_details.cvv) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Card details required for card payment: card_number, card_name, expiry_month, expiry_year, cvv'
+                });
+            }
+        } else if (payment_mode === 'NB' && !bank_code) {
+            return res.status(400).json({
+                success: false,
+                error: 'bank_code required for net banking payment'
+            });
+        } else if (payment_mode === 'UPI' && !upi_id) {
+            return res.status(400).json({
+                success: false,
+                error: 'upi_id required for UPI payment'
+            });
+        } else if (payment_mode === 'WALLET' && !wallet_code) {
+            return res.status(400).json({
+                success: false,
+                error: 'wallet_code required for wallet payment'
+            });
+        }
+
+        // Validate amount
+        const amountFloat = parseFloat(amount);
+        if (isNaN(amountFloat) || amountFloat < 1) {
+            return res.status(400).json({
+                success: false,
+                error: 'Amount must be at least ₹1'
+            });
+        }
+
+        // Generate unique IDs
+        transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        orderId = `ORDER_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+        // Get merchant's configured URLs
+        const merchant = await User.findById(merchantId);
+        const finalCallbackUrl = callback_url ||
+            merchant?.successUrl ||
+            `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
+
+        const payuCallbackUrl = `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/payu/callback?transaction_id=${transactionId}`;
+
+        // Prepare payment parameters
+        const amountFormatted = amountFloat.toFixed(2);
+        const productInfo = description || `Payment for ${merchantName}`;
+        const firstName = customer_name.split(' ')[0] || customer_name;
+        const email = customer_email.trim();
+
+        // Prepare PayU parameters
+        const payuParams = {
+            key: PAYU_KEY.trim(),
+            txnid: orderId,
+            amount: amountFormatted,
+            productinfo: productInfo,
+            firstname: firstName,
+            email: email,
+            phone: customer_phone.trim(),
+            surl: (success_url || finalCallbackUrl).trim(),
+            furl: (failure_url || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`).trim(),
+            curl: payuCallbackUrl.trim(),
+            service_provider: 'payu_paisa',
+            pg: payment_mode // Payment gateway mode
+        };
+
+        // Add payment mode specific parameters
+        if (payment_mode === 'CC' || payment_mode === 'DC') {
+            // Card payment - will be submitted via form
+            payuParams.ccnum = card_details.card_number.replace(/\s/g, '');
+            payuParams.ccname = card_details.card_name;
+            payuParams.ccvv = card_details.cvv;
+            payuParams.ccexpmon = String(card_details.expiry_month).padStart(2, '0');
+            payuParams.ccexpyr = String(card_details.expiry_year).slice(-2);
+        } else if (payment_mode === 'NB') {
+            payuParams.bankcode = bank_code;
+        } else if (payment_mode === 'EMI') {
+            payuParams.emi_plan_id = emi_plan_id;
+        } else if (payment_mode === 'UPI') {
+            payuParams.upi_id = upi_id;
+        } else if (payment_mode === 'WALLET') {
+            payuParams.wallet_code = wallet_code;
+        }
+
+        // Generate hash
+        const hashParams = {
+            txnid: payuParams.txnid,
+            amount: payuParams.amount,
+            productinfo: payuParams.productinfo,
+            firstname: payuParams.firstname,
+            email: payuParams.email
+        };
+        
+        const hash = generatePayUHash(hashParams);
+        payuParams.hash = hash;
+
+        // Save transaction
+        const transactionData = {
+            transactionId: transactionId,
+            orderId: orderId,
+            merchantId: merchantId,
+            merchantName: merchantName,
+            customerId: `CUST_${customer_phone}_${Date.now()}`,
+            customerName: customer_name,
+            customerEmail: customer_email,
+            customerPhone: customer_phone,
+            amount: amountFloat,
+            currency: 'INR',
+            description: productInfo,
+            status: 'created',
+            paymentGateway: 'payu',
+            paymentMethod: payment_mode,
+            payuOrderId: orderId,
+            callbackUrl: finalCallbackUrl,
+            successUrl: success_url,
+            failureUrl: failure_url,
+            payuParams: payuParams, // Store params for form submission
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+
+        const transaction = new Transaction(transactionData);
+        await transaction.save();
+
+        // For Merchant Hosted Checkout, return payment parameters
+        // Frontend will submit form to PayU
+        res.json({
+            success: true,
+            transaction_id: transactionId,
+            order_id: orderId,
+            payment_mode: payment_mode,
+            payu_params: payuParams,
+            payment_url: PAYU_PAYMENT_URL,
+            message: 'Payment parameters generated. Submit form to PayU payment URL.'
+        });
+
+    } catch (error) {
+        console.error('❌ Create Merchant Hosted Payment Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to create payment',
+            transaction_id: transactionId,
+            order_id: orderId || 'N/A'
+        });
+    }
+};
+
+// ============ UPI SEAMLESS - SERVER TO SERVER ============
+/**
+ * Process UPI payment using Server-to-Server (S2S) seamless flow
+ * Reference: https://docs.payu.in/docs/collect-payments-with-upi-seamless
+ * 
+ * This allows processing UPI payments without redirecting customer to PayU page
+ */
+exports.processUPISeamless = async (req, res) => {
+    let transactionId = null;
+    let orderId = null;
+    
+    try {
+        const {
+            amount,
+            customer_name,
+            customer_email,
+            customer_phone,
+            description,
+            upi_id,
+            callback_url,
+            success_url,
+            failure_url,
+            client_ip,
+            device_info
+        } = req.body;
+
+        // Get merchant info
+        const merchantId = req.merchantId;
+        const merchantName = req.merchantName;
+
+        // Check if PayU is enabled
+        const settings = await Settings.getSettings();
+        if (!settings.paymentGateways.payu?.enabled) {
+            return res.status(403).json({
+                success: false,
+                error: 'PayU payment gateway is not enabled'
+            });
+        }
+
+        // Validate credentials
+        if (!PAYU_KEY || !PAYU_SALT) {
+            return res.status(500).json({
+                success: false,
+                error: 'PayU credentials not configured'
+            });
+        }
+
+        // Validate input
+        if (!amount || !customer_name || !customer_email || !customer_phone || !upi_id) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: amount, customer_name, customer_email, customer_phone, upi_id'
+            });
+        }
+
+        // Validate UPI ID format
+        if (!/^[a-zA-Z0-9._-]+@[a-zA-Z]+$/.test(upi_id)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid UPI ID format. Expected format: user@bankname'
+            });
+        }
+
+        // Validate amount
+        const amountFloat = parseFloat(amount);
+        if (isNaN(amountFloat) || amountFloat < 1) {
+            return res.status(400).json({
+                success: false,
+                error: 'Amount must be at least ₹1'
+            });
+        }
+
+        // Generate unique IDs
+        transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        orderId = `ORDER_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+        // Get merchant's configured URLs
+        const merchant = await User.findById(merchantId);
+        const finalCallbackUrl = callback_url ||
+            merchant?.successUrl ||
+            `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
+
+        const payuCallbackUrl = `${process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000'}/api/payu/callback?transaction_id=${transactionId}`;
+
+        // Prepare payment parameters
+        const amountFormatted = amountFloat.toFixed(2);
+        const productInfo = description || `Payment for ${merchantName}`;
+        const firstName = customer_name.split(' ')[0] || customer_name;
+        const email = customer_email.trim();
+
+        // Get client IP and device info
+        const clientIp = client_ip || req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || '127.0.0.1';
+        const deviceInfo = device_info || req.headers['user-agent'] || 'Unknown';
+
+        // Prepare S2S parameters for UPI Seamless
+        // Reference: https://docs.payu.in/docs/collect-payments-with-upi-seamless
+        // PayU S2S API expects form-encoded parameters
+        
+        // Standard payment parameters
+        const paymentParams = {
+            key: PAYU_KEY.trim(),
+            txnid: orderId,
+            amount: amountFormatted,
+            productinfo: productInfo,
+            firstname: firstName,
+            email: email,
+            phone: customer_phone.trim(),
+            surl: (success_url || finalCallbackUrl).trim(),
+            furl: (failure_url || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`).trim(),
+            curl: payuCallbackUrl.trim(),
+            service_provider: 'payu_paisa',
+            pg: 'UPI',
+            upi_id: upi_id,
+            txn_s2s_flow: '4', // S2S flow indicator
+            s2s_client_ip: clientIp,
+            s2s_device_info: deviceInfo,
+            upiAppName: 'genericintent'
+        };
+
+        // Generate S2S hash for UPI
+        const hashParams = {
+            txnid: paymentParams.txnid,
+            amount: paymentParams.amount,
+            productinfo: paymentParams.productinfo,
+            firstname: paymentParams.firstname,
+            email: paymentParams.email,
+            txn_s2s_flow: paymentParams.txn_s2s_flow,
+            s2s_client_ip: paymentParams.s2s_client_ip,
+            s2s_device_info: paymentParams.s2s_device_info,
+            upiAppName: paymentParams.upiAppName
+        };
+        
+        const hash = generatePayUS2SHash(hashParams);
+        paymentParams.hash = hash;
+
+        // Prepare S2S API request
+        const s2sParams = {
+            key: PAYU_KEY.trim(),
+            command: 'initiateTransaction',
+            var1: JSON.stringify(paymentParams), // PayU expects JSON string in var1
+            hash: '' // Will be calculated for S2S command
+        };
+
+        // Generate hash for S2S command
+        // Hash format: sha512(key|command|var1|salt)
+        const commandHashString = `${PAYU_KEY.trim()}|${s2sParams.command}|${s2sParams.var1}|${PAYU_SALT.trim()}`;
+        const commandHash = crypto.createHash('sha512').update(commandHashString, 'utf8').digest('hex');
+        s2sParams.hash = commandHash;
+
+        // Save transaction
+        const transactionData = {
+            transactionId: transactionId,
+            orderId: orderId,
+            merchantId: merchantId,
+            merchantName: merchantName,
+            customerId: `CUST_${customer_phone}_${Date.now()}`,
+            customerName: customer_name,
+            customerEmail: customer_email,
+            customerPhone: customer_phone,
+            amount: amountFloat,
+            currency: 'INR',
+            description: productInfo,
+            status: 'pending',
+            paymentGateway: 'payu',
+            paymentMethod: 'UPI',
+            payuOrderId: orderId,
+            payuUPIId: upi_id,
+            callbackUrl: finalCallbackUrl,
+            successUrl: success_url,
+            failureUrl: failure_url,
+            payuS2SParams: s2sParams,
+            payuPaymentParams: paymentParams,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+
+        const transaction = new Transaction(transactionData);
+        await transaction.save();
+
+        // Make S2S API call to PayU
+        try {
+            console.log('🔄 Making PayU S2S API call for UPI Seamless');
+            console.log('   Transaction ID:', transactionId);
+            console.log('   Order ID:', orderId);
+            console.log('   UPI ID:', upi_id);
+            
+            const s2sResponse = await axios.post(PAYU_S2S_API_URL, new URLSearchParams(s2sParams), {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                timeout: 30000,
+                validateStatus: function (status) {
+                    return status >= 200 && status < 600;
+                }
+            });
+
+            const responseData = s2sResponse.data || {};
+            console.log('✅ PayU S2S API Response:', responseData);
+
+            // Check response status
+            // PayU S2S API returns different response formats
+            let isSuccess = false;
+            let statusMessage = '';
+            
+            if (typeof responseData === 'string') {
+                // Sometimes PayU returns HTML or plain text
+                if (responseData.includes('success') || responseData.includes('SUCCESS')) {
+                    isSuccess = true;
+                    statusMessage = 'Payment initiated successfully';
+                } else {
+                    statusMessage = responseData;
+                }
+            } else if (responseData.status === 'success' || responseData.status === 1 || responseData.status === 'SUCCESS') {
+                isSuccess = true;
+                statusMessage = responseData.message || 'Payment initiated successfully';
+            } else if (responseData.status === 'failure' || responseData.status === 0 || responseData.status === 'FAILURE') {
+                statusMessage = responseData.error || responseData.error_Message || 'Payment initiation failed';
+            } else {
+                // Try to parse response
+                statusMessage = responseData.message || JSON.stringify(responseData);
+            }
+
+            if (isSuccess) {
+                // Payment initiated successfully
+                await Transaction.findOneAndUpdate(
+                    { transactionId: transactionId },
+                    {
+                        status: 'pending',
+                        payuPaymentId: responseData.mihpayid || responseData.txnid || orderId,
+                        payuResponse: responseData,
+                        updatedAt: new Date()
+                    }
+                );
+
+                res.json({
+                    success: true,
+                    transaction_id: transactionId,
+                    order_id: orderId,
+                    status: 'pending',
+                    message: 'UPI payment initiated successfully. Customer should complete payment in their UPI app.',
+                    payu_response: responseData,
+                    next_steps: 'Customer should complete payment in their UPI app. Use /api/payu/verify endpoint to check payment status.'
+                });
+            } else {
+                // Payment initiation failed
+                await Transaction.findOneAndUpdate(
+                    { transactionId: transactionId },
+                    {
+                        status: 'failed',
+                        failureReason: statusMessage,
+                        payuResponse: responseData,
+                        updatedAt: new Date()
+                    }
+                );
+
+                res.status(400).json({
+                    success: false,
+                    transaction_id: transactionId,
+                    order_id: orderId,
+                    error: statusMessage,
+                    payu_response: responseData
+                });
+            }
+        } catch (apiError) {
+            console.error('❌ PayU S2S API Error:', apiError);
+            console.error('   Error details:', {
+                message: apiError.message,
+                status: apiError.response?.status,
+                data: apiError.response?.data
+            });
+            
+            await Transaction.findOneAndUpdate(
+                { transactionId: transactionId },
+                {
+                    status: 'failed',
+                    failureReason: apiError.message || 'PayU API call failed',
+                    payuResponse: apiError.response?.data || {},
+                    updatedAt: new Date()
+                }
+            );
+
+            res.status(500).json({
+                success: false,
+                transaction_id: transactionId,
+                order_id: orderId,
+                error: 'Failed to initiate UPI payment',
+                details: apiError.response?.data || apiError.message
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Process UPI Seamless Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to process UPI payment',
+            transaction_id: transactionId,
+            order_id: orderId || 'N/A'
+        });
+    }
+};
+
+// ============ VERIFY PAYMENT STATUS ============
+/**
+ * Verify payment status using PayU Verify Payment API
+ * Reference: https://docs.payu.in/docs/verify-payment-api
+ */
+exports.verifyPaymentStatus = async (req, res) => {
+    try {
+        const { transaction_id, order_id } = req.query;
+
+        if (!transaction_id && !order_id) {
+            return res.status(400).json({
+                success: false,
+                error: 'Either transaction_id or order_id is required'
+            });
+        }
+
+        // Find transaction
+        const transaction = await Transaction.findOne({
+            $or: [
+                { transactionId: transaction_id },
+                { orderId: order_id || transaction_id }
+            ]
+        });
+
+        if (!transaction) {
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found'
+            });
+        }
+
+        // Prepare verify API parameters
+        const verifyParams = {
+            key: PAYU_KEY.trim(),
+            command: 'verify_payment',
+            var1: transaction.payuOrderId || transaction.orderId,
+            hash: '' // Will be calculated
+        };
+
+        // Generate hash for verify API
+        // Hash format: sha512(key|command|var1|salt)
+        const hashString = `${PAYU_KEY.trim()}|verify_payment|${verifyParams.var1}|${PAYU_SALT.trim()}`;
+        const hash = crypto.createHash('sha512').update(hashString, 'utf8').digest('hex');
+        verifyParams.hash = hash;
+
+        // Call PayU Verify API
+        const verifyResponse = await axios.post(PAYU_S2S_API_URL, new URLSearchParams(verifyParams), {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            timeout: 30000
+        });
+
+        const responseData = verifyResponse.data || {};
+
+        // Update transaction if status changed
+        if (responseData.status === 'success' && transaction.status !== 'paid') {
+            const paidAt = new Date();
+            const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
+            const commissionData = calculatePayinCommission(transaction.amount);
+
+            await Transaction.findOneAndUpdate(
+                { _id: transaction._id },
+                {
+                    status: 'paid',
+                    paidAt: paidAt,
+                    paymentMethod: responseData.payment_mode || transaction.paymentMethod,
+                    payuPaymentId: responseData.mihpayid || transaction.payuPaymentId,
+                    acquirerData: {
+                        utr: responseData.bank_ref_num || null,
+                        rrn: responseData.bank_ref_num || null,
+                        bank_transaction_id: responseData.bank_ref_num || null
+                    },
+                    settlementStatus: 'unsettled',
+                    expectedSettlementDate: expectedSettlement,
+                    commission: commissionData.commission,
+                    netAmount: parseFloat((transaction.amount - commissionData.commission).toFixed(2)),
+                    payuResponse: responseData,
+                    updatedAt: new Date()
+                }
+            );
+        }
+
+        res.json({
+            success: true,
+            transaction_id: transaction.transactionId,
+            order_id: transaction.orderId,
+            status: responseData.status || transaction.status,
+            payment_status: responseData.status,
+            payu_response: responseData,
+            transaction: {
+                transaction_id: transaction.transactionId,
+                order_id: transaction.orderId,
+                amount: transaction.amount,
+                status: transaction.status,
+                payment_method: transaction.paymentMethod
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Verify Payment Status Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to verify payment status',
+            details: error.response?.data || {}
+        });
     }
 };
 
