@@ -7,6 +7,7 @@ const {
     handlePayuWebhook,
     handlePayuCallback,
     getPayuCheckoutPage,
+    getPayuCheckoutData,
     createMerchantHostedPayment,
     processUPISeamless,
     verifyPaymentStatus
@@ -25,6 +26,9 @@ router.post('/create-payment-link', apiKeyAuth, (req, res, next) => {
 
 // ============ CHECKOUT PAGE (No Auth - Auto-submits form to PayU) ============
 router.get('/checkout/:transactionId', getPayuCheckoutPage);
+
+// ============ CHECKOUT DATA API (For Krishi Shaktisewa Frontend) ============
+router.get('/checkout-data/:transactionId', getPayuCheckoutData);
 
 // ============ CALLBACK (No Auth - GET/POST from PayU) ============
 router.get('/callback', handlePayuCallback);

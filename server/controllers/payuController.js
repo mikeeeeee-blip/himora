@@ -341,17 +341,24 @@ exports.createPayuPaymentLink = async (req, res) => {
         const transaction = new Transaction(transactionData);
         await transaction.save();
 
-        // Create checkout page URL - this will use form-based UPI payment
+        // Get krishi-shaktisewa base URL (similar to Cashfree)
+        const krishiBaseUrl = (process.env.KRISHI_API_URL || process.env.NEXTJS_API_URL || 'https://www.shaktisewafoudation.in').replace(/\/$/, '');
+        // Use unified payment page that handles all gateways
+        const krishiCheckoutUrl = `${krishiBaseUrl}/payment?transaction_id=${transactionId}&gateway=payu`;
+        
+        // Also keep backend checkout URL as fallback
         const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
-        const checkoutPageUrl = `${baseUrl}/api/payu/checkout/${transactionId}`;
+        const backendCheckoutUrl = `${baseUrl}/api/payu/checkout/${transactionId}`;
 
         // Build response with form-based payment data
         const response = {
             success: true,
             transaction_id: transactionId,
             payment_link_id: orderId,
-            payment_url: checkoutPageUrl,
-            checkout_page: checkoutPageUrl,
+            payment_url: krishiCheckoutUrl,
+            checkout_page: krishiCheckoutUrl,
+            checkout_page_krishi: krishiCheckoutUrl, // Unified Krishi Shaktisewa payment page
+            checkout_page_backend: backendCheckoutUrl, // Backend checkout page (fallback)
             order_id: orderId,
             order_amount: parseFloat(amount),
             order_currency: 'INR',
@@ -360,9 +367,10 @@ exports.createPayuPaymentLink = async (req, res) => {
             reference_id: payuReferenceId,
             callback_url: finalCallbackUrl,
             payment_mode: 'UPI',
+            gateway: 'payu',
             payu_params: payuParams,
             payu_payment_url: PAYU_PAYMENT_URL,
-            message: 'Payment link created successfully using PayU UPI Seamless (form-based). Use the checkout_page URL to access the payment interface. Customer will be redirected to PayU to complete UPI payment.'
+            message: 'Payment link created successfully using PayU UPI Seamless (form-based). Use the checkout_page URL to access the unified payment interface.'
         };
         
         res.json(response);
@@ -1084,6 +1092,212 @@ async function generatePayUUPIIntent(transactionId, transactionAmount, expiryTim
     detailedError.lastStatus = lastError?.response?.status;
     throw detailedError;
 }
+
+// ============ PAYU CHECKOUT DATA API ============
+/**
+ * Get PayU checkout data for frontend (Krishi Shaktisewa)
+ * Returns UPI Intent S2S data for custom checkout page with UPI app buttons
+ * Reference: https://docs.payu.in/docs/upi-intent-server-to-server
+ */
+exports.getPayuCheckoutData = async (req, res) => {
+    try {
+        const { transactionId } = req.params;
+
+        // Find transaction
+        const transaction = await Transaction.findOne({ transactionId: transactionId });
+
+        if (!transaction) {
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found'
+            });
+        }
+
+        if (transaction.status !== 'created' && transaction.status !== 'pending') {
+            return res.status(400).json({
+                success: false,
+                error: `Transaction already processed. Status: ${transaction.status}`
+            });
+        }
+
+        // Check if PayU is enabled
+        const settings = await Settings.getSettings();
+        if (!settings.paymentGateways.payu?.enabled) {
+            return res.status(403).json({
+                success: false,
+                error: 'PayU payment gateway is not enabled'
+            });
+        }
+
+        // Validate credentials
+        if (!PAYU_KEY || !PAYU_SALT) {
+            return res.status(500).json({
+                success: false,
+                error: 'PayU credentials not configured'
+            });
+        }
+
+        // Use PayU Generate UPI Intent API (v2)
+        // Reference: https://docs.payu.in/v2/reference/v2-generate-upi-intent-api
+        const amountFormatted = transaction.amount.toFixed(2);
+        const orderId = transaction.payuOrderId || transaction.orderId;
+        
+        // Prepare callback URL
+        const refUrl = transaction.successUrl || transaction.callbackUrl || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
+        
+        // Expiry time: 15 minutes (900 seconds)
+        const expiryTime = 900;
+        
+        console.log('🔄 Generating PayU UPI Intent for transaction:', transactionId);
+        console.log('   Order ID:', orderId);
+        console.log('   Amount:', amountFormatted);
+        console.log('   Expiry Time:', expiryTime, 'seconds');
+        console.log('   Reference URL:', refUrl);
+        
+        let intentData = null;
+        try {
+            // Call PayU Generate UPI Intent API
+            const intentResult = await generatePayUUPIIntent(
+                orderId,
+                amountFormatted,
+                expiryTime,
+                refUrl,
+                '01' // Category code
+            );
+
+            // Extract UPI intent data from API response
+            // Response format: { intentUri, intentId, intentUrl, intentUrlWithQR, transactionId, expiryTime, bankAccounts }
+            if (!intentResult.intentUri && !intentResult.intentId) {
+                throw new Error('PayU Generate UPI Intent API did not return intentUri or intentId');
+            }
+
+            // Use intentUri or intentId (they should be the same)
+            const intentUri = intentResult.intentUri || intentResult.intentId;
+            
+            // Extract merchant VPA from intent URI (format: upi://pay?pa=payumoney@hdfcbank&...)
+            let merchantVPA = null;
+            if (intentUri && intentUri.startsWith('upi://')) {
+                const paMatch = intentUri.match(/pa=([^&]+)/);
+                if (paMatch) {
+                    merchantVPA = decodeURIComponent(paMatch[1]);
+                }
+            }
+
+            // Extract reference ID (transaction ID) from intent URI
+            let referenceId = intentResult.transactionId || orderId;
+            if (intentUri && intentUri.startsWith('upi://')) {
+                const trMatch = intentUri.match(/tr=([^&]+)/);
+                if (trMatch) {
+                    referenceId = decodeURIComponent(trMatch[1]);
+                }
+            }
+
+            intentData = {
+                intentUri: intentUri,
+                intentId: intentResult.intentId,
+                intentUrl: intentResult.intentUrl,
+                intentUrlWithQR: intentResult.intentUrlWithQR,
+                merchantVPA: merchantVPA,
+                merchantName: transaction.merchantName,
+                referenceId: referenceId,
+                amount: amountFormatted,
+                expiryTime: intentResult.expiryTime || expiryTime,
+                bankAccounts: intentResult.bankAccounts || [],
+                status: 'success'
+            };
+
+            console.log('✅ UPI Intent data extracted from PayU Generate UPI Intent API:', {
+                hasIntentUri: !!intentData.intentUri,
+                merchantVPA: intentData.merchantVPA,
+                referenceId: intentData.referenceId,
+                intentUrl: intentData.intentUrl
+            });
+
+            // Update transaction with intent data
+            await Transaction.findOneAndUpdate(
+                { transactionId: transactionId },
+                {
+                    status: 'pending',
+                    payuPaymentId: orderId,
+                    payuIntentData: intentData,
+                    updatedAt: new Date()
+                }
+            );
+
+        } catch (apiError) {
+            console.error('❌ PayU Generate UPI Intent API Error:', apiError);
+            console.error('   Error details:', {
+                message: apiError.message,
+                status: apiError.response?.status,
+                data: apiError.response?.data,
+                errorCode: apiError.errorCode
+            });
+            
+            // If UPI Intent API is disabled (E2016), return a helpful error
+            if (apiError.errorCode === 'E2016' || apiError.isAccountRestriction) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'PayU UPI Intent feature is disabled',
+                    message: apiError.message || 'PayU UPI Intent feature is disabled for your merchant account. Please contact your PayU account manager to enable the Generate UPI Intent API feature.',
+                    details: {
+                        description: 'PayU UPI Intent API feature is disabled at account level',
+                        code: 'E2016',
+                        payu_message: apiError.payuMessage || 'Payment option is disabled. Please contact your account manager.',
+                        solution: 'Contact your PayU account manager to enable the Generate UPI Intent API feature for your merchant account.',
+                        documentation: 'https://docs.payu.in/v2/reference/v2-generate-upi-intent-api',
+                        troubleshooting: [
+                            '1. Contact your PayU account manager',
+                            '2. Request to enable the "Generate UPI Intent API" feature',
+                            '3. Verify your PayU merchant account has UPI Intent permissions',
+                            '4. Check if your account type supports this feature'
+                        ]
+                    },
+                    transaction_id: transactionId,
+                    order_id: orderId
+                });
+            }
+            
+            // For other errors, throw to be caught by outer catch
+            throw apiError;
+        }
+
+        // IntentURIData must be provided by PayU Generate UPI Intent API
+        if (!intentData || !intentData.intentUri) {
+            throw new Error('PayU Generate UPI Intent API did not return valid intentUri. Cannot proceed with UPI Intent payment.');
+        }
+
+        // Return response with UPI intent data
+        res.json({
+            success: true,
+            data: {
+                transaction_id: transaction.transactionId,
+                order_id: transaction.orderId,
+                amount: transaction.amount,
+                customer_name: transaction.customerName,
+                customer_email: transaction.customerEmail,
+                customer_phone: transaction.customerPhone,
+                payment_mode: 'upi_intent',
+                intent_uri: intentData.intentUri,
+                intent_id: intentData.intentId,
+                intent_url: intentData.intentUrl,
+                intent_url_with_qr: intentData.intentUrlWithQR,
+                merchant_vpa: intentData.merchantVPA,
+                merchant_name: intentData.merchantName,
+                reference_id: intentData.referenceId,
+                expiry_time: intentData.expiryTime,
+                bank_accounts: intentData.bankAccounts,
+                callback_url: transaction.callbackUrl
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Get PayU Checkout Data Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to get checkout data'
+        });
+    }
+};
 
 // ============ PAYU CHECKOUT PAGE ============
 /**
@@ -1937,4 +2151,3 @@ exports.verifyPaymentStatus = async (req, res) => {
         });
     }
 };
-

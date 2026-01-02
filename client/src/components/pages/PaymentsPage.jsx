@@ -319,6 +319,44 @@ const PaymentsPage = () => {
             </div>
             
             <div className="space-y-4">
+              {/* Krishi Shaktisewa Checkout Link (if available) */}
+              {createdLink.checkout_page_krishi && (
+                <div className="bg-[#263F43] border border-white/10 rounded-lg p-4 sm:p-5">
+                  <label className="block text-white/80 text-sm font-medium font-['Albert_Sans'] mb-2 flex items-center gap-2">
+                    <span>Krishi Shaktisewa Checkout Page:</span>
+                    <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded">Recommended</span>
+                  </label>
+                  <div className="relative flex gap-2">
+                    <input 
+                      type="text" 
+                      value={createdLink.checkout_page_krishi} 
+                      readOnly 
+                      className="flex-1 px-4 py-3 border-2 border-white/10 rounded-lg bg-bg-secondary text-blue-400 text-sm font-mono focus:outline-none focus:border-accent pr-24"
+                    />
+                    <button 
+                      onClick={() => copyToClipboard(createdLink.checkout_page_krishi)} 
+                      className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-3 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-2"
+                      title="Copy to clipboard"
+                    >
+                      <FiCopy className="w-4 h-4" />
+                      <span className="hidden sm:inline">Copy</span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (createdLink.checkout_page_krishi) {
+                          window.open(createdLink.checkout_page_krishi, '_blank', 'noopener,noreferrer');
+                        }
+                      }}
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white px-4 py-3 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-2"
+                      title="Open checkout page"
+                    >
+                      <FiExternalLink className="w-4 h-4" />
+                      <span className="hidden sm:inline">Open</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Main Payment Link */}
               <div className="bg-[#263F43] border border-white/10 rounded-lg p-4 sm:p-5">
                 <label className="block text-white/80 text-sm font-medium font-['Albert_Sans'] mb-2">
@@ -327,12 +365,12 @@ const PaymentsPage = () => {
                 <div className="relative flex gap-2">
                   <input 
                     type="text" 
-                    value={createdLink.paymentLink || createdLink.payment_url || createdLink.raw?.link_url || 'Link generated'} 
+                    value={createdLink.paymentLink || createdLink.payment_url || createdLink.checkout_page || createdLink.raw?.link_url || 'Link generated'} 
                     readOnly 
                     className="flex-1 px-4 py-3 border-2 border-white/10 rounded-lg bg-bg-secondary text-green-400 text-sm font-mono focus:outline-none focus:border-accent pr-24"
                   />
                   <button 
-                    onClick={() => copyToClipboard(createdLink.paymentLink || createdLink.payment_url || createdLink.raw?.link_url)} 
+                    onClick={() => copyToClipboard(createdLink.paymentLink || createdLink.payment_url || createdLink.checkout_page || createdLink.raw?.link_url)} 
                     className="bg-gradient-to-r from-accent to-bg-tertiary hover:from-bg-tertiary hover:to-accent text-white px-4 py-3 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200 hover:shadow-lg active:scale-95 flex items-center gap-2"
                     title="Copy to clipboard"
                   >
@@ -341,7 +379,7 @@ const PaymentsPage = () => {
                   </button>
                   <button 
                     onClick={() => {
-                      const paymentUrl = createdLink.paymentLink || createdLink.payment_url || createdLink.raw?.link_url;
+                      const paymentUrl = createdLink.paymentLink || createdLink.payment_url || createdLink.checkout_page || createdLink.raw?.link_url;
                       // For Cashfree, open direct link; for others use openPaymentLink
                       if (createdLink.raw?.link_url || createdLink.gateway_used === 'cashfree') {
                         if (paymentUrl) {
