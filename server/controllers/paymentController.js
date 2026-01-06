@@ -97,6 +97,9 @@ exports.getTransactions = async (req, res) => {
         // Build query
         let query = { merchantId: merchantId };
 
+        // Exclude admin deduction transactions
+        query.paymentGateway = { $ne: 'admin_deduction' };
+
         // Filter by status
         if (status) {
             if (status.includes(',')) {

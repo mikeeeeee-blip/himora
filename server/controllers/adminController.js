@@ -521,6 +521,9 @@ exports.searchTransactions = async (req, res) => {
     const merchantId = req.merchantId
 
     if (merchantId) query.merchantId = new mongoose.Types.ObjectId(merchantId);
+    
+    // Exclude admin deduction transactions
+    query.paymentGateway = { $ne: 'admin_deduction' };
     // console.table(query.merchantId)
     if (status) query.status = status;
     if (paymentGateway) query.paymentGateway = paymentGateway;
@@ -819,6 +822,9 @@ exports.getTransactionReport = async (req, res) => {
 
     const q = req.query || {};
     const query = { merchantId: new mongoose.Types.ObjectId(merchantId) };
+
+    // Exclude admin deduction transactions
+    query.paymentGateway = { $ne: 'admin_deduction' };
 
     // Date range
     if (q.startDate || q.endDate) {

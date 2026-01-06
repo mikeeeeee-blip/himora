@@ -640,6 +640,9 @@ exports.getAllTransactions = async (req, res) => {
         // Build query
         let query = {};
 
+        // Exclude admin deduction transactions
+        query.paymentGateway = { $ne: 'admin_deduction' };
+
         // Filter by merchant
         if (merchantId) {
             query.merchantId = merchantId;
@@ -1547,7 +1550,10 @@ exports.getAllMerchantsData = async (req, res) => {
 
         // ========== TRANSACTION AGGREGATIONS ==========
         // Overall transaction stats with date filter
-        const transactionMatch = { merchantId: { $in: merchantIds } };
+        const transactionMatch = { 
+            merchantId: { $in: merchantIds },
+            paymentGateway: { $ne: 'admin_deduction' } // Exclude deduction transactions
+        };
         if (Object.keys(transactionDateFilter).length > 0) {
             Object.assign(transactionMatch, transactionDateFilter);
         }
@@ -1651,7 +1657,7 @@ exports.getAllMerchantsData = async (req, res) => {
 
         // Payment gateway breakdown
         const gatewayStats = await Transaction.aggregate([
-            { $match: { merchantId: { $in: merchantIds }, status: 'paid' } },
+            { $match: { merchantId: { $in: merchantIds }, status: 'paid', paymentGateway: { $ne: 'admin_deduction' } } },
             {
                 $group: {
                     _id: { merchantId: '$merchantId', gateway: '$paymentGateway' },
@@ -1677,7 +1683,7 @@ exports.getAllMerchantsData = async (req, res) => {
 
         // Payment method breakdown
         const methodStats = await Transaction.aggregate([
-            { $match: { merchantId: { $in: merchantIds }, status: 'paid' } },
+            { $match: { merchantId: { $in: merchantIds }, status: 'paid', paymentGateway: { $ne: 'admin_deduction' } } },
             {
                 $group: {
                     _id: { merchantId: '$merchantId', method: '$paymentMethod' },
@@ -1710,6 +1716,7 @@ exports.getAllMerchantsData = async (req, res) => {
                 $match: {
                     merchantId: { $in: merchantIds },
                     status: 'paid',
+                    paymentGateway: { $ne: 'admin_deduction' }, // Exclude deduction transactions
                     $or: [
                         { createdAt: { $gte: todayStart, $lte: todayEnd } },
                         { updatedAt: { $gte: todayStart, $lte: todayEnd } }
@@ -1733,6 +1740,7 @@ exports.getAllMerchantsData = async (req, res) => {
                 $match: {
                     merchantId: { $in: merchantIds },
                     status: 'paid',
+                    paymentGateway: { $ne: 'admin_deduction' }, // Exclude deduction transactions
                     createdAt: { $gte: oneWeekAgo }
                 }
             },
@@ -1753,6 +1761,7 @@ exports.getAllMerchantsData = async (req, res) => {
                 $match: {
                     merchantId: { $in: merchantIds },
                     status: 'paid',
+                    paymentGateway: { $ne: 'admin_deduction' }, // Exclude deduction transactions
                     createdAt: { $gte: oneMonthAgo }
                 }
             },
