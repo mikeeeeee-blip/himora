@@ -1902,7 +1902,8 @@ exports.getAllMerchantsData = async (req, res) => {
             const settledNetAmount = parseFloat((txnStat.settled_net_amount || 0).toFixed(2));
             
             // Use netAmount if available (more accurate, handles deductions), otherwise calculate
-            const settledNetRevenue = settledNetAmount !== 0 
+            // Check if settledNetAmount exists and is not null/undefined (could be 0, positive, or negative)
+            const settledNetRevenue = (txnStat.settled_net_amount !== undefined && txnStat.settled_net_amount !== null)
                 ? settledNetAmount - settledRefunded
                 : settledRevenue - settledRefunded - settledCommission;
             
