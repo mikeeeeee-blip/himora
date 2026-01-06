@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiTrash2, FiKey, FiX, FiLock, FiUnlock, FiEye } from 'react-icons/fi';
+import { FiTrash2, FiKey, FiX, FiLock, FiUnlock, FiEye, FiMinus } from 'react-icons/fi';
 import superadminPaymentService from '../../services/superadminPaymentService';
 import '../pages/PageLayout.css';
 import './SuperadminMerchantsPage.css';
@@ -139,10 +139,13 @@ export default function SuperadminMerchantsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
+  const [showDeductModal, setShowDeductModal] = useState(false);
   const [selectedMerchant, setSelectedMerchant] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [blockAmount, setBlockAmount] = useState('');
+  const [deductAmount, setDeductAmount] = useState('');
+  const [deductReason, setDeductReason] = useState('');
   const [blockAction, setBlockAction] = useState('block'); // 'block' or 'unblock'
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -288,6 +291,45 @@ export default function SuperadminMerchantsPage() {
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       setActionError(err.message || `Failed to ${blockAction} funds`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle deduct balance
+  const handleDeductClick = (merchant) => {
+    setSelectedMerchant(merchant);
+    setDeductAmount('');
+    setDeductReason('');
+    setActionError('');
+    setShowDeductModal(true);
+  };
+
+  const handleDeductBalance = async () => {
+    if (!selectedMerchant?.merchant_id) return;
+
+    // Validation
+    const amount = parseFloat(deductAmount);
+    if (!deductAmount || isNaN(amount) || amount <= 0) {
+      setActionError('Please enter a valid amount greater than 0');
+      return;
+    }
+
+    setActionLoading(true);
+    setActionError('');
+    try {
+      await superadminPaymentService.deductMerchantBalance(selectedMerchant.merchant_id, amount, deductReason);
+      setSuccessMessage(`Successfully deducted ₹${amount} from ${selectedMerchant.merchant_info?.email}`);
+      setShowDeductModal(false);
+      setSelectedMerchant(null);
+      setDeductAmount('');
+      setDeductReason('');
+      // Reload merchants list
+      await loadMerchants();
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      setActionError(err.message || 'Failed to deduct balance');
     } finally {
       setActionLoading(false);
     }
@@ -489,6 +531,13 @@ export default function SuperadminMerchantsPage() {
                                   title="Unblock Funds"
                                 >
                                   <FiUnlock className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeductClick(m)}
+                                  className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg text-red-400 transition-all duration-200"
+                                  title="Deduct Balance"
+                                >
+                                  <FiMinus className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => handlePasswordClick(m)}
@@ -737,6 +786,101 @@ export default function SuperadminMerchantsPage() {
                             setShowBlockModal(false);
                             setSelectedMerchant(null);
                             setBlockAmount('');
+                            setActionError('');
+                          }}
+                          disabled={actionLoading}
+                          className="px-5 py-2.5 bg-[#263F43] hover:bg-[#1a2d32] border border-white/10 text-white rounded-lg font-medium font-['Albert_Sans'] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Deduct Balance Modal */}
+              {showDeductModal && selectedMerchant && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                  <div className="bg-[#122D32] border border-white/10 rounded-xl shadow-2xl max-w-md w-full">
+                    <div className="flex items-center justify-between p-6 border-b border-white/10">
+                      <h3 className="text-xl font-semibold text-white font-['Albert_Sans']">
+                        Deduct Balance
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setShowDeductModal(false);
+                          setSelectedMerchant(null);
+                          setDeductAmount('');
+                          setDeductReason('');
+                          setActionError('');
+                        }}
+                        className="text-white/60 hover:text-white transition-colors"
+                      >
+                        <FiX className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="p-6">
+                      <p className="text-white/80 font-['Albert_Sans'] mb-4">
+                        Deduct amount from{' '}
+                        <span className="font-semibold text-white">
+                          {selectedMerchant.merchant_info?.email}
+                        </span>
+                      </p>
+                      {selectedMerchant.balance_information?.available_balance !== undefined && (
+                        <p className="text-yellow-400 text-sm font-['Albert_Sans'] mb-4">
+                          Available Balance: ₹{currency(selectedMerchant.balance_information?.available_balance || 0)}
+                        </p>
+                      )}
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-white/70 mb-2 font-['Albert_Sans']">
+                            Amount to Deduct (₹)
+                          </label>
+                          <input
+                            type="number"
+                            value={deductAmount}
+                            onChange={(e) => setDeductAmount(e.target.value)}
+                            placeholder="Enter amount to deduct"
+                            min="0"
+                            step="0.01"
+                            className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent font-['Albert_Sans']"
+                            disabled={actionLoading}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-white/70 mb-2 font-['Albert_Sans']">
+                            Reason (Optional)
+                          </label>
+                          <textarea
+                            value={deductReason}
+                            onChange={(e) => setDeductReason(e.target.value)}
+                            placeholder="Enter reason for deduction"
+                            rows="3"
+                            className="w-full px-4 py-2.5 bg-[#263F43] border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent font-['Albert_Sans'] resize-none"
+                            disabled={actionLoading}
+                          />
+                        </div>
+                        {actionError && (
+                          <div className="text-red-400 bg-red-500/20 border border-red-500/40 rounded-lg p-3 text-sm font-['Albert_Sans']">
+                            {actionError}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-6">
+                        <button
+                          onClick={handleDeductBalance}
+                          disabled={actionLoading || !deductAmount || parseFloat(deductAmount) <= 0}
+                          className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-medium font-['Albert_Sans'] transition-all duration-200"
+                        >
+                          {actionLoading ? 'Processing...' : 'Deduct Balance'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowDeductModal(false);
+                            setSelectedMerchant(null);
+                            setDeductAmount('');
+                            setDeductReason('');
                             setActionError('');
                           }}
                           disabled={actionLoading}

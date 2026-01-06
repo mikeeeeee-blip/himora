@@ -7,6 +7,7 @@ const { calculateExpectedSettlementDate } = require('../utils/settlementCalculat
 const { sendMerchantWebhook, sendPayoutWebhook } = require('./merchantWebhookController');
 const { notifySuperAdmins, notifyUser } = require('../services/pushNotificationService');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const COMMISSION_RATE = 0.038; // 3.8%
 
 // Helper function to validate cron expression (simple validation)
@@ -1631,6 +1632,18 @@ exports.getAllMerchantsData = async (req, res) => {
                                 0
                             ]
                         }
+                    },
+                    settled_net_amount: {
+                        $sum: {
+                            $cond: [
+                                { $and: [
+                                    { $eq: ['$status', 'paid'] },
+                                    { $eq: ['$settlementStatus', 'settled'] }
+                                ]},
+                                { $ifNull: ['$netAmount', { $subtract: ['$amount', { $ifNull: ['$commission', 0] }] }] },
+                                0
+                            ]
+                        }
                     }
                 }
             }
@@ -1877,8 +1890,12 @@ exports.getAllMerchantsData = async (req, res) => {
             const settledRevenue = parseFloat((txnStat.settled_revenue || 0).toFixed(2));
             const settledCommission = parseFloat((txnStat.settled_commission || 0).toFixed(2));
             const settledRefunded = parseFloat((txnStat.settled_refunded || 0).toFixed(2));
+            const settledNetAmount = parseFloat((txnStat.settled_net_amount || 0).toFixed(2));
             
-            const settledNetRevenue = settledRevenue - settledRefunded - settledCommission;
+            // Use netAmount if available (more accurate, handles deductions), otherwise calculate
+            const settledNetRevenue = settledNetAmount !== 0 
+                ? settledNetAmount - settledRefunded
+                : settledRevenue - settledRefunded - settledCommission;
             
             const totalPaidOut = parseFloat((payoutStat.total_payout_completed || 0).toFixed(2));
             const totalPendingPayout = parseFloat((payoutStat.total_payout_pending || 0).toFixed(2));
@@ -2551,6 +2568,152 @@ exports.blockMerchantFunds = async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to block/unblock merchant funds',
+            detail: error.message
+        });
+    }
+};
+
+// ============ DEDUCT MERCHANT BALANCE ============
+exports.deductMerchantBalance = async (req, res) => {
+    try {
+        const { merchantId } = req.params;
+        const { amount, reason } = req.body;
+
+        console.log(`💰 SuperAdmin ${req.user.name} deducting ₹${amount} from merchant ${merchantId}`);
+
+        if (!merchantId || !mongoose.Types.ObjectId.isValid(merchantId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Valid merchantId is required'
+            });
+        }
+
+        if (typeof amount !== 'number' || amount <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Amount must be a positive number'
+            });
+        }
+
+        // Find merchant
+        const merchant = await User.findById(merchantId);
+        if (!merchant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Merchant not found'
+            });
+        }
+
+        if (merchant.role !== 'admin') {
+            return res.status(400).json({
+                success: false,
+                error: 'User is not a merchant'
+            });
+        }
+
+        // Calculate current available balance
+        const merchantObjectId = new mongoose.Types.ObjectId(merchantId);
+        
+        // Get settled transactions to calculate available balance
+        const settledAgg = await Transaction.aggregate([
+            { $match: { merchantId: merchantObjectId, status: 'paid', settlementStatus: 'settled' } },
+            {
+                $group: {
+                    _id: null,
+                    settledRevenue: { $sum: '$amount' },
+                    settledRefunded: { $sum: { $ifNull: ['$refundAmount', 0] } },
+                    settledCommission: { $sum: { $ifNull: ['$commission', 0] } },
+                    settledNetAmount: { $sum: { $ifNull: ['$netAmount', { $subtract: ['$amount', { $ifNull: ['$commission', 0] }] }] } },
+                    settledCount: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const settled = settledAgg[0] || {};
+        const settledNetRevenue = parseFloat((settled.settledNetAmount || 0).toFixed(2));
+
+        // Get payout totals
+        const payoutAgg = await Payout.aggregate([
+            { $match: { merchantId: merchantObjectId } },
+            {
+                $group: {
+                    _id: null,
+                    total_completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$netAmount', 0] } },
+                    total_pending: { $sum: { $cond: [{ $in: ['$status', ['requested', 'pending', 'processing', 'approved']] }, '$netAmount', 0] } }
+                }
+            }
+        ]);
+
+        const payoutStat = payoutAgg[0] || {};
+        const totalPaidOut = parseFloat((payoutStat.total_completed || 0).toFixed(2));
+        const totalPendingPayout = parseFloat((payoutStat.total_pending || 0).toFixed(2));
+        const blockedBalance = parseFloat((merchant.blockedBalance || 0).toFixed(2));
+
+        const availableBalance = Math.max(0, parseFloat((settledNetRevenue - totalPaidOut - totalPendingPayout - blockedBalance).toFixed(2)));
+
+        // Check if deduction amount is valid
+        if (amount > availableBalance) {
+            return res.status(400).json({
+                success: false,
+                error: `Insufficient balance. Available: ₹${availableBalance.toFixed(2)}, Requested: ₹${amount.toFixed(2)}`,
+                availableBalance: availableBalance.toFixed(2),
+                requestedAmount: amount.toFixed(2)
+            });
+        }
+
+        // Create deduction transaction record
+        const transactionId = `DEDUCT_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+        const orderId = `DEDUCT_ORDER_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+
+        const deductionTransaction = new Transaction({
+            transactionId,
+            orderId,
+            merchantId: merchantObjectId,
+            merchantName: merchant.name || merchant.email,
+            customerId: `ADMIN_${req.user._id}`,
+            customerName: req.user.name || 'SuperAdmin',
+            customerEmail: req.user.email || 'admin@system',
+            customerPhone: '0000000000',
+            amount: amount,
+            currency: 'INR',
+            description: reason || `Balance deduction by SuperAdmin ${req.user.name}`,
+            status: 'paid',
+            paymentGateway: 'admin_deduction',
+            settlementStatus: 'settled',
+            settlementDate: new Date(),
+            commission: 0,
+            netAmount: -amount, // Negative to reduce balance
+            paidAt: new Date()
+        });
+
+        await deductionTransaction.save();
+
+        console.log(`✅ Deducted ₹${amount} from merchant ${merchant.email}. New available balance: ₹${(availableBalance - amount).toFixed(2)}`);
+
+        res.json({
+            success: true,
+            message: `Successfully deducted ₹${amount} from merchant ${merchant.email}`,
+            deduction: {
+                transactionId,
+                amount: amount.toFixed(2),
+                reason: reason || 'Balance deduction by SuperAdmin',
+                deductedBy: req.user.name,
+                deductedAt: new Date()
+            },
+            merchant: {
+                merchantId: merchant._id,
+                email: merchant.email,
+                name: merchant.name,
+                previousBalance: availableBalance.toFixed(2),
+                newBalance: (availableBalance - amount).toFixed(2)
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Deduct Merchant Balance Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to deduct merchant balance',
             detail: error.message
         });
     }

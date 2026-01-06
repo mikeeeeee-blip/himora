@@ -155,6 +155,38 @@ class SuperadminPaymentService {
       this.handleError(error, `Failed to ${action} merchant funds`);
     }
   }
+
+  async deductMerchantBalance(merchantId, amount, reason = '') {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      if (!amount || amount <= 0) {
+        throw new Error('Amount must be greater than 0');
+      }
+
+      console.log('Deducting balance for merchant:', merchantId, 'amount:', amount);
+
+      const response = await axios.post(
+        API_ENDPOINTS.SUPERADMIN_DEDUCT_BALANCE(merchantId),
+        { amount, reason },
+        {
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('Deduct balance response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Deduct balance error:', error);
+      this.handleError(error, 'Failed to deduct merchant balance');
+    }
+  }
 // ============ MANUAL SETTLEMENT ============
 async triggerManualSettlement() {
   try {
