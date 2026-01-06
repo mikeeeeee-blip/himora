@@ -15,7 +15,8 @@ const SuperadminPaymentGatewaySettings = () => {
     easebuzz: { enabled: false },
     sabpaisa: { enabled: false },
     cashfree: { enabled: false },
-    payu: { enabled: false }
+    payu: { enabled: false },
+    zaakpay: { enabled: false }
   });
   const [roundRobinRotation, setRoundRobinRotation] = useState({
     enabled: true,
@@ -98,6 +99,9 @@ const SuperadminPaymentGatewaySettings = () => {
           },
           payu: { 
             enabled: Boolean(response.payment_gateways?.payu?.enabled)
+          },
+          zaakpay: {
+            enabled: Boolean(response.payment_gateways?.zaakpay?.enabled)
           }
         };
         
@@ -215,7 +219,8 @@ const SuperadminPaymentGatewaySettings = () => {
         easebuzz: { enabled: prev.easebuzz?.enabled || false },
         sabpaisa: { enabled: prev.sabpaisa?.enabled || false },
         cashfree: { enabled: prev.cashfree?.enabled || false },
-        payu: { enabled: prev.payu?.enabled || false }
+        payu: { enabled: prev.payu?.enabled || false },
+        zaakpay: { enabled: prev.zaakpay?.enabled || false }
       };
       
       const currentGateway = updated[gatewayName];
@@ -409,7 +414,8 @@ const SuperadminPaymentGatewaySettings = () => {
     easebuzz: 'Easebuzz',
     sabpaisa: 'SabPaisa',
     cashfree: 'Cashfree',
-    payu: 'PayU'
+    payu: 'PayU',
+    zaakpay: 'Zaakpay'
   };
 
   // Removed handleRotateGateway - round-robin is automatic on the backend

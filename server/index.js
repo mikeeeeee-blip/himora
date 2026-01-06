@@ -437,6 +437,7 @@ app.use('/api/easebuzz', require('./routes/easebuzzRoutes')); // ✅ NEW
 app.use('/api/payu', require('./routes/payuRoutes'));
 app.use('/api/sabpaisa', require('./routes/sabpaisaRoutes')); // ✅ NEW
 app.use('/api/cashfree', require('./routes/cashfreeRoutes')); // ✅ NEW
+app.use('/api/zaakpay', require('./routes/zaakpayRoutes')); // ✅ Zaakpay
 
 // Ensure logs are flushed immediately (important for PM2)
 const originalLog = console.log;

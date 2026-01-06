@@ -53,6 +53,14 @@ const TransactionSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.Mixed,
         default: null
     }, // Stores UPI Intent data from S2S API
+
+    // Zaakpay Fields
+    zaakpayOrderId: String,
+    zaakpayPaymentId: String,
+    zaakpayChecksum: String,
+    zaakpayRequestData: mongoose.Schema.Types.Mixed,
+    zaakpayEndpoint: String,
+    zaakpayMode: String,
     
     // Payment Gateway
     paymentGateway: String, // 'razorpay', 'paytm', 'phonepe', 'cashfree', 'easebuzz', 'sabpaisa', or 'payu'
@@ -210,6 +218,8 @@ TransactionSchema.index({ paytmPaymentId: 1 });
 TransactionSchema.index({ easebuzzOrderId: 1 });
 TransactionSchema.index({ payuOrderId: 1 });
 TransactionSchema.index({ payuPaymentId: 1 });
+TransactionSchema.index({ zaakpayOrderId: 1 });
+TransactionSchema.index({ zaakpayPaymentId: 1 });
 TransactionSchema.index({ easebuzzPaymentId: 1 });
 TransactionSchema.index({ sabpaisaClientTxnId: 1 });
 TransactionSchema.index({ sabpaisaPaymentId: 1 });
