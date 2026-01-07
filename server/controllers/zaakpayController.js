@@ -312,47 +312,12 @@ exports.createZaakpayPaymentLink = async (req, res) => {
             merchant?.successUrl ||
             `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
 
-        // Build returnUrl - must be publicly accessible (not localhost)
+        // Build returnUrl - ALWAYS use production URL (never localhost)
         // Zaakpay requires the returnUrl to be registered in their dashboard
-        // Priority: Use Next.js app URL (KRISHI_API_URL) for callback, not server URL
-        const urlOptions = [
-            process.env.ZACKPAY_CALLBACK_URL_TEST,
-            process.env.ZACKPAY_CALLBACK_URL_PRODUCTION,
-            process.env.ZACKPAY_CALLBACK_URL,
-            process.env.KRISHI_API_URL, // Next.js app URL
-            process.env.ZACKPAY_WEBSITE_URL,
-            process.env.FRONTEND_URL,
-            process.env.BACKEND_URL,
-            process.env.API_URL,
-            MODE === 'production' 
-                ? (process.env.PRODUCTION_CALLBACK_URL || 'https://www.shaktisewafoudation.in')
-                : (process.env.STAGING_CALLBACK_URL || 'https://www.shaktisewafoudation.in')
-        ];
+        // Hardcoded to always use: https://www.shaktisewafoudation.in/api/zaakpay/callback
+        const returnUrl = `https://www.shaktisewafoudation.in/api/zaakpay/callback?transaction_id=${transactionId}`;
         
-        let backendUrl = 'https://www.shaktisewafoudation.in'; // Default fallback (never localhost)
-        for (const url of urlOptions) {
-            if (url && !url.includes('localhost') && !url.includes('127.0.0.1')) {
-                backendUrl = url;
-                break;
-            }
-        }
-        
-        // Normalize URL - remove trailing slashes and /api/v1 if present
-        backendUrl = backendUrl.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
-        
-        // Use Next.js app callback route (not server route)
-        let returnUrl = `${backendUrl}/api/zaakpay/callback?transaction_id=${transactionId}`;
-        
-        // Final check - NEVER allow localhost
-        if (returnUrl.includes('localhost') || returnUrl.includes('127.0.0.1')) {
-            console.error('❌ CRITICAL ERROR: returnUrl still contains localhost after processing!');
-            console.error('   Using production URL as final fallback.');
-            const fallbackUrl = 'https://www.shaktisewafoudation.in';
-            returnUrl = `${fallbackUrl}/api/zaakpay/callback?transaction_id=${transactionId}`;
-            console.warn('⚠️ Using fallback URL:', returnUrl);
-        }
-        
-        console.log('🔗 Return URL configured:', returnUrl);
+        console.log('🔗 Return URL configured (hardcoded):', returnUrl);
 
         const amountPaisa = Math.round(amountFloat * 100).toString();
         const nameParts = (customer_name || '').trim().split(' ').filter(p => p.length > 0);
@@ -541,46 +506,11 @@ function buildPaymentData(transaction, option, vpa) {
     console.log('   firstName:', firstName, '(length:', firstName.length + ')');
     console.log('   lastName:', lastName, '(length:', lastName.length + ')');
     
-    // Build returnUrl - must be publicly accessible (not localhost)
-    // Priority: Use Next.js app URL (KRISHI_API_URL) for callback, not server URL
-    const urlOptions = [
-        process.env.ZACKPAY_CALLBACK_URL_TEST,
-        process.env.ZACKPAY_CALLBACK_URL_PRODUCTION,
-        process.env.ZACKPAY_CALLBACK_URL,
-        process.env.KRISHI_API_URL, // Next.js app URL
-        process.env.ZACKPAY_WEBSITE_URL,
-        process.env.FRONTEND_URL,
-        process.env.BACKEND_URL,
-        process.env.API_URL,
-        MODE === 'production' 
-            ? (process.env.PRODUCTION_CALLBACK_URL || 'https://www.shaktisewafoudation.in')
-            : (process.env.STAGING_CALLBACK_URL || 'https://www.shaktisewafoudation.in')
-    ];
+    // Build returnUrl - ALWAYS use production URL (never localhost)
+    // Hardcoded to always use: https://www.shaktisewafoudation.in/api/zaakpay/callback
+    const returnUrl = `https://www.shaktisewafoudation.in/api/zaakpay/callback?transaction_id=${transaction.transactionId}`;
     
-    let backendUrl = 'https://www.shaktisewafoudation.in'; // Default fallback (never localhost)
-    for (const url of urlOptions) {
-        if (url && !url.includes('localhost') && !url.includes('127.0.0.1')) {
-            backendUrl = url;
-            break;
-        }
-    }
-    
-    // Normalize URL - remove trailing slashes and /api/v1 if present
-    backendUrl = backendUrl.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
-    
-    // Use Next.js app callback route (not server route)
-    let returnUrl = `${backendUrl}/api/zaakpay/callback?transaction_id=${transaction.transactionId}`;
-    
-    // Final check - NEVER allow localhost
-    if (returnUrl.includes('localhost') || returnUrl.includes('127.0.0.1')) {
-        console.error('❌ CRITICAL ERROR: returnUrl still contains localhost after processing!');
-        console.error('   Using production URL as final fallback.');
-        const fallbackUrl = 'https://www.shaktisewafoudation.in';
-        returnUrl = `${fallbackUrl}/api/zaakpay/callback?transaction_id=${transaction.transactionId}`;
-        console.warn('⚠️ Using fallback URL:', returnUrl);
-    }
-    
-    console.log('🔗 Return URL configured:', returnUrl);
+    console.log('🔗 Return URL configured (hardcoded):', returnUrl);
     const amountPaisa = Math.round(transaction.amount * 100).toString();
     
     // Map payment option to instrument
