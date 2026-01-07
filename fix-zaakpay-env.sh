@@ -20,12 +20,50 @@ TEST_MERCHANT_ID="d22b6680ce804b1a81cdccb69a1285f1"
 PROD_SECRET_KEY="8213da8027db44aa937e203ce2745cfe"
 PROD_MERCHANT_ID="a55fa97d585646228a70d0e6ae5db840"
 
-echo "📋 Step 1: Checking current environment files..."
+echo "📋 Step 1: Detecting paths and checking environment files..."
 echo ""
 
-# Paths (UPDATED)
-KRISHI_ENV="/home/pranjal/shaktisewa-krishi/.env"
-SERVER_ENV="/home/pranjal/himora/server/.env"
+# Auto-detect user and base directory
+CURRENT_USER=$(whoami)
+HOME_DIR=$(eval echo ~$CURRENT_USER)
+
+# Try to find the actual paths
+# Check common locations
+if [ -d "$HOME_DIR/shaktisewa-krishi" ]; then
+    KRISHI_DIR="$HOME_DIR/shaktisewa-krishi"
+elif [ -d "$HOME_DIR/himora/krishi-shaktisewa" ]; then
+    KRISHI_DIR="$HOME_DIR/himora/krishi-shaktisewa"
+elif [ -d "/home/ubuntu/shaktisewa-krishi" ]; then
+    KRISHI_DIR="/home/ubuntu/shaktisewa-krishi"
+elif [ -d "/home/pranjal/shaktisewa-krishi" ]; then
+    KRISHI_DIR="/home/pranjal/shaktisewa-krishi"
+else
+    echo -e "${RED}❌ Could not find Next.js app directory${NC}"
+    echo "   Please specify the path manually or ensure the directory exists"
+    exit 1
+fi
+
+if [ -d "$HOME_DIR/himora/server" ]; then
+    SERVER_DIR="$HOME_DIR/himora/server"
+elif [ -d "/home/ubuntu/himora/server" ]; then
+    SERVER_DIR="/home/ubuntu/himora/server"
+elif [ -d "/home/pranjal/himora/server" ]; then
+    SERVER_DIR="/home/pranjal/himora/server"
+else
+    echo -e "${RED}❌ Could not find server directory${NC}"
+    echo "   Please specify the path manually or ensure the directory exists"
+    exit 1
+fi
+
+KRISHI_ENV="$KRISHI_DIR/.env"
+SERVER_ENV="$SERVER_DIR/.env"
+
+echo "📁 Detected paths:"
+echo "   User: $CURRENT_USER"
+echo "   Home: $HOME_DIR"
+echo "   Next.js app: $KRISHI_DIR"
+echo "   Server: $SERVER_DIR"
+echo ""
 
 ##############################
 # Fix krishi-shaktisewa/.env
@@ -162,11 +200,11 @@ echo ""
 echo -e "${YELLOW}⚠️  IMPORTANT: Now you must restart apps:${NC}"
 echo ""
 echo "1. Restart backend:"
-echo "   cd /home/pranjal/himora/server"
+echo "   cd $SERVER_DIR"
 echo "   pm2 restart all"
 echo ""
-echo "2. Rebuild/redeploy Next.js app (shaktisewafoudation-krishi):"
-echo "   cd /home/pranjal/shaktisewafoudation-krishi"
+echo "2. Rebuild/redeploy Next.js app:"
+echo "   cd $KRISHI_DIR"
 echo "   npm run build"
 echo "   # Then redeploy or restart your Next.js process"
 echo ""
