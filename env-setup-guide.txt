@@ -1,0 +1,37 @@
+# Zaakpay Environment Variables Setup Guide
+# ==========================================
+
+COPY THESE VARIABLES TO YOUR .env FILES:
+
+## FOR: krishi-shaktisewa/.env
+-------------------------------
+ZACKPAY_MODE=test
+ZACKPAY_MERCHANT_ID_TEST=d22b6680ce804b1a81cdccb69a1285f1
+ZACKPAY_SECRET_KEY_TEST=4efb7796be644b25be2decf19ebf197e
+ZACKPAY_CALLBACK_URL_TEST=https://www.shaktisewafoudation.in
+ZACKPAY_CALLBACK_URL_PRODUCTION=https://www.shaktisewafoudation.in
+ZACKPAY_WEBSITE_URL=https://www.shaktisewafoudation.in
+NEXT_PUBLIC_WEBSITE_URL=https://www.shaktisewafoudation.in
+NEXT_PUBLIC_SERVER_URL=https://api.shaktisewafoudation.in
+
+## FOR: server/.env
+-------------------------------
+ZACKPAY_MODE=test
+ZACKPAY_MERCHANT_ID_TEST=d22b6680ce804b1a81cdccb69a1285f1
+ZACKPAY_SECRET_KEY_TEST=4efb7796be644b25be2decf19ebf197e
+KRISHI_API_URL=https://www.shaktisewafoudation.in
+FRONTEND_URL=https://www.shaktisewafoudation.in
+BACKEND_URL=https://api.shaktisewafoudation.in
+
+## IMPORTANT NOTES:
+==================
+1. NO localhost URLs - they cause Zaakpay to reject transactions
+2. Register ALL URLs in Zaakpay Dashboard → Developers → Integration URLs
+3. Deploy the updated code after setting these variables
+4. Create a NEW payment link (don't reuse old transaction IDs)
+5. If encrypted names still appear, contact Zaakpay support
+
+## QUICK TEST:
+=============
+node verify-zaakpay-setup.js
+
