@@ -70,6 +70,7 @@ if [ -f "$KRISHI_ENV" ]; then
         sed -i '/ZACKPAY_WEBSITE_URL=/d' "$KRISHI_ENV" || true
         sed -i '/NEXT_PUBLIC_WEBSITE_URL=/d' "$KRISHI_ENV" || true
         sed -i '/NEXT_PUBLIC_SERVER_URL=/d' "$KRISHI_ENV" || true
+        sed -i '/NEXT_PUBLIC_API_URL=/d' "$KRISHI_ENV" || true
 
         cat >> "$KRISHI_ENV" << EOF
 
