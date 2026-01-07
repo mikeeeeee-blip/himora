@@ -1584,9 +1584,26 @@ exports.getZaakpayTransaction = async (req, res) => {
 
 exports.handleZaakpayCallback = async (req, res) => {
     try {
-        const payload = req.body || req.query || {};
+        // Handle both GET (query params) and POST (body) requests
+        const payload = req.method === 'GET' ? req.query : (req.body || req.query || {});
         const orderId = payload.orderId || payload.orderid;
         const responseCode = payload.responseCode || payload.responsecode;
+        
+        console.log('📥 Server: Zaakpay callback received:', {
+            method: req.method,
+            orderId,
+            responseCode,
+            hasPayload: !!payload && Object.keys(payload).length > 0
+        });
+        
+        if (!orderId) {
+            console.error('❌ Server: Order ID missing in callback');
+            return res.status(400).json({
+                success: false,
+                error: 'Order ID is required'
+            });
+        }
+        
         const transaction = await Transaction.findOne({
             $or: [
                 { orderId: orderId },
@@ -1595,7 +1612,11 @@ exports.handleZaakpayCallback = async (req, res) => {
         }).populate('merchantId');
 
         if (!transaction) {
-            return res.status(404).send('Transaction not found');
+            console.error('❌ Server: Transaction not found for orderId:', orderId);
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found'
+            });
         }
 
         const amountRupees = payload.amount ? parseFloat(payload.amount) / 100 : transaction.amount;
@@ -1610,8 +1631,8 @@ exports.handleZaakpayCallback = async (req, res) => {
                 {
                     status: 'paid',
                     paidAt,
-                    paymentMethod: payload.paymentMode || 'UPI',
-                    zaakpayPaymentId: payload.paymentId || payload.payment_id || payload.txnId,
+                    paymentMethod: payload.paymentMode || payload.paymentMethod || 'UPI',
+                    zaakpayPaymentId: payload.paymentId || payload.payment_id || payload.txnId || payload.pgTransId,
                     acquirerData: {
                         utr: payload.utr || payload.bankTransactionId || null,
                         bank_transaction_id: payload.bankTransactionId || null
@@ -1623,28 +1644,49 @@ exports.handleZaakpayCallback = async (req, res) => {
                     webhookData: payload
                 }
             );
+            
+            console.log('✅ Server: Transaction marked as PAID:', {
+                transactionId: transaction.transactionId,
+                orderId,
+                amount: amountRupees,
+                status: 'paid'
+            });
         } else {
             await Transaction.findOneAndUpdate(
                 { _id: transaction._id },
                 {
                     status: 'failed',
-                    failureReason: payload.responseDescription || 'Payment failed',
+                    failureReason: payload.responseDescription || payload.response_description || 'Payment failed',
                     webhookData: payload
                 }
             );
+            
+            console.log('❌ Server: Transaction marked as FAILED:', {
+                transactionId: transaction.transactionId,
+                orderId,
+                responseCode,
+                reason: payload.responseDescription || payload.response_description
+            });
         }
 
-        const successUrl = transaction.successUrl || transaction.callbackUrl;
-        const failureUrl = transaction.failureUrl;
-
-        if (responseCode === '100' || responseCode === 100) {
-            return res.redirect(successUrl || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success?transaction_id=${transaction.transactionId}`);
-        }
-
-        return res.redirect(failureUrl || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed?transaction_id=${transaction.transactionId}`);
+        // Return JSON response for Next.js to handle redirect
+        // Next.js will handle the redirect with absolute URLs
+        return res.json({
+            success: true,
+            transaction: {
+                transactionId: transaction.transactionId,
+                orderId: transaction.orderId || transaction.zaakpayOrderId,
+                status: responseCode === '100' || responseCode === 100 ? 'paid' : 'failed',
+                responseCode: responseCode,
+                responseDescription: payload.responseDescription || payload.response_description
+            }
+        });
     } catch (error) {
         console.error('❌ Zaakpay callback error:', error);
-        res.status(500).send('Callback processing failed');
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Callback processing failed'
+        });
     }
 };
 
