@@ -344,13 +344,16 @@ exports.createZaakpayPaymentLink = async (req, res) => {
         const returnUrl = `${backendUrl}/api/zaakpay/callback?transaction_id=${transactionId}`;
         
         // Final check - NEVER allow localhost
+        let finalReturnUrl = returnUrl;
         if (returnUrl.includes('localhost') || returnUrl.includes('127.0.0.1')) {
             console.error('❌ CRITICAL ERROR: returnUrl still contains localhost after processing!');
             console.error('   Using production URL as final fallback.');
             const fallbackUrl = 'https://www.shaktisewafoudation.in';
-            returnUrl = `${fallbackUrl}/api/zaakpay/callback?transaction_id=${transactionId}`;
-            console.warn('⚠️ Using fallback URL:', returnUrl);
+            finalReturnUrl = `${fallbackUrl}/api/zaakpay/callback?transaction_id=${transactionId}`;
+            console.warn('⚠️ Using fallback URL:', finalReturnUrl);
         }
+        
+        const returnUrl = finalReturnUrl;
         
         console.log('🔗 Return URL configured:', returnUrl);
 
@@ -569,16 +572,18 @@ function buildPaymentData(transaction, option, vpa) {
     backendUrl = backendUrl.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
     
     // Use Next.js app callback route (not server route)
-    let returnUrl = `${backendUrl}/api/zaakpay/callback?transaction_id=${transaction.transactionId}`;
+    let finalReturnUrl = `${backendUrl}/api/zaakpay/callback?transaction_id=${transaction.transactionId}`;
     
     // Final check - NEVER allow localhost
-    if (returnUrl.includes('localhost') || returnUrl.includes('127.0.0.1')) {
+    if (finalReturnUrl.includes('localhost') || finalReturnUrl.includes('127.0.0.1')) {
         console.error('❌ CRITICAL ERROR: returnUrl still contains localhost after processing!');
         console.error('   Using production URL as final fallback.');
         const fallbackUrl = 'https://www.shaktisewafoudation.in';
-        returnUrl = `${fallbackUrl}/api/zaakpay/callback?transaction_id=${transaction.transactionId}`;
-        console.warn('⚠️ Using fallback URL:', returnUrl);
+        finalReturnUrl = `${fallbackUrl}/api/zaakpay/callback?transaction_id=${transaction.transactionId}`;
+        console.warn('⚠️ Using fallback URL:', finalReturnUrl);
     }
+    
+    const returnUrl = finalReturnUrl;
     
     console.log('🔗 Return URL configured:', returnUrl);
     const amountPaisa = Math.round(transaction.amount * 100).toString();
