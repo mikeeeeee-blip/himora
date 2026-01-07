@@ -1572,6 +1572,34 @@ exports.getZaakpayTransaction = async (req, res) => {
             });
         }
         
+        // CRITICAL: Decode customerName if it's encrypted (base64)
+        // This ensures we always return plain text names to the frontend
+        let customerName = String(transaction.customerName || '').trim();
+        
+        console.log('🔍 [getZaakpayTransaction] Processing customerName:');
+        console.log('   Raw value from DB:', customerName);
+        console.log('   Length:', customerName.length);
+        console.log('   Looks like base64:', isBase64(customerName));
+        
+        // Force plain text extraction
+        customerName = forcePlainTextName(customerName, 'Customer');
+        
+        console.log('✅ [getZaakpayTransaction] Decoded customerName:', customerName);
+        
+        // If the name was encrypted, update the transaction in the database with the decoded value
+        // This prevents future issues
+        if (isBase64(String(transaction.customerName || '').trim())) {
+            console.warn('⚠️ [getZaakpayTransaction] Detected encrypted customerName in DB, updating transaction');
+            try {
+                transaction.customerName = customerName;
+                await transaction.save();
+                console.log('✅ [getZaakpayTransaction] Transaction updated with plain text customerName');
+            } catch (updateError) {
+                console.error('❌ [getZaakpayTransaction] Failed to update transaction:', updateError);
+                // Continue anyway - we'll return the decoded name
+            }
+        }
+        
         res.json({
             success: true,
             transaction: {
@@ -1581,7 +1609,7 @@ exports.getZaakpayTransaction = async (req, res) => {
                 amount: transaction.amount,
                 currency: transaction.currency,
                 status: transaction.status,
-                customerName: transaction.customerName,
+                customerName: customerName, // Use decoded name
                 customerEmail: transaction.customerEmail,
                 customerPhone: transaction.customerPhone,
                 description: transaction.description,

@@ -23,6 +23,7 @@ import WebhookPage from "./components/pages/WebhookPage";
 import WebhookHowTo from "./components/pages/WebhookHowTo";
 import ApiDocumentationPage from "./components/pages/ApiDocumentationPage";
 import AuthWrapper from "./components/AuthWrapper";
+import RouteProtection from "./components/RouteProtection";
 import SuperadminLayout from "./components/SuperadminLayout";
 import { USER_ROLES } from "./constants/api";
 import TransactionDetailPage from "./components/pages/TransactionDetailPage";
@@ -40,212 +41,258 @@ function App() {
         <Route
           path="/superadmin"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminLayout>
-                <SuperadminDashboard />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <SuperadminDashboard />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/superadmin/signup"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminLayout>
-                <SuperadminSignupPage />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <SuperadminSignupPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/superadmin/transactions"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminLayout>
-                <SuperadminTransactionsPage />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <SuperadminTransactionsPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/superadmin/payouts"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminLayout>
-                <SuperadminPayoutsPage />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <SuperadminPayoutsPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/superadmin/merchants"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminLayout>
-                <SuperadminMerchantsPage />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <SuperadminMerchantsPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/superadmin/merchants/:merchantId"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminLayout>
-                <MerchantDetailPage />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <MerchantDetailPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/superadmin/settings/payment-gateways"
           element={
-            <AuthWrapper requiredRole={[USER_ROLES.SUPERADMIN, USER_ROLES.SUB_SUPERADMIN]}>
-              <SuperadminLayout>
-                <SuperadminPaymentGatewaySettings />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={[USER_ROLES.SUPERADMIN, USER_ROLES.SUB_SUPERADMIN]}>
+                <SuperadminLayout>
+                  <SuperadminPaymentGatewaySettings />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/superadmin/sub-superadmins"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
-              <SuperadminLayout>
-                <SubSuperadminManagementPage />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <SubSuperadminManagementPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         {/* Sub-SuperAdmin Routes */}
         <Route
           path="/sub-superadmin"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
-              <SuperadminLayout>
-                <SubSuperadminDashboard />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
+                <SuperadminLayout>
+                  <SubSuperadminDashboard />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/sub-superadmin/transactions"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
-              <SuperadminLayout>
-                <SuperadminTransactionsPage />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
+                <SuperadminLayout>
+                  <SuperadminTransactionsPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/sub-superadmin/payouts"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
-              <SuperadminLayout>
-                <SuperadminPayoutsPage />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
+                <SuperadminLayout>
+                  <SuperadminPayoutsPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/sub-superadmin/merchants"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
-              <SuperadminLayout>
-                <SuperadminMerchantsPage />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
+                <SuperadminLayout>
+                  <SuperadminMerchantsPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/sub-superadmin/merchants/:merchantId"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
-              <SuperadminLayout>
-                <MerchantDetailPage />
-              </SuperadminLayout>
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUB_SUPERADMIN}>
+                <SuperadminLayout>
+                  <MerchantDetailPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/admin"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
-              <AdminDashboard />
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
+                <AdminDashboard />
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/admin/transactions"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
-              <TransactionsPage />
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
+                <TransactionsPage />
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/admin/payouts"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
-              <PayoutsPage />
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
+                <PayoutsPage />
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/admin/payins"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
-              <PayinsPage />
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
+                <PayinsPage />
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/admin/transactions/:transactionId"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
-              <TransactionDetailPage />
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
+                <TransactionDetailPage />
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/admin/payments"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
-              <PaymentsPage />
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
+                <PaymentsPage />
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/admin/payments/subpaisa"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
-              <SubPaisaPaymentPage />
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
+                <SubPaisaPaymentPage />
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/admin/webhooks"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
-              <WebhookPage />
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
+                <WebhookPage />
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/admin/webhooks/how-to"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
-              <WebhookHowTo />
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
+                <WebhookHowTo />
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         <Route
           path="/admin/api-docs"
           element={
-            <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
-              <ApiDocumentationPage />
-            </AuthWrapper>
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.ADMIN}>
+                <ApiDocumentationPage />
+              </AuthWrapper>
+            </RouteProtection>
           }
         />
         {/* Payment Result Pages (Public - No Auth Required) */}

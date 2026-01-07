@@ -10,7 +10,7 @@ eas build --platform android --profile preview --local
 
 cd /home/pranjal/himora/mobile-app/android
 ./gradlew clean
-./gradlew assembleRelease
+./gradlew assembleReleas e
 
 
 AIzaSyASkQgwaHD-Xrdv5P5VboU9bFkNM5spJJI

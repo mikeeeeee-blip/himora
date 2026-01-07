@@ -39,22 +39,17 @@ const AuthWrapper = ({ children, requiredRole }) => {
     return <Navigate to="/login" replace />;
   }
 
- // ✅ Allow SuperAdmin and SubSuperAdmin to access Admin routes
-if (requiredRole === USER_ROLES.ADMIN && (userRole === USER_ROLES.SUPERADMIN || userRole === USER_ROLES.SUB_SUPERADMIN)) {
-  return children; // SuperAdmin and SubSuperAdmin can access admin routes
-}
-
-// ✅ Handle array of required roles
-if (Array.isArray(requiredRole)) {
-  if (requiredRole.includes(userRole)) {
-    return children;
+  // ✅ Handle array of required roles
+  if (Array.isArray(requiredRole)) {
+    if (requiredRole.includes(userRole)) {
+      return children;
+    }
+  } else {
+    // ✅ Allow SubSuperAdmin to access SuperAdmin routes (with backend access control)
+    if (requiredRole === USER_ROLES.SUPERADMIN && userRole === USER_ROLES.SUB_SUPERADMIN) {
+      return children; // SubSuperAdmin can access superadmin routes (backend will check permissions)
+    }
   }
-} else {
-  // ✅ Allow SubSuperAdmin to access SuperAdmin routes (with backend access control)
-  if (requiredRole === USER_ROLES.SUPERADMIN && userRole === USER_ROLES.SUB_SUPERADMIN) {
-    return children; // SubSuperAdmin can access superadmin routes (backend will check permissions)
-  }
-}
 
   // Check if role matches (handle both single role and array of roles)
   const roleMatches = Array.isArray(requiredRole) 
