@@ -1,5 +1,5 @@
 #!/bin/bash
-# Zaakpay Environment Fix Script
+# Zaakpay Environment Fix Script (Corrected paths)
 # This script helps fix the Zaakpay encrypted name issue
 
 set -e
@@ -23,39 +23,53 @@ PROD_MERCHANT_ID="a55fa97d585646228a70d0e6ae5db840"
 echo "📋 Step 1: Checking current environment files..."
 echo ""
 
-# Check krishi-shaktisewa/.env
-KRISHI_ENV="/home/pranjal/himora/krishi-shaktisewa/.env"
+# Paths (UPDATED)
+KRISHI_ENV="/home/pranjal/shaktisewa-krishi/.env"
+SERVER_ENV="/home/pranjal/himora/server/.env"
+
+##############################
+# Fix krishi-shaktisewa/.env
+##############################
 if [ -f "$KRISHI_ENV" ]; then
-    echo "✅ Found krishi-shaktisewa/.env"
+    echo "✅ Found shaktisewa-krishi/.env"
     
-    # Check if secret key is correct
     if grep -q "ZACKPAY_SECRET_KEY_TEST=$TEST_SECRET_KEY" "$KRISHI_ENV"; then
-        echo -e "${GREEN}✅ Test secret key is correct${NC}"
+        echo -e "${GREEN}✅ Test secret key is correct in shaktisewa-krishi/.env${NC}"
     else
-        echo -e "${RED}❌ Test secret key is missing or incorrect${NC}"
-        echo "   Adding correct test secret key..."
-        
-        # Remove old incorrect key if exists
-        sed -i '/ZACKPAY_SECRET_KEY_TEST=/d' "$KRISHI_ENV"
-        
-        # Add correct key
-        echo "" >> "$KRISHI_ENV"
-        echo "# Zaakpay Configuration - Updated $(date)" >> "$KRISHI_ENV"
-        echo "ZACKPAY_MODE=test" >> "$KRISHI_ENV"
-        echo "ZACKPAY_MERCHANT_ID_TEST=$TEST_MERCHANT_ID" >> "$KRISHI_ENV"
-        echo "ZACKPAY_SECRET_KEY_TEST=$TEST_SECRET_KEY" >> "$KRISHI_ENV"
-        echo "ZACKPAY_MERCHANT_ID=$PROD_MERCHANT_ID" >> "$KRISHI_ENV"
-        echo "ZACKPAY_SECRET_KEY=$PROD_SECRET_KEY" >> "$KRISHI_ENV"
-        echo "ZACKPAY_CALLBACK_URL_TEST=https://www.shaktisewafoudation.in" >> "$KRISHI_ENV"
-        echo "ZACKPAY_CALLBACK_URL_PRODUCTION=https://www.shaktisewafoudation.in" >> "$KRISHI_ENV"
-        echo "ZACKPAY_WEBSITE_URL=https://www.shaktisewafoudation.in" >> "$KRISHI_ENV"
-        echo "NEXT_PUBLIC_WEBSITE_URL=https://www.shaktisewafoudation.in" >> "$KRISHI_ENV"
-        echo "NEXT_PUBLIC_SERVER_URL=https://api.shaktisewafoudation.in" >> "$KRISHI_ENV"
-        
-        echo -e "${GREEN}✅ Updated krishi-shaktisewa/.env${NC}"
+        echo -e "${RED}❌ Test secret key is missing or incorrect in shaktisewa-krishi/.env${NC}"
+        echo "   Updating with correct Zaakpay configuration..."
+
+        # Remove old lines if exist
+        sed -i '/ZACKPAY_MODE=/d' "$KRISHI_ENV" || true
+        sed -i '/ZACKPAY_MERCHANT_ID_TEST=/d' "$KRISHI_ENV" || true
+        sed -i '/ZACKPAY_SECRET_KEY_TEST=/d' "$KRISHI_ENV" || true
+        sed -i '/ZACKPAY_MERCHANT_ID=/d' "$KRISHI_ENV" || true
+        sed -i '/ZACKPAY_SECRET_KEY=/d' "$KRISHI_ENV" || true
+        sed -i '/ZACKPAY_CALLBACK_URL_TEST=/d' "$KRISHI_ENV" || true
+        sed -i '/ZACKPAY_CALLBACK_URL_PRODUCTION=/d' "$KRISHI_ENV" || true
+        sed -i '/ZACKPAY_WEBSITE_URL=/d' "$KRISHI_ENV" || true
+        sed -i '/NEXT_PUBLIC_WEBSITE_URL=/d' "$KRISHI_ENV" || true
+        sed -i '/NEXT_PUBLIC_SERVER_URL=/d' "$KRISHI_ENV" || true
+
+        cat >> "$KRISHI_ENV" << EOF
+
+# Zaakpay Configuration - Updated $(date)
+ZACKPAY_MODE=test
+ZACKPAY_MERCHANT_ID_TEST=$TEST_MERCHANT_ID
+ZACKPAY_SECRET_KEY_TEST=$TEST_SECRET_KEY
+ZACKPAY_MERCHANT_ID=$PROD_MERCHANT_ID
+ZACKPAY_SECRET_KEY=$PROD_SECRET_KEY
+ZACKPAY_CALLBACK_URL_TEST=https://www.shaktisewafoudation.in
+ZACKPAY_CALLBACK_URL_PRODUCTION=https://www.shaktisewafoudation.in
+ZACKPAY_WEBSITE_URL=https://www.shaktisewafoudation.in
+NEXT_PUBLIC_WEBSITE_URL=https://www.shaktisewafoudation.in
+NEXT_PUBLIC_SERVER_URL=https://api.shaktisewafoudation.in
+EOF
+
+        echo -e "${GREEN}✅ Updated shaktisewafoudation-krishi/.env${NC}"
     fi
 else
-    echo -e "${YELLOW}⚠️  krishi-shaktisewa/.env not found, creating it...${NC}"
+    echo -e "${YELLOW}⚠️  shaktisewafoudation-krishi/.env not found, creating it...${NC}"
     cat > "$KRISHI_ENV" << EOF
 # Zaakpay Configuration
 ZACKPAY_MODE=test
@@ -69,35 +83,47 @@ ZACKPAY_WEBSITE_URL=https://www.shaktisewafoudation.in
 NEXT_PUBLIC_WEBSITE_URL=https://www.shaktisewafoudation.in
 NEXT_PUBLIC_SERVER_URL=https://api.shaktisewafoudation.in
 EOF
-    echo -e "${GREEN}✅ Created krishi-shaktisewa/.env${NC}"
+    echo -e "${GREEN}✅ Created shaktisewafoudation-krishi/.env${NC}"
 fi
 
-# Check server/.env
-SERVER_ENV="/home/pranjal/himora/server/.env"
+#######################
+# Fix server/.env
+#######################
 if [ -f "$SERVER_ENV" ]; then
-    echo "✅ Found server/.env"
+    echo "✅ Found himora/server/.env"
     
     if grep -q "ZACKPAY_SECRET_KEY_TEST=$TEST_SECRET_KEY" "$SERVER_ENV"; then
-        echo -e "${GREEN}✅ Test secret key is correct${NC}"
+        echo -e "${GREEN}✅ Test secret key is correct in server/.env${NC}"
     else
-        echo -e "${RED}❌ Test secret key is missing or incorrect${NC}"
-        echo "   Adding correct test secret key..."
-        
-        sed -i '/ZACKPAY_SECRET_KEY_TEST=/d' "$SERVER_ENV"
-        
-        echo "" >> "$SERVER_ENV"
-        echo "# Zaakpay Configuration - Updated $(date)" >> "$SERVER_ENV"
-        echo "ZACKPAY_MODE=test" >> "$SERVER_ENV"
-        echo "ZACKPAY_MERCHANT_ID_TEST=$TEST_MERCHANT_ID" >> "$SERVER_ENV"
-        echo "ZACKPAY_SECRET_KEY_TEST=$TEST_SECRET_KEY" >> "$SERVER_ENV"
-        echo "ZACKPAY_MERCHANT_ID=$PROD_MERCHANT_ID" >> "$SERVER_ENV"
-        echo "ZACKPAY_SECRET_KEY=$PROD_SECRET_KEY" >> "$SERVER_ENV"
-        echo "KRISHI_API_URL=https://www.shaktisewafoudation.in" >> "$SERVER_ENV"
-        echo "FRONTEND_URL=https://www.shaktisewafoudation.in" >> "$SERVER_ENV"
-        echo "BACKEND_URL=https://api.shaktisewafoudation.in" >> "$SERVER_ENV"
-        echo "ZACKPAY_CALLBACK_URL=https://www.shaktisewafoudation.in" >> "$SERVER_ENV"
-        echo "ZACKPAY_WEBSITE_URL=https://www.shaktisewafoudation.in" >> "$SERVER_ENV"
-        
+        echo -e "${RED}❌ Test secret key is missing or incorrect in server/.env${NC}"
+        echo "   Updating with correct Zaakpay configuration..."
+
+        sed -i '/ZACKPAY_MODE=/d' "$SERVER_ENV" || true
+        sed -i '/ZACKPAY_MERCHANT_ID_TEST=/d' "$SERVER_ENV" || true
+        sed -i '/ZACKPAY_SECRET_KEY_TEST=/d' "$SERVER_ENV" || true
+        sed -i '/ZACKPAY_MERCHANT_ID=/d' "$SERVER_ENV" || true
+        sed -i '/ZACKPAY_SECRET_KEY=/d' "$SERVER_ENV" || true
+        sed -i '/KRISHI_API_URL=/d' "$SERVER_ENV" || true
+        sed -i '/FRONTEND_URL=/d' "$SERVER_ENV" || true
+        sed -i '/BACKEND_URL=/d' "$SERVER_ENV" || true
+        sed -i '/ZACKPAY_CALLBACK_URL=/d' "$SERVER_ENV" || true
+        sed -i '/ZACKPAY_WEBSITE_URL=/d' "$SERVER_ENV" || true
+
+        cat >> "$SERVER_ENV" << EOF
+
+# Zaakpay Configuration - Updated $(date)
+ZACKPAY_MODE=test
+ZACKPAY_MERCHANT_ID_TEST=$TEST_MERCHANT_ID
+ZACKPAY_SECRET_KEY_TEST=$TEST_SECRET_KEY
+ZACKPAY_MERCHANT_ID=$PROD_MERCHANT_ID
+ZACKPAY_SECRET_KEY=$PROD_SECRET_KEY
+KRISHI_API_URL=https://www.shaktisewafoudation.in
+FRONTEND_URL=https://www.shaktisewafoudation.in
+BACKEND_URL=https://api.shaktisewafoudation.in
+ZACKPAY_CALLBACK_URL=https://www.shaktisewafoudation.in
+ZACKPAY_WEBSITE_URL=https://www.shaktisewafoudation.in
+EOF
+
         echo -e "${GREEN}✅ Updated server/.env${NC}"
     fi
 else
@@ -122,7 +148,6 @@ echo ""
 echo "📋 Step 2: Verification"
 echo ""
 
-# Verify the keys are correct
 if grep -q "ZACKPAY_SECRET_KEY_TEST=$TEST_SECRET_KEY" "$KRISHI_ENV" && \
    grep -q "ZACKPAY_SECRET_KEY_TEST=$TEST_SECRET_KEY" "$SERVER_ENV"; then
     echo -e "${GREEN}✅ Both environment files have correct test secret key${NC}"
@@ -134,21 +159,18 @@ fi
 echo ""
 echo "📋 Step 3: Next Steps"
 echo ""
-echo -e "${YELLOW}⚠️  IMPORTANT: You must now:${NC}"
+echo -e "${YELLOW}⚠️  IMPORTANT: Now you must restart apps:${NC}"
 echo ""
-echo "1. Restart the Next.js app (if using PM2 or similar):"
-echo "   cd /home/pranjal/himora/krishi-shaktisewa"
-echo "   npm run build"
-echo "   # Then redeploy to Vercel or restart your server"
-echo ""
-echo "2. Restart the backend server:"
+echo "1. Restart backend:"
 echo "   cd /home/pranjal/himora/server"
 echo "   pm2 restart all"
 echo ""
-echo "3. Create a NEW payment link (don't reuse old transaction IDs)"
+echo "2. Rebuild/redeploy Next.js app (shaktisewafoudation-krishi):"
+echo "   cd /home/pranjal/shaktisewafoudation-krishi"
+echo "   npm run build"
+echo "   # Then redeploy or restart your Next.js process"
 echo ""
-echo "4. Test the new payment link"
+echo "3. Create a NEW payment link (do not reuse old transaction IDs)"
 echo ""
 echo -e "${GREEN}✅ Environment files updated successfully!${NC}"
 echo ""
-
