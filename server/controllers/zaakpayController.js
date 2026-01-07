@@ -50,14 +50,14 @@ if (MODE === 'production') {
 // According to Zaakpay docs: https://developer.zaakpay.com/docs/seamless-flow
 // Custom Checkout (TransactU) endpoint - Server to Server API
 // IMPORTANT: Staging and Production use DIFFERENT endpoints
-// Staging: https://zaakstaging.zaakpay.com/transactU?v=8
-// Production: https://zaakpay.com/transactU?v=8
+// Staging: https://zaakstaging.zaakpay.com/api/paymentTransact/V8
+// Production: https://api.zaakpay.com/api/paymentTransact/V8
 // 
 // Force staging for testing - change to production only when going live
 const BASE_URL = MODE === 'production'
-    ? 'https://zaakpay.com'
+    ? 'https://api.zaakpay.com'
     : 'https://zaakstaging.zaakpay.com';
-const TRANSACT_ENDPOINT = `${BASE_URL}/transactU?v=8`;
+const TRANSACT_ENDPOINT = `${BASE_URL}/api/paymentTransact/V8`;
 
 // Ensure we're using staging endpoint (for testing)
 if (BASE_URL !== 'https://zaakstaging.zaakpay.com' && MODE !== 'production') {
@@ -314,23 +314,45 @@ exports.createZaakpayPaymentLink = async (req, res) => {
 
         // Build returnUrl - must be publicly accessible (not localhost)
         // Zaakpay requires the returnUrl to be registered in their dashboard
-        const backendUrl = process.env.BACKEND_URL || 
-                          process.env.API_URL || 
-                          process.env.ZACKPAY_CALLBACK_URL ||
-                          (MODE === 'production' 
-                              ? (process.env.PRODUCTION_CALLBACK_URL || 'https://yourdomain.com')
-                              : (process.env.STAGING_CALLBACK_URL || 'http://localhost:5001'));
+        // Priority: Use Next.js app URL (KRISHI_API_URL) for callback, not server URL
+        const urlOptions = [
+            process.env.ZACKPAY_CALLBACK_URL_TEST,
+            process.env.ZACKPAY_CALLBACK_URL_PRODUCTION,
+            process.env.ZACKPAY_CALLBACK_URL,
+            process.env.KRISHI_API_URL, // Next.js app URL
+            process.env.ZACKPAY_WEBSITE_URL,
+            process.env.FRONTEND_URL,
+            process.env.BACKEND_URL,
+            process.env.API_URL,
+            MODE === 'production' 
+                ? (process.env.PRODUCTION_CALLBACK_URL || 'https://www.shaktisewafoudation.in')
+                : (process.env.STAGING_CALLBACK_URL || 'https://www.shaktisewafoudation.in')
+        ];
         
-        const returnUrl = `${backendUrl.replace(/\/$/, '')}/api/zaakpay/callback?transaction_id=${transactionId}`;
-        
-        // Warn if using localhost (Zaakpay can't reach it)
-        if ((returnUrl.includes('localhost') || returnUrl.includes('127.0.0.1')) && MODE === 'test') {
-            console.warn('⚠️ WARNING: returnUrl contains localhost:', returnUrl);
-            console.warn('   Zaakpay cannot reach localhost URLs. For testing:');
-            console.warn('   1. Use ngrok: npx ngrok http 5001 (then set ZACKPAY_CALLBACK_URL=https://your-ngrok-url.ngrok.io)');
-            console.warn('   2. Or set ZACKPAY_CALLBACK_URL environment variable to your public URL');
-            console.warn('   3. Register the public URL in Zaakpay dashboard (Developers > Integration URLs)');
+        let backendUrl = 'https://www.shaktisewafoudation.in'; // Default fallback (never localhost)
+        for (const url of urlOptions) {
+            if (url && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+                backendUrl = url;
+                break;
+            }
         }
+        
+        // Normalize URL - remove trailing slashes and /api/v1 if present
+        backendUrl = backendUrl.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
+        
+        // Use Next.js app callback route (not server route)
+        const returnUrl = `${backendUrl}/api/zaakpay/callback?transaction_id=${transactionId}`;
+        
+        // Final check - NEVER allow localhost
+        if (returnUrl.includes('localhost') || returnUrl.includes('127.0.0.1')) {
+            console.error('❌ CRITICAL ERROR: returnUrl still contains localhost after processing!');
+            console.error('   Using production URL as final fallback.');
+            const fallbackUrl = 'https://www.shaktisewafoudation.in';
+            returnUrl = `${fallbackUrl}/api/zaakpay/callback?transaction_id=${transactionId}`;
+            console.warn('⚠️ Using fallback URL:', returnUrl);
+        }
+        
+        console.log('🔗 Return URL configured:', returnUrl);
 
         const amountPaisa = Math.round(amountFloat * 100).toString();
         const nameParts = (customer_name || '').trim().split(' ').filter(p => p.length > 0);
@@ -520,23 +542,43 @@ function buildPaymentData(transaction, option, vpa) {
     console.log('   lastName:', lastName, '(length:', lastName.length + ')');
     
     // Build returnUrl - must be publicly accessible (not localhost)
-    // For staging: Use a public URL or ngrok tunnel
-    // For production: Use your production callback URL
-    const backendUrl = process.env.BACKEND_URL || 
-                      process.env.API_URL || 
-                      process.env.ZACKPAY_CALLBACK_URL ||
-                      (MODE === 'production' ? 'https://yourdomain.com' : 'http://localhost:5001');
+    // Priority: Use Next.js app URL (KRISHI_API_URL) for callback, not server URL
+    const urlOptions = [
+        process.env.ZACKPAY_CALLBACK_URL_TEST,
+        process.env.ZACKPAY_CALLBACK_URL_PRODUCTION,
+        process.env.ZACKPAY_CALLBACK_URL,
+        process.env.KRISHI_API_URL, // Next.js app URL
+        process.env.ZACKPAY_WEBSITE_URL,
+        process.env.FRONTEND_URL,
+        process.env.BACKEND_URL,
+        process.env.API_URL,
+        MODE === 'production' 
+            ? (process.env.PRODUCTION_CALLBACK_URL || 'https://www.shaktisewafoudation.in')
+            : (process.env.STAGING_CALLBACK_URL || 'https://www.shaktisewafoudation.in')
+    ];
     
-    // Warn if using localhost (Zaakpay can't reach it)
-    if (backendUrl.includes('localhost') || backendUrl.includes('127.0.0.1')) {
-        console.warn('⚠️ WARNING: returnUrl contains localhost. Zaakpay cannot reach localhost URLs.');
-        console.warn('   For testing, use:');
-        console.warn('   1. ngrok: https://ngrok.com (tunnel localhost to public URL)');
-        console.warn('   2. Set ZACKPAY_CALLBACK_URL environment variable to your public URL');
-        console.warn('   3. Register the public URL in Zaakpay dashboard (Developers > Integration URLs)');
+    let backendUrl = 'https://www.shaktisewafoudation.in'; // Default fallback (never localhost)
+    for (const url of urlOptions) {
+        if (url && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+            backendUrl = url;
+            break;
+        }
     }
     
-    const returnUrl = `${backendUrl.replace(/\/$/, '')}/api/zaakpay/callback?transaction_id=${transaction.transactionId}`;
+    // Normalize URL - remove trailing slashes and /api/v1 if present
+    backendUrl = backendUrl.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
+    
+    // Use Next.js app callback route (not server route)
+    let returnUrl = `${backendUrl}/api/zaakpay/callback?transaction_id=${transaction.transactionId}`;
+    
+    // Final check - NEVER allow localhost
+    if (returnUrl.includes('localhost') || returnUrl.includes('127.0.0.1')) {
+        console.error('❌ CRITICAL ERROR: returnUrl still contains localhost after processing!');
+        console.error('   Using production URL as final fallback.');
+        const fallbackUrl = 'https://www.shaktisewafoudation.in';
+        returnUrl = `${fallbackUrl}/api/zaakpay/callback?transaction_id=${transaction.transactionId}`;
+        console.warn('⚠️ Using fallback URL:', returnUrl);
+    }
     
     console.log('🔗 Return URL configured:', returnUrl);
     const amountPaisa = Math.round(transaction.amount * 100).toString();
