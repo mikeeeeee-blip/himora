@@ -437,25 +437,41 @@ exports.createZaakpayPaymentLink = async (req, res) => {
 
         await transaction.save();
 
-        // Use Next.js frontend URL instead of server URL
-        const frontendUrl = process.env.KRISHI_API_URL || 
-                           process.env.NEXT_PUBLIC_API_URL || 
-                           process.env.FRONTEND_URL || 
-                           'http://localhost:3000';
-        const checkoutPageUrl = `${frontendUrl.replace(/\/$/, '')}/zaakpay-checkout?transaction_id=${transactionId}&amount=${amountFloat}&customer_name=${encodeURIComponent(customer_name)}`;
+        // Return a WORKING link that opens our Next.js redirect page, which then POSTs to Zaakpay hosted checkout.
+        // (A plain TRANSACT_ENDPOINT URL is not directly usable because Zaakpay expects POST fields: data + checksum.)
+        const frontendUrl =
+            process.env.KRISHI_API_URL ||
+            process.env.FRONTEND_URL ||
+            process.env.NEXT_PUBLIC_API_URL ||
+            process.env.ZACKPAY_WEBSITE_URL ||
+            'http://localhost:3001';
 
+        const hostedRedirectLink = `${String(frontendUrl).replace(/\/$/, '')}/zaakpay-checkout?transaction_id=${encodeURIComponent(transactionId)}`;
+        const zaakpayHostedUrl = `${TRANSACT_ENDPOINT}`;
+        
+        // Return the hosted checkout URL with form data
+        // The frontend can either:
+        // 1. Auto-submit a form to redirect to Zaakpay
+        // 2. Use the data to build a redirect URL
+        
         res.json({
             success: true,
             transaction_id: transactionId,
             order_id: orderId,
-            payment_url: checkoutPageUrl,
-            checkout_page: checkoutPageUrl,
+            payment_url: hostedRedirectLink,
+            checkout_page: hostedRedirectLink,
             gateway: 'zaakpay',
             mode: MODE,
             data: dataObject,
             checksum,
             endpoint: TRANSACT_ENDPOINT,
-            message: 'Zaakpay payment link created. Redirect customer to checkout_page.'
+            redirect_url: zaakpayHostedUrl,
+            hosted_redirect_link: hostedRedirectLink,
+            form_data: {
+                data: dataString,
+                checksum: checksum
+            },
+            message: 'Zaakpay payment link created. Redirect customer to checkout_page (our redirect page -> Zaakpay hosted checkout).'
         });
     } catch (error) {
         console.error('❌ Zaakpay createPaymentLink error:', error);
