@@ -49,14 +49,9 @@ if (MODE === 'production') {
 
 // According to Zaakpay docs: https://developer.zaakpay.com/docs/seamless-flow
 // Custom Checkout (TransactU) endpoint - Server to Server API
-// IMPORTANT: Staging and Production use DIFFERENT endpoints
-// Staging: https://zaakstaging.zaakpay.com/api/paymentTransact/V8
-// Production: https://api.zaakpay.com/api/paymentTransact/V8
-// 
-// Force staging for testing - change to production only when going live
-const BASE_URL = MODE === 'production'
-    ? 'https://api.zaakpay.com'
-    : 'https://zaakstaging.zaakpay.com';
+// ALWAYS use production endpoint: https://api.zaakpay.com/api/paymentTransact/V8
+// Test credentials work on production endpoint when mode=0
+const BASE_URL = 'https://api.zaakpay.com';
 const TRANSACT_ENDPOINT = `${BASE_URL}/api/paymentTransact/V8`;
 
 // Ensure we're using staging endpoint (for testing)
