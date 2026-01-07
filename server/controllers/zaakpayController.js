@@ -54,28 +54,15 @@ if (MODE === 'production') {
 const BASE_URL = 'https://api.zaakpay.com';
 const TRANSACT_ENDPOINT = `${BASE_URL}/api/paymentTransact/V8`;
 
-// Ensure we're using staging endpoint (for testing)
-if (BASE_URL !== 'https://zaakstaging.zaakpay.com' && MODE !== 'production') {
-    console.warn('⚠️ Forcing staging endpoint for testing');
-}
-
-// Warn if using production endpoint with test credentials
-if (MODE === 'production' && (!process.env.ZACKPAY_MERCHANT_ID || !process.env.ZACKPAY_SECRET_KEY)) {
-    console.warn('⚠️ WARNING: Production mode but production credentials not found. Using test credentials.');
-}
-
 // Log configuration on startup
 if (!global.zaakpayConfigLogged) {
     console.log('🔧 Zaakpay Configuration:');
-    console.log('   Mode:', MODE, MODE === 'test' ? '(STAGING)' : '(PRODUCTION)');
+    console.log('   Mode:', MODE, MODE === 'test' ? '(TEST - using mode=0)' : '(PRODUCTION - using mode=1)');
     console.log('   Base URL:', BASE_URL);
     console.log('   Endpoint:', TRANSACT_ENDPOINT);
     console.log('   Merchant ID:', MERCHANT_ID ? MERCHANT_ID.substring(0, 15) + '...' : 'NOT SET');
-    if (MODE === 'test') {
-        console.log('   ✅ Using STAGING endpoint: https://zaakstaging.zaakpay.com');
-    } else {
-        console.log('   ⚠️ Using PRODUCTION endpoint: https://zaakpay.com');
-    }
+    console.log('   ✅ Always using PRODUCTION endpoint: https://api.zaakpay.com/api/paymentTransact/V8');
+    console.log('   Note: Test credentials work on production endpoint with mode="0"');
     global.zaakpayConfigLogged = true;
 }
 
