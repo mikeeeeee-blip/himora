@@ -308,6 +308,13 @@ exports.createPayuPaymentLink = async (req, res) => {
         const firstName = customer_name.split(' ')[0] || customer_name;
         const email = customer_email.trim();
         
+        // Success and Failure URLs for user redirects
+        const successUrl = success_url || 
+                          finalCallbackUrl || 
+                          `${String(frontendUrl).replace(/\/$/, '')}/payment/success?txnid=${orderId}`;
+        const failureUrl = failure_url || 
+                          `${String(frontendUrl).replace(/\/$/, '')}/payment/failed?txnid=${orderId}`;
+        
         // Standard PayU form parameters for UPI
         const payuParams = {
             key: PAYU_KEY.trim(),
@@ -317,9 +324,9 @@ exports.createPayuPaymentLink = async (req, res) => {
             firstname: firstName,
             email: email,
             phone: customer_phone.trim(),
-            surl: (success_url || finalCallbackUrl).trim(),
-            furl: (failure_url || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`).trim(),
-            curl: payuCallbackUrl.trim(),
+            surl: successUrl.trim(), // User redirect URL after successful payment
+            furl: failureUrl.trim(), // User redirect URL after failed payment
+            curl: payuCallbackUrl.trim(), // PayU callback/webhook URL - PayU POSTs here (server-to-server)
             service_provider: 'payu_paisa',
             pg: 'UPI',  // Payment gateway: UPI
             bankcode: 'UPI'  // Bank code: UPI for seamless UPI payment
@@ -458,8 +465,16 @@ async function createPayuFormBasedPayment(req, res, data) {
         finalCallbackUrl,
         success_url,
         failure_url,
-        payuCallbackUrl
+        payuCallbackUrl,
+        frontendUrl
     } = data;
+
+    // Success and Failure URLs for user redirects
+    const successUrl = success_url || 
+                      finalCallbackUrl || 
+                      `${String(frontendUrl || process.env.FRONTEND_URL || 'https://www.shaktisewafoudation.in').replace(/\/$/, '')}/payment/success?txnid=${orderId}`;
+    const failureUrl = failure_url || 
+                      `${String(frontendUrl || process.env.FRONTEND_URL || 'https://www.shaktisewafoudation.in').replace(/\/$/, '')}/payment/failed?txnid=${orderId}`;
 
     // Standard form-based parameters
     const payuParams = {
@@ -470,9 +485,9 @@ async function createPayuFormBasedPayment(req, res, data) {
         firstname: firstName,
         email: email,
         phone: customer_phone.trim(),
-        surl: (success_url || finalCallbackUrl).trim(),
-        furl: (failure_url || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`).trim(),
-        curl: payuCallbackUrl.trim(),
+        surl: successUrl.trim(), // User redirect URL after successful payment
+        furl: failureUrl.trim(), // User redirect URL after failed payment
+        curl: payuCallbackUrl.trim(), // PayU callback/webhook URL - PayU POSTs here (server-to-server)
         service_provider: 'payu_paisa',
         pg: 'UPI'
     };
