@@ -262,7 +262,9 @@ exports.createPayuPaymentLink = async (req, res) => {
             `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
 
         // PayU callback URL - points to Next.js callback handler (same pattern as Zaakpay)
-        const frontendUrl = process.env.FRONTEND_URL || 
+        // Use NEXTJS_API_URL (like cashfreeController) for consistency
+        const frontendUrl = process.env.NEXTJS_API_URL || 
+                            process.env.FRONTEND_URL || 
                             process.env.NEXT_PUBLIC_SERVER_URL || 
                             process.env.KRISHI_API_URL || 
                             process.env.NEXT_PUBLIC_API_URL || 
@@ -353,9 +355,10 @@ exports.createPayuPaymentLink = async (req, res) => {
         const iframeCheckoutLink = `${String(frontendUrl).replace(/\/$/, '')}/payu-checkout-iframe?transaction_id=${encodeURIComponent(transactionId)}`;
         const payuHostedUrl = `${PAYU_PAYMENT_URL}`;
 
-        // Check if iframe mode is requested (from query param or env)
-        const useIframe = req.query.use_iframe === 'true' || req.query.use_iframe === '1' || 
-                         process.env.PAYU_USE_IFRAME === 'true' || process.env.PAYU_USE_IFRAME === '1';
+        // Default to iframe mode (can be overridden with use_iframe=false)
+        // Check if iframe mode is disabled (default is true/iframe mode)
+        const useIframe = req.query.use_iframe !== 'false' && req.query.use_iframe !== '0' && 
+                         process.env.PAYU_USE_IFRAME !== 'false' && process.env.PAYU_USE_IFRAME !== '0';
         const checkoutPageUrl = useIframe ? iframeCheckoutLink : normalCheckoutLink;
 
         // Build response with Next.js page URL (similar to Zaakpay)
@@ -1182,7 +1185,8 @@ exports.getPayuCheckoutPage = async (req, res) => {
             const email = transaction.customerEmail.trim();
             
             // PayU callback URL - points to Next.js callback handler
-            const frontendUrl = process.env.FRONTEND_URL || 
+            const frontendUrl = process.env.NEXTJS_API_URL || 
+                                process.env.FRONTEND_URL || 
                                 process.env.NEXT_PUBLIC_SERVER_URL || 
                                 process.env.KRISHI_API_URL || 
                                 process.env.NEXT_PUBLIC_API_URL || 
@@ -1450,7 +1454,8 @@ exports.createMerchantHostedPayment = async (req, res) => {
             `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
 
         // PayU callback URL - points to Next.js callback handler
-        const frontendUrl = process.env.FRONTEND_URL || 
+        const frontendUrl = process.env.NEXTJS_API_URL || 
+                            process.env.FRONTEND_URL || 
                             process.env.NEXT_PUBLIC_SERVER_URL || 
                             process.env.KRISHI_API_URL || 
                             process.env.NEXT_PUBLIC_API_URL || 
