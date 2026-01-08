@@ -2069,6 +2069,60 @@ exports.getPayuTransaction = async (req, res) => {
     }
 };
 
+// ============ GET TRANSACTION BY ORDER ID ============
+exports.getPayuTransactionByOrderId = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        
+        const transaction = await Transaction.findOne({
+            $or: [
+                { payuOrderId: orderId },
+                { orderId: orderId }
+            ]
+        })
+            .populate('merchantId', 'name email')
+            .select('-__v');
+        
+        if (!transaction) {
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            transaction: {
+                transactionId: transaction.transactionId,
+                orderId: transaction.orderId,
+                payuOrderId: transaction.payuOrderId,
+                amount: transaction.amount,
+                currency: transaction.currency,
+                status: transaction.status,
+                customerName: transaction.customerName,
+                customerEmail: transaction.customerEmail,
+                customerPhone: transaction.customerPhone,
+                description: transaction.description,
+                merchantName: transaction.merchantName,
+                paymentGateway: transaction.paymentGateway,
+                paymentMethod: transaction.paymentMethod,
+                successUrl: transaction.successUrl,
+                failureUrl: transaction.failureUrl,
+                callbackUrl: transaction.callbackUrl,
+                createdAt: transaction.createdAt,
+                paidAt: transaction.paidAt,
+                updatedAt: transaction.updatedAt
+            }
+        });
+    } catch (error) {
+        console.error('❌ Get PayU Transaction By Order ID Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to fetch transaction'
+        });
+    }
+};
+
 exports.verifyPaymentStatus = async (req, res) => {
     try {
         const { transaction_id, order_id } = req.query;
