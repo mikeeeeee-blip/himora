@@ -347,15 +347,8 @@ exports.createPayuPaymentLink = async (req, res) => {
         const transaction = new Transaction(transactionData);
         await transaction.save();
 
-        // Get frontend URL for Next.js checkout page (similar to Zaakpay)
-        const frontendUrl = process.env.FRONTEND_URL || 
-                            process.env.NEXT_PUBLIC_SERVER_URL || 
-                            process.env.KRISHI_API_URL || 
-                            process.env.NEXT_PUBLIC_API_URL || 
-                            process.env.PAYU_WEBSITE_URL ||
-                            'http://localhost:3001';
-
         // Create Next.js checkout page URL (not backend checkout URL)
+        // Reuse frontendUrl already declared above for callback URL
         const hostedRedirectLink = `${String(frontendUrl).replace(/\/$/, '')}/payu-checkout?transaction_id=${encodeURIComponent(transactionId)}`;
         const payuHostedUrl = `${PAYU_PAYMENT_URL}`;
 
