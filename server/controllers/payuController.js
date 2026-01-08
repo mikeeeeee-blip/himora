@@ -1649,7 +1649,8 @@ exports.processUPISeamless = async (req, res) => {
             `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
 
         // PayU callback URL - points to Next.js callback handler
-        const frontendUrl = process.env.FRONTEND_URL || 
+        const frontendUrl = process.env.NEXTJS_API_URL || 
+                            process.env.FRONTEND_URL || 
                             process.env.NEXT_PUBLIC_SERVER_URL || 
                             process.env.KRISHI_API_URL || 
                             process.env.NEXT_PUBLIC_API_URL || 
