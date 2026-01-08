@@ -44,21 +44,14 @@ const PAYU_S2S_API_URL = `${PAYU_BASE_URL}/merchant/postservice?form=2`;
 
 // PayU Generate UPI Intent API
 // Reference: https://docs.payu.in/v2/reference/v2-generate-upi-intent-api
-// Note: UPI Intent API might not be available in test/sandbox mode
+// Note: Use production endpoints - test credentials work on production endpoints
 // Endpoints to try (in order of preference)
-const PAYU_INTENT_API_ENDPOINTS = PAYU_MODE === 'test'
-    ? [
-        'https://test.payu.in/info/v1/intent',
-        'http://test.payu.in/info/v1/intent',
-        'https://info.payu.in/info/v1/intent',  // Try production endpoint as fallback
-        'https://info.payu.in/v1/intent'
-      ]
-    : [
-        'https://info.payu.in/info/v1/intent',  // Try with /info/ path first
-        'https://info.payu.in/v1/intent',        // Original endpoint
-        'https://secure.payu.in/info/v1/intent', // Alternative endpoint
-        'https://secure.payu.in/v1/intent'       // Another alternative
-      ];
+const PAYU_INTENT_API_ENDPOINTS = [
+    'https://info.payu.in/info/v1/intent',  // Try with /info/ path first
+    'https://info.payu.in/v1/intent',        // Original endpoint
+    'https://secure.payu.in/info/v1/intent', // Alternative endpoint
+    'https://secure.payu.in/v1/intent'       // Another alternative
+];
 
 // PayU Merchant ID (mid) - required for Intent API
 // If not set, will try to extract from PAYU_KEY or use default
