@@ -554,38 +554,71 @@ exports.handlePayuCallback = async (req, res) => {
         const { transaction_id } = req.query;
         const payuResponse = req.method === 'POST' ? req.body : req.query;
 
+        console.log('========================================================================');
         console.log('🔔 PayU Callback received');
-        console.log('   Transaction ID:', transaction_id);
+        console.log('========================================================================');
+        console.log('   Method:', req.method);
+        console.log('   Transaction ID (from URL):', transaction_id);
         console.log('   PayU Response:', JSON.stringify(payuResponse, null, 2));
 
-        if (!transaction_id) {
-            console.warn('❌ Missing transaction_id in callback');
-            return res.redirect(`${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed?error=missing_transaction_id`);
+        // Try to find transaction by transaction_id from URL first
+        let transaction = null;
+        if (transaction_id) {
+            transaction = await Transaction.findOne({ transactionId: transaction_id }).populate('merchantId');
         }
 
-        // Find transaction
-        const transaction = await Transaction.findOne({ transactionId: transaction_id }).populate('merchantId');
+        // If not found, try to find by PayU order ID (txnid)
+        if (!transaction && payuResponse.txnid) {
+            console.log('   Transaction not found by transaction_id, trying by PayU order ID:', payuResponse.txnid);
+            transaction = await Transaction.findOne({ 
+                $or: [
+                    { payuOrderId: payuResponse.txnid },
+                    { orderId: payuResponse.txnid }
+                ]
+            }).populate('merchantId');
+            
+            if (transaction) {
+                console.log('   ✅ Transaction found by PayU order ID:', transaction.transactionId);
+            }
+        }
 
         if (!transaction) {
-            console.warn('⚠️ Transaction not found for transactionId:', transaction_id);
-            return res.redirect(`${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed?error=transaction_not_found`);
+            console.warn('⚠️ Transaction not found');
+            console.warn('   Searched for transaction_id:', transaction_id);
+            console.warn('   Searched for PayU order ID:', payuResponse.txnid);
+            const frontendUrl = process.env.NEXTJS_API_URL || 
+                                process.env.FRONTEND_URL || 
+                                'https://www.shaktisewafoudation.in';
+            return res.redirect(`${frontendUrl}/payment-failed?error=transaction_not_found`);
         }
 
-        // Verify hash
+        // Verify hash (if provided)
         const receivedHash = payuResponse.hash;
-        const calculatedHash = generatePayUHash(payuResponse);
-
-        if (receivedHash !== calculatedHash) {
-            console.warn('❌ Invalid PayU hash in callback');
-            // Still process but log warning
+        if (receivedHash) {
+            const calculatedHash = generatePayUHash(payuResponse);
+            if (receivedHash !== calculatedHash) {
+                console.warn('❌ Invalid PayU hash in callback');
+                console.warn('   Received hash:', receivedHash.substring(0, 20) + '...');
+                console.warn('   Calculated hash:', calculatedHash.substring(0, 20) + '...');
+                // Still process but log warning
+            } else {
+                console.log('✅ PayU hash verified successfully');
+            }
+        } else {
+            console.warn('⚠️ No hash provided in PayU callback - proceeding without verification');
         }
 
-        // Check payment status
-        const status = payuResponse.status;
-        const txnid = payuResponse.txnid || payuResponse.txnid;
+        // Check payment status - PayU can return status in multiple fields
+        const status = payuResponse.status || payuResponse.pg_type || payuResponse.payment_status;
+        const txnid = payuResponse.txnid || payuResponse.mihpayid || payuResponse.pgTxnId || payuResponse.orderId;
         const amount = payuResponse.amount ? parseFloat(payuResponse.amount) : transaction.amount;
 
-        if (status === 'success' || payuResponse.pg_type === 'success') {
+        console.log('   Payment Status:', status);
+        console.log('   PayU Transaction ID:', txnid);
+        console.log('   Amount:', amount);
+        console.log('   Current Transaction Status:', transaction.status);
+
+        if (status === 'success' || status === 'Success' || payuResponse.pg_type === 'success' || payuResponse.pg_type === 'Success') {
             // Payment successful
             if (transaction.status !== 'paid') {
                 const paidAt = new Date();
@@ -656,12 +689,22 @@ exports.handlePayuCallback = async (req, res) => {
                     await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
                 }
 
-                console.log('✅ Transaction updated via callback:', transaction_id);
+                console.log('✅ Transaction updated via callback:', transaction.transactionId);
+                console.log('   New Status: paid');
+                console.log('   PayU Payment ID:', updatedTransaction.payuPaymentId);
+            } else {
+                console.log('⚠️ Transaction already marked as paid, skipping update');
             }
 
+            // Get redirect URL - use Next.js frontend URL
+            const frontendUrl = process.env.NEXTJS_API_URL || 
+                                process.env.FRONTEND_URL || 
+                                'https://www.shaktisewafoudation.in';
             const redirectUrl = transaction.successUrl ||
                               transaction.callbackUrl ||
-                              `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success?transaction_id=${transaction_id}`;
+                              `${frontendUrl}/payment-success?transaction_id=${transaction.transactionId}`;
+            
+            console.log('   Redirecting to:', redirectUrl);
             return res.redirect(redirectUrl);
         } else {
             // Payment failed
@@ -680,8 +723,14 @@ exports.handlePayuCallback = async (req, res) => {
                 );
             }
 
+            // Get redirect URL - use Next.js frontend URL
+            const frontendUrl = process.env.NEXTJS_API_URL || 
+                                process.env.FRONTEND_URL || 
+                                'https://www.shaktisewafoudation.in';
             const redirectUrl = transaction.failureUrl ||
-                              `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed?transaction_id=${transaction_id}&error=${encodeURIComponent(failureReason)}`;
+                              `${frontendUrl}/payment-failed?transaction_id=${transaction.transactionId}&error=${encodeURIComponent(failureReason)}`;
+            
+            console.log('   Redirecting to failure URL:', redirectUrl);
             return res.redirect(redirectUrl);
         }
 
