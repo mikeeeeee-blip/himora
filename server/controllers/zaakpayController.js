@@ -1583,26 +1583,67 @@ exports.getZaakpayTransaction = async (req, res) => {
 };
 
 exports.handleZaakpayCallback = async (req, res) => {
+    const startTime = Date.now();
+    const requestId = `SRV_CALLBACK_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    
     try {
+        console.log('========================================================================');
+        console.log('📥 [SERVER] Zaakpay Callback Handler Started');
+        console.log('========================================================================');
+        console.log(`   Request ID: ${requestId}`);
+        console.log(`   Timestamp: ${new Date().toISOString()}`);
+        console.log(`   Method: ${req.method}`);
+        console.log(`   URL: ${req.originalUrl || req.url}`);
+        console.log(`   IP: ${req.ip || req.connection.remoteAddress || req.socket.remoteAddress}`);
+        console.log(`   Headers: ${JSON.stringify(req.headers, null, 2)}`);
+        
         // Handle both GET (query params) and POST (body) requests
         const payload = req.method === 'GET' ? req.query : (req.body || req.query || {});
-        const orderId = payload.orderId || payload.orderid;
-        const responseCode = payload.responseCode || payload.responsecode;
         
-        console.log('📥 Server: Zaakpay callback received:', {
-            method: req.method,
-            orderId,
-            responseCode,
-            hasPayload: !!payload && Object.keys(payload).length > 0
+        // Extract key parameters with multiple fallbacks
+        const orderId = payload.orderId || payload.orderid || payload.order_id || '';
+        const responseCode = payload.responseCode || payload.responsecode || payload.response_code || '';
+        const responseDescription = payload.responseDescription || payload.response_description || payload.responseDescription || '';
+        const amount = payload.amount || '';
+        const checksum = payload.checksum || '';
+        const paymentMode = payload.paymentMode || payload.paymentMethod || payload.payment_mode || '';
+        const paymentId = payload.paymentId || payload.payment_id || payload.pgTransId || payload.pg_trans_id || '';
+        const transactionId = payload.transaction_id || payload.transactionId || '';
+        
+        console.log('   📋 Callback Payload Extraction:');
+        console.log(`      Order ID: ${orderId || '❌ MISSING'}`);
+        console.log(`      Transaction ID (from URL): ${transactionId || 'N/A'}`);
+        console.log(`      Response Code: ${responseCode || '❌ MISSING'}`);
+        console.log(`      Response Description: ${responseDescription || 'N/A'}`);
+        console.log(`      Amount: ${amount || 'N/A'} (in paisa, will convert to rupees)`);
+        console.log(`      Payment Mode: ${paymentMode || 'N/A'}`);
+        console.log(`      Payment ID: ${paymentId || 'N/A'}`);
+        console.log(`      Checksum: ${checksum ? checksum.substring(0, 20) + '...' : '❌ MISSING'}`);
+        console.log(`      Total payload keys: ${Object.keys(payload).length}`);
+        console.log('   📦 Full Payload:');
+        Object.entries(payload).forEach(([key, value]) => {
+            const displayValue = typeof value === 'string' && value.length > 50 
+                ? value.substring(0, 50) + '...' 
+                : value;
+            console.log(`         ${key}: ${displayValue}`);
         });
         
+        // Validate required fields
         if (!orderId) {
-            console.error('❌ Server: Order ID missing in callback');
+            console.error('   ❌ [SERVER] Order ID is REQUIRED but missing!');
+            console.error('   Available payload keys:', Object.keys(payload));
+            console.error('========================================================================');
             return res.status(400).json({
                 success: false,
-                error: 'Order ID is required'
+                error: 'Order ID is required',
+                requestId,
+                receivedKeys: Object.keys(payload)
             });
         }
+        
+        // Find transaction by orderId
+        console.log('   🔍 Searching for transaction in database...');
+        console.log(`      Search criteria: orderId="${orderId}" OR zaakpayOrderId="${orderId}"`);
         
         const transaction = await Transaction.findOne({
             $or: [
@@ -1612,81 +1653,164 @@ exports.handleZaakpayCallback = async (req, res) => {
         }).populate('merchantId');
 
         if (!transaction) {
-            console.error('❌ Server: Transaction not found for orderId:', orderId);
+            console.error('   ❌ [SERVER] Transaction NOT FOUND in database!');
+            console.error(`      Searched orderId: ${orderId}`);
+            const totalTransactions = await Transaction.countDocuments();
+            console.error(`      Total transactions in DB: ${totalTransactions}`);
+            console.error('========================================================================');
             return res.status(404).json({
                 success: false,
-                error: 'Transaction not found'
+                error: 'Transaction not found',
+                orderId,
+                requestId
             });
         }
+        
+        console.log('   ✅ Transaction FOUND in database:');
+        console.log(`      Transaction ID: ${transaction.transactionId}`);
+        console.log(`      Order ID: ${transaction.orderId || 'N/A'}`);
+        console.log(`      Zaakpay Order ID: ${transaction.zaakpayOrderId || 'N/A'}`);
+        console.log(`      Current Status: ${transaction.status}`);
+        console.log(`      Original Amount: ${transaction.amount} rupees`);
+        console.log(`      Merchant: ${transaction.merchantId?.merchantName || 'N/A'} (${transaction.merchantId?._id || 'N/A'})`);
+        console.log(`      Created At: ${transaction.createdAt || 'N/A'}`);
 
-        const amountRupees = payload.amount ? parseFloat(payload.amount) / 100 : transaction.amount;
+        // Calculate amount (Zaakpay sends amount in paisa)
+        const amountRupees = amount ? parseFloat(amount) / 100 : transaction.amount;
+        console.log(`   💰 Amount Processing:`);
+        console.log(`      Received from Zaakpay: ${amount} paisa`);
+        console.log(`      Converted to rupees: ${amountRupees}`);
+        console.log(`      Using amount: ${amountRupees} rupees`);
 
+        // Process based on response code
         if (responseCode === '100' || responseCode === 100) {
+            console.log('   ✅ [SUCCESS] Response Code 100 - Payment SUCCESSFUL');
+            console.log('   🔄 Updating transaction to PAID status...');
+            
             const paidAt = new Date();
             const expectedSettlement = await calculateExpectedSettlementDate(paidAt);
             const commissionData = calculatePayinCommission(amountRupees);
+            
+            console.log('   📊 Settlement & Commission Calculation:');
+            console.log(`      Paid At: ${paidAt.toISOString()}`);
+            console.log(`      Expected Settlement Date: ${expectedSettlement.toISOString()}`);
+            console.log(`      Gross Amount: ${amountRupees} rupees`);
+            console.log(`      Commission: ${commissionData.commission} rupees`);
+            console.log(`      Net Amount: ${amountRupees - commissionData.commission} rupees`);
 
-            await Transaction.findOneAndUpdate(
+            const updateData = {
+                status: 'paid',
+                paidAt,
+                paymentMethod: paymentMode || 'UPI',
+                zaakpayPaymentId: paymentId,
+                acquirerData: {
+                    utr: payload.utr || payload.bankTransactionId || null,
+                    bank_transaction_id: payload.bankTransactionId || null
+                },
+                settlementStatus: 'unsettled',
+                expectedSettlementDate: expectedSettlement,
+                commission: commissionData.commission,
+                netAmount: parseFloat((amountRupees - commissionData.commission).toFixed(2)),
+                webhookData: payload
+            };
+            
+            console.log('   📝 Database Update Data:');
+            console.log(JSON.stringify(updateData, null, 2));
+            
+            const updatedTransaction = await Transaction.findOneAndUpdate(
                 { _id: transaction._id },
-                {
-                    status: 'paid',
-                    paidAt,
-                    paymentMethod: payload.paymentMode || payload.paymentMethod || 'UPI',
-                    zaakpayPaymentId: payload.paymentId || payload.payment_id || payload.txnId || payload.pgTransId,
-                    acquirerData: {
-                        utr: payload.utr || payload.bankTransactionId || null,
-                        bank_transaction_id: payload.bankTransactionId || null
-                    },
-                    settlementStatus: 'unsettled',
-                    expectedSettlementDate: expectedSettlement,
-                    commission: commissionData.commission,
-                    netAmount: parseFloat((amountRupees - commissionData.commission).toFixed(2)),
-                    webhookData: payload
-                }
+                updateData,
+                { new: true }
             );
             
-            console.log('✅ Server: Transaction marked as PAID:', {
-                transactionId: transaction.transactionId,
-                orderId,
-                amount: amountRupees,
-                status: 'paid'
+            const processingTime = Date.now() - startTime;
+            console.log('   ✅ Transaction SUCCESSFULLY updated to PAID status');
+            console.log(`      Processing time: ${processingTime}ms`);
+            console.log(`      Transaction ID: ${updatedTransaction.transactionId}`);
+            console.log(`      New Status: ${updatedTransaction.status}`);
+            console.log(`      Paid At: ${updatedTransaction.paidAt}`);
+            console.log(`      Payment Method: ${updatedTransaction.paymentMethod}`);
+            console.log(`      Payment ID: ${updatedTransaction.zaakpayPaymentId || 'N/A'}`);
+            console.log(`      Commission: ${updatedTransaction.commission} rupees`);
+            console.log(`      Net Amount: ${updatedTransaction.netAmount} rupees`);
+            console.log(`      Settlement Date: ${updatedTransaction.expectedSettlementDate}`);
+            console.log('========================================================================');
+            
+            return res.json({
+                success: true,
+                transaction: {
+                    transactionId: updatedTransaction.transactionId,
+                    orderId: updatedTransaction.orderId || updatedTransaction.zaakpayOrderId,
+                    status: 'paid',
+                    responseCode: responseCode,
+                    responseDescription: responseDescription,
+                    amount: amountRupees,
+                    paidAt: updatedTransaction.paidAt,
+                    paymentMethod: updatedTransaction.paymentMethod,
+                    paymentId: updatedTransaction.zaakpayPaymentId,
+                    requestId
+                }
             });
         } else {
-            await Transaction.findOneAndUpdate(
+            console.log(`   ❌ [FAILURE] Response Code ${responseCode} - Payment FAILED`);
+            console.log(`      Failure Description: ${responseDescription || 'Payment failed'}`);
+            console.log('   🔄 Updating transaction to FAILED status...');
+            
+            const updateData = {
+                status: 'failed',
+                failureReason: responseDescription || 'Payment failed',
+                webhookData: payload
+            };
+            
+            console.log('   📝 Database Update Data:');
+            console.log(JSON.stringify(updateData, null, 2));
+            
+            const updatedTransaction = await Transaction.findOneAndUpdate(
                 { _id: transaction._id },
-                {
-                    status: 'failed',
-                    failureReason: payload.responseDescription || payload.response_description || 'Payment failed',
-                    webhookData: payload
-                }
+                updateData,
+                { new: true }
             );
             
-            console.log('❌ Server: Transaction marked as FAILED:', {
-                transactionId: transaction.transactionId,
-                orderId,
-                responseCode,
-                reason: payload.responseDescription || payload.response_description
+            const processingTime = Date.now() - startTime;
+            console.log('   ✅ Transaction SUCCESSFULLY updated to FAILED status');
+            console.log(`      Processing time: ${processingTime}ms`);
+            console.log(`      Transaction ID: ${updatedTransaction.transactionId}`);
+            console.log(`      New Status: ${updatedTransaction.status}`);
+            console.log(`      Failure Reason: ${updatedTransaction.failureReason || 'N/A'}`);
+            console.log(`      Response Code: ${responseCode}`);
+            console.log('========================================================================');
+            
+            return res.json({
+                success: true,
+                transaction: {
+                    transactionId: updatedTransaction.transactionId,
+                    orderId: updatedTransaction.orderId || updatedTransaction.zaakpayOrderId,
+                    status: 'failed',
+                    responseCode: responseCode,
+                    responseDescription: responseDescription,
+                    failureReason: updatedTransaction.failureReason,
+                    requestId
+                }
             });
         }
-
-        // Return JSON response for Next.js to handle redirect
-        // Next.js will handle the redirect with absolute URLs
-        return res.json({
-            success: true,
-            transaction: {
-                transactionId: transaction.transactionId,
-                orderId: transaction.orderId || transaction.zaakpayOrderId,
-                status: responseCode === '100' || responseCode === 100 ? 'paid' : 'failed',
-                responseCode: responseCode,
-                responseDescription: payload.responseDescription || payload.response_description
-            }
-        });
+        
     } catch (error) {
-        console.error('❌ Zaakpay callback error:', error);
+        const errorTime = Date.now() - startTime;
+        console.error('========================================================================');
+        console.error(`❌ [SERVER] CALLBACK FATAL ERROR after ${errorTime}ms`);
+        console.error('========================================================================');
+        console.error(`   Request ID: ${requestId}`);
+        console.error(`   Error Message: ${error.message}`);
+        console.error(`   Error Stack: ${error.stack}`);
+        console.error(`   Error Code: ${error.code || 'N/A'}`);
+        console.error('========================================================================');
+        
         return res.status(500).json({
             success: false,
-            error: error.message || 'Callback processing failed'
+            error: error.message || 'Callback processing failed',
+            requestId
         });
     }
 };
+
 
