@@ -347,18 +347,26 @@ exports.createPayuPaymentLink = async (req, res) => {
         const transaction = new Transaction(transactionData);
         await transaction.save();
 
-        // Create Next.js checkout page URL (not backend checkout URL)
+        // Create Next.js checkout page URLs (normal and iframe)
         // Reuse frontendUrl already declared above for callback URL
-        const hostedRedirectLink = `${String(frontendUrl).replace(/\/$/, '')}/payu-checkout?transaction_id=${encodeURIComponent(transactionId)}`;
+        const normalCheckoutLink = `${String(frontendUrl).replace(/\/$/, '')}/payu-checkout?transaction_id=${encodeURIComponent(transactionId)}`;
+        const iframeCheckoutLink = `${String(frontendUrl).replace(/\/$/, '')}/payu-checkout-iframe?transaction_id=${encodeURIComponent(transactionId)}`;
         const payuHostedUrl = `${PAYU_PAYMENT_URL}`;
+
+        // Check if iframe mode is requested (from query param or env)
+        const useIframe = req.query.use_iframe === 'true' || req.query.use_iframe === '1' || 
+                         process.env.PAYU_USE_IFRAME === 'true' || process.env.PAYU_USE_IFRAME === '1';
+        const checkoutPageUrl = useIframe ? iframeCheckoutLink : normalCheckoutLink;
 
         // Build response with Next.js page URL (similar to Zaakpay)
         const response = {
             success: true,
             transaction_id: transactionId,
             payment_link_id: orderId,
-            payment_url: hostedRedirectLink,
-            checkout_page: hostedRedirectLink,
+            payment_url: checkoutPageUrl,
+            checkout_page: checkoutPageUrl,
+            checkout_page_normal: normalCheckoutLink,
+            checkout_page_iframe: iframeCheckoutLink,
             order_id: orderId,
             order_amount: parseFloat(amount),
             order_currency: 'INR',
@@ -368,11 +376,12 @@ exports.createPayuPaymentLink = async (req, res) => {
             callback_url: finalCallbackUrl,
             payment_mode: 'UPI',
             gateway: 'payu',
+            use_iframe: useIframe,
             payu_params: payuParams,
             payu_payment_url: payuHostedUrl,
-            hosted_redirect_link: hostedRedirectLink,
+            hosted_redirect_link: checkoutPageUrl,
             redirect_url: payuHostedUrl,
-            message: 'PayU payment link created. Redirect customer to checkout_page (our Next.js redirect page -> PayU hosted checkout).'
+            message: `PayU payment link created. Redirect customer to checkout_page (${useIframe ? 'iframe' : 'normal'} mode -> PayU hosted checkout).`
         };
         
         res.json(response);
