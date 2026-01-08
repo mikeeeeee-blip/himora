@@ -542,14 +542,37 @@ async function createPayuFormBasedPayment(req, res, data) {
 exports.handlePayuCallback = async (req, res) => {
     try {
         const { transaction_id } = req.query;
-        const payuResponse = req.method === 'POST' ? req.body : req.query;
+        
+        // PayU can send data via POST body (form-encoded) or GET query params
+        // Also check req.body for POST requests
+        let payuResponse = {};
+        
+        if (req.method === 'POST') {
+            // PayU typically sends POST with form-encoded data
+            payuResponse = req.body || {};
+            // Also check if it's JSON
+            if (Object.keys(payuResponse).length === 0 && req.body && typeof req.body === 'object') {
+                payuResponse = req.body;
+            }
+        } else {
+            // GET request - data in query params
+            payuResponse = req.query || {};
+        }
+        
+        // Merge query params with body/query data (query params take precedence for transaction_id)
+        if (transaction_id) {
+            payuResponse.transaction_id = transaction_id;
+        }
 
         console.log('========================================================================');
         console.log('🔔 PayU Callback received');
         console.log('========================================================================');
         console.log('   Method:', req.method);
+        console.log('   Headers:', JSON.stringify(req.headers, null, 2));
         console.log('   Transaction ID (from URL):', transaction_id);
-        console.log('   PayU Response:', JSON.stringify(payuResponse, null, 2));
+        console.log('   Raw Body:', typeof req.body === 'object' ? JSON.stringify(req.body, null, 2) : req.body);
+        console.log('   Query Params:', JSON.stringify(req.query, null, 2));
+        console.log('   PayU Response (merged):', JSON.stringify(payuResponse, null, 2));
 
         // Try to find transaction by transaction_id from URL first
         let transaction = null;
@@ -599,16 +622,38 @@ exports.handlePayuCallback = async (req, res) => {
         }
 
         // Check payment status - PayU can return status in multiple fields
-        const status = payuResponse.status || payuResponse.pg_type || payuResponse.payment_status;
-        const txnid = payuResponse.txnid || payuResponse.mihpayid || payuResponse.pgTxnId || payuResponse.orderId;
+        // PayU status values: 'success', 'failure', 'pending', 'bounced', etc.
+        const status = payuResponse.status || 
+                      payuResponse.pg_type || 
+                      payuResponse.payment_status || 
+                      payuResponse.STATUS ||
+                      (payuResponse.unmappedstatus === 'captured' ? 'success' : null);
+        const txnid = payuResponse.txnid || 
+                     payuResponse.mihpayid || 
+                     payuResponse.pgTxnId || 
+                     payuResponse.orderId ||
+                     payuResponse.productinfo;
         const amount = payuResponse.amount ? parseFloat(payuResponse.amount) : transaction.amount;
 
-        console.log('   Payment Status:', status);
+        console.log('   Payment Status (raw):', payuResponse.status, payuResponse.pg_type, payuResponse.payment_status, payuResponse.unmappedstatus);
+        console.log('   Payment Status (parsed):', status);
         console.log('   PayU Transaction ID:', txnid);
         console.log('   Amount:', amount);
         console.log('   Current Transaction Status:', transaction.status);
+        console.log('   All PayU Response Fields:', Object.keys(payuResponse).join(', '));
 
-        if (status === 'success' || status === 'Success' || payuResponse.pg_type === 'success' || payuResponse.pg_type === 'Success') {
+        // Check for success - PayU uses various status indicators
+        const isSuccess = status === 'success' || 
+                         status === 'Success' || 
+                         status === 'SUCCESS' ||
+                         payuResponse.pg_type === 'success' || 
+                         payuResponse.pg_type === 'Success' ||
+                         payuResponse.payment_status === 'SUCCESS' ||
+                         payuResponse.unmappedstatus === 'captured' ||
+                         (payuResponse.error === 'E000' && payuResponse.status === 'success') ||
+                         (payuResponse.error === 'E000' && !payuResponse.error_Message);
+
+        if (isSuccess) {
             // Payment successful
             if (transaction.status !== 'paid') {
                 const paidAt = new Date();
@@ -618,14 +663,16 @@ exports.handlePayuCallback = async (req, res) => {
                 const update = {
                     status: 'paid',
                     paidAt,
-                    paymentMethod: payuResponse.payment_mode || 'UPI',
+                    paymentMethod: payuResponse.payment_mode || payuResponse.mode || 'UPI',
                     payuPaymentId: txnid,
                     updatedAt: new Date(),
                     acquirerData: {
-                        utr: payuResponse.bank_ref_num || null,
-                        rrn: payuResponse.bank_ref_num || null,
-                        bank_transaction_id: payuResponse.bank_ref_num || null,
-                        bank_name: payuResponse.bankcode || null
+                        utr: payuResponse.bank_ref_num || payuResponse.utr || null,
+                        rrn: payuResponse.bank_ref_num || payuResponse.rrn || null,
+                        bank_transaction_id: payuResponse.bank_ref_num || payuResponse.bank_transaction_id || null,
+                        bank_name: payuResponse.bankcode || payuResponse.bank_name || null,
+                        pg_type: payuResponse.pg_type || null,
+                        payment_mode: payuResponse.payment_mode || payuResponse.mode || null
                     },
                     settlementStatus: 'unsettled',
                     expectedSettlementDate: expectedSettlement,
@@ -633,6 +680,8 @@ exports.handlePayuCallback = async (req, res) => {
                     netAmount: parseFloat((amount - commissionData.commission).toFixed(2)),
                     webhookData: payuResponse
                 };
+                
+                console.log('   Updating transaction with:', JSON.stringify(update, null, 2));
 
                 const updatedTransaction = await Transaction.findOneAndUpdate(
                     { transactionId: transaction_id },
@@ -694,17 +743,29 @@ exports.handlePayuCallback = async (req, res) => {
                               transaction.callbackUrl ||
                               `${frontendUrl}/payment-success?transaction_id=${transaction.transactionId}`;
             
+            console.log('✅ Payment successful!');
+            console.log('   Transaction ID:', transaction.transactionId);
+            console.log('   PayU Payment ID:', updatedTransaction?.payuPaymentId || txnid);
             console.log('   Redirecting to:', redirectUrl);
             return res.redirect(redirectUrl);
         } else {
-            // Payment failed
-            const failureReason = payuResponse.error || payuResponse.error_Message || 'Payment failed';
+            // Payment failed or pending
+            const failureReason = payuResponse.error || 
+                                 payuResponse.error_Message || 
+                                 payuResponse.error_message ||
+                                 payuResponse.message ||
+                                 `Payment ${status || 'failed'}`;
             
-            if (transaction.status !== 'failed') {
+            console.log('❌ Payment failed or pending');
+            console.log('   Status:', status);
+            console.log('   Failure Reason:', failureReason);
+            console.log('   Error Code:', payuResponse.error);
+            
+            if (transaction.status !== 'failed' && status !== 'pending') {
                 await Transaction.findOneAndUpdate(
                     { transactionId: transaction_id },
                     {
-                        status: 'failed',
+                        status: status === 'pending' ? 'pending' : 'failed',
                         failureReason: failureReason,
                         payuPaymentId: txnid,
                         updatedAt: new Date(),
