@@ -1641,28 +1641,144 @@ exports.handleZaakpayCallback = async (req, res) => {
             });
         }
         
-        // Find transaction by orderId
+        // Find transaction by multiple criteria (orderId may be reformatted by Zaakpay)
         console.log('   🔍 Searching for transaction in database...');
-        console.log(`      Search criteria: orderId="${orderId}" OR zaakpayOrderId="${orderId}"`);
+        console.log(`      Search criteria 1: orderId="${orderId}" OR zaakpayOrderId="${orderId}"`);
         
-        const transaction = await Transaction.findOne({
+        let transaction = await Transaction.findOne({
             $or: [
                 { orderId: orderId },
                 { zaakpayOrderId: orderId }
             ]
         }).populate('merchantId');
 
+        // If not found, try searching by transaction_id (MongoDB _id)
+        if (!transaction && transactionId) {
+            console.log(`      Search criteria 2: transactionId="${transactionId}" (MongoDB _id)`);
+            try {
+                // Try to find by transactionId (MongoDB _id) if it's a valid ObjectId
+                if (transactionId.match(/^[0-9a-fA-F]{24}$/)) {
+                    transaction = await Transaction.findById(transactionId).populate('merchantId');
+                } else {
+                    // Try searching by our transactionId field (TXN_ZP_...)
+                    transaction = await Transaction.findOne({
+                        transactionId: transactionId
+                    }).populate('merchantId');
+                }
+            } catch (idError) {
+                console.warn(`      ⚠️ Error searching by transactionId: ${idError.message}`);
+            }
+        }
+
+        // If still not found, try searching with different orderId formats (Zaakpay may reformat)
+        if (!transaction && orderId) {
+            console.log(`      Search criteria 3: Trying different orderId formats...`);
+            
+            // Try variations: ORDERZP... vs ORDER_ZP_...
+            const orderIdVariations = [];
+            
+            // If orderId starts with "ORDERZP" (no underscore), try adding underscore
+            if (orderId.startsWith('ORDERZP')) {
+                // Try ORDER_ZP_...
+                const withUnderscore = orderId.replace(/^ORDERZP/, 'ORDER_ZP_');
+                orderIdVariations.push(withUnderscore);
+                // Try ORDER_ZP...
+                orderIdVariations.push(orderId.replace(/^ORDERZP/, 'ORDER_ZP'));
+            }
+            
+            // If orderId starts with "ORDER_ZP", try removing underscore
+            if (orderId.startsWith('ORDER_ZP')) {
+                const withoutUnderscore = orderId.replace(/^ORDER_ZP_?/, 'ORDERZP');
+                orderIdVariations.push(withoutUnderscore);
+            }
+            
+            // Try searching by partial match (first 15 chars)
+            if (orderId.length > 15) {
+                orderIdVariations.push(orderId.substring(0, 15));
+            }
+            
+            // Try searching with regex (partial match)
+            if (orderIdVariations.length > 0) {
+                console.log(`      Trying variations: ${orderIdVariations.join(', ')}`);
+                transaction = await Transaction.findOne({
+                    $or: [
+                        { orderId: { $in: orderIdVariations } },
+                        { zaakpayOrderId: { $in: orderIdVariations } },
+                        { orderId: { $regex: `^${orderId.substring(0, 10)}` } },
+                        { zaakpayOrderId: { $regex: `^${orderId.substring(0, 10)}` } }
+                    ]
+                }).populate('merchantId');
+            }
+        }
+
+        // If still not found, try searching by payment ID (pgTransId)
+        if (!transaction && paymentId) {
+            console.log(`      Search criteria 4: zaakpayPaymentId="${paymentId}"`);
+            transaction = await Transaction.findOne({
+                zaakpayPaymentId: paymentId
+            }).populate('merchantId');
+        }
+
+        // If still not found, try searching by amount and recent timestamp (last resort)
+        if (!transaction && amount) {
+            const amountRupees = parseFloat(amount) / 100;
+            console.log(`      Search criteria 5: amount=${amountRupees} (within last 1 hour)`);
+            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+            transaction = await Transaction.findOne({
+                amount: amountRupees,
+                createdAt: { $gte: oneHourAgo },
+                paymentGateway: 'zaakpay',
+                status: { $in: ['created', 'pending'] }
+            })
+            .sort({ createdAt: -1 })
+            .populate('merchantId');
+        }
+
         if (!transaction) {
-            console.error('   ❌ [SERVER] Transaction NOT FOUND in database!');
+            console.error('   ❌ [SERVER] Transaction NOT FOUND in database after all search attempts!');
             console.error(`      Searched orderId: ${orderId}`);
+            console.error(`      Searched transactionId: ${transactionId || 'N/A'}`);
+            console.error(`      Searched paymentId: ${paymentId || 'N/A'}`);
+            console.error(`      Searched amount: ${amount || 'N/A'} paisa`);
             const totalTransactions = await Transaction.countDocuments();
+            const recentZaakpayTransactions = await Transaction.countDocuments({
+                paymentGateway: 'zaakpay',
+                createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+            });
             console.error(`      Total transactions in DB: ${totalTransactions}`);
+            console.error(`      Recent Zaakpay transactions (last 24h): ${recentZaakpayTransactions}`);
+            
+            // Log some example recent transaction orderIds for debugging
+            const recentExamples = await Transaction.find({
+                paymentGateway: 'zaakpay',
+                createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+            })
+            .select('orderId zaakpayOrderId transactionId amount createdAt')
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .lean();
+            
+            if (recentExamples.length > 0) {
+                console.error('      Recent Zaakpay transaction examples:');
+                recentExamples.forEach((tx, idx) => {
+                    console.error(`         ${idx + 1}. orderId: ${tx.orderId}, zaakpayOrderId: ${tx.zaakpayOrderId}, transactionId: ${tx.transactionId}, amount: ${tx.amount}, createdAt: ${tx.createdAt}`);
+                });
+            }
+            
             console.error('========================================================================');
             return res.status(404).json({
                 success: false,
                 error: 'Transaction not found',
                 orderId,
-                requestId
+                transactionId: transactionId || null,
+                paymentId: paymentId || null,
+                requestId,
+                searchedCriteria: [
+                    `orderId="${orderId}"`,
+                    `zaakpayOrderId="${orderId}"`,
+                    transactionId ? `transactionId="${transactionId}"` : null,
+                    paymentId ? `zaakpayPaymentId="${paymentId}"` : null
+                ].filter(Boolean)
             });
         }
         
