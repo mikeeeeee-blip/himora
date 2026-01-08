@@ -10,7 +10,8 @@ const {
     createMerchantHostedPayment,
     processUPISeamless,
     verifyPaymentStatus,
-    getPayuTransaction
+    getPayuTransaction,
+    getPayuTransactionByOrderId
 } = require('../controllers/payuController.js');
 
 // ============ MERCHANT APIs (API Key Auth) ============
@@ -30,6 +31,8 @@ router.get('/checkout/:transactionId', getPayuCheckoutPage);
 // ============ TRANSACTION (No Auth - Public endpoint for Next.js) ============
 // Public endpoint for Next.js to fetch transaction details
 router.get('/transaction/:transactionId', getPayuTransaction);
+// Get transaction by PayU order ID (txnid)
+router.get('/transaction/by-order/:orderId', getPayuTransactionByOrderId);
 
 // ============ CALLBACK (No Auth - GET/POST from PayU) ============
 router.get('/callback', handlePayuCallback);

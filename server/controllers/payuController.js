@@ -599,10 +599,13 @@ exports.handlePayuCallback = async (req, res) => {
             console.warn('⚠️ Transaction not found');
             console.warn('   Searched for transaction_id:', transaction_id);
             console.warn('   Searched for PayU order ID:', payuResponse.txnid);
-            const frontendUrl = process.env.NEXTJS_API_URL || 
-                                process.env.FRONTEND_URL || 
-                                'https://www.shaktisewafoudation.in';
-            return res.redirect(`${frontendUrl}/payment-failed?error=transaction_not_found`);
+            // Return success to PayU even if transaction not found (prevents retries)
+            // Log the issue for investigation
+            return res.status(200).json({
+                success: false,
+                message: 'Transaction not found',
+                txnid: payuResponse.txnid
+            });
         }
 
         // Verify hash (if provided)
@@ -735,19 +738,21 @@ exports.handlePayuCallback = async (req, res) => {
                 console.log('⚠️ Transaction already marked as paid, skipping update');
             }
 
-            // Get redirect URL - use Next.js frontend URL
-            const frontendUrl = process.env.NEXTJS_API_URL || 
-                                process.env.FRONTEND_URL || 
-                                'https://www.shaktisewafoudation.in';
-            const redirectUrl = transaction.successUrl ||
-                              transaction.callbackUrl ||
-                              `${frontendUrl}/payment-success?transaction_id=${transaction.transactionId}`;
-            
+            // ✅ CRITICAL: Don't redirect from callback - this is a webhook/callback endpoint
+            // User redirects are handled separately via PayU's surl/furl parameters
+            // Just return success response to PayU
             console.log('✅ Payment successful!');
             console.log('   Transaction ID:', transaction.transactionId);
             console.log('   PayU Payment ID:', updatedTransaction?.payuPaymentId || txnid);
-            console.log('   Redirecting to:', redirectUrl);
-            return res.redirect(redirectUrl);
+            console.log('   ✅ Callback processed - user will be redirected by PayU to surl/furl');
+            
+            // Return simple success response (PayU expects this)
+            return res.status(200).json({
+                success: true,
+                message: 'Callback processed successfully',
+                transaction_id: transaction.transactionId,
+                status: 'paid'
+            });
         } else {
             // Payment failed or pending
             const failureReason = payuResponse.error || 
@@ -774,15 +779,21 @@ exports.handlePayuCallback = async (req, res) => {
                 );
             }
 
-            // Get redirect URL - use Next.js frontend URL
-            const frontendUrl = process.env.NEXTJS_API_URL || 
-                                process.env.FRONTEND_URL || 
-                                'https://www.shaktisewafoudation.in';
-            const redirectUrl = transaction.failureUrl ||
-                              `${frontendUrl}/payment-failed?transaction_id=${transaction.transactionId}&error=${encodeURIComponent(failureReason)}`;
+            // ✅ CRITICAL: Don't redirect from callback - this is a webhook/callback endpoint
+            // User redirects are handled separately via PayU's surl/furl parameters
+            console.log('❌ Payment failed or pending');
+            console.log('   Transaction ID:', transaction.transactionId);
+            console.log('   Failure Reason:', failureReason);
+            console.log('   ✅ Callback processed - user will be redirected by PayU to surl/furl');
             
-            console.log('   Redirecting to failure URL:', redirectUrl);
-            return res.redirect(redirectUrl);
+            // Return simple response (PayU expects this)
+            return res.status(200).json({
+                success: true,
+                message: 'Callback processed successfully',
+                transaction_id: transaction.transactionId,
+                status: status === 'pending' ? 'pending' : 'failed',
+                error: failureReason
+            });
         }
 
     } catch (error) {
