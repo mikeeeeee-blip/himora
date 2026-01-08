@@ -28,10 +28,14 @@ const PAYU_CLIENT_SECRET = PAYU_MODE === 'production'
     ? process.env.PAYU_CLIENT_SECRET
     : (process.env.PAYU_CLIENT_SECRET_TEST || process.env.PAYU_CLIENT_SECRET);
 
-// PayU API URLs - Use sandbox for test mode
-const PAYU_BASE_URL = PAYU_MODE === 'test'
-    ? 'https://sandboxsecure.payu.in'
-    : 'https://secure.payu.in';
+// PayU API URLs
+// According to PayU docs: Test credentials work on production endpoint
+// Use production URL for both test and production modes
+// Test mode is determined by credentials, not by URL
+// Reference: https://docs.payu.in/docs/test-cards-upi-id-and-wallets
+const PAYU_BASE_URL = 'https://secure.payu.in'; // Always use production URL
+// Alternative test URL (if sandboxsecure.payu.in is not accessible):
+// const PAYU_BASE_URL_TEST = 'https://test.payu.in'; // Alternative test URL
 
 const PAYU_PAYMENT_URL = `${PAYU_BASE_URL}/_payment`;
 // PayU S2S API endpoint for UPI Intent
@@ -230,22 +234,15 @@ exports.createPayuPaymentLink = async (req, res) => {
         // Log PayU configuration on first use
         if (!global.payuConfigLogged) {
             console.log('🔧 PayU Configuration:');
-            console.log('   Mode:', PAYU_MODE, PAYU_MODE === 'test' ? '(TEST/SANDBOX)' : '(PRODUCTION)');
+            console.log('   Mode:', PAYU_MODE, PAYU_MODE === 'test' ? '(TEST - using test credentials)' : '(PRODUCTION)');
             console.log('   Environment:', PAYU_ENVIRONMENT || 'production');
-            console.log('   Base URL:', PAYU_BASE_URL);
+            console.log('   Base URL:', PAYU_BASE_URL, '(Always production URL - test credentials work on production endpoint)');
             console.log('   Payment URL:', PAYU_PAYMENT_URL);
             console.log('   Key:', PAYU_KEY ? PAYU_KEY.substring(0, 10) + '...' : 'NOT SET');
             console.log('   Salt:', PAYU_SALT ? PAYU_SALT.substring(0, 10) + '...' : 'NOT SET');
             console.log('   Client ID:', PAYU_CLIENT_ID ? PAYU_CLIENT_ID.substring(0, 15) + '...' : 'NOT SET');
+            console.log('   Note: PayU test credentials work on production endpoint (secure.payu.in)');
             global.payuConfigLogged = true;
-        }
-
-        // Warn if environment might be mismatched
-        if (PAYU_MODE === 'production' && PAYU_KEY && PAYU_KEY.includes('test')) {
-            console.warn('⚠️ WARNING: Production mode detected but key appears to be test key');
-        }
-        if (PAYU_MODE === 'test' && PAYU_KEY && !PAYU_KEY.includes('test') && !PAYU_BASE_URL.includes('sandbox')) {
-            console.warn('⚠️ WARNING: Test mode but key/URL might be production');
         }
 
         // Validate input
