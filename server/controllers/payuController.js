@@ -1827,6 +1827,11 @@ exports.processUPISeamless = async (req, res) => {
         // Reference: https://docs.payu.in/docs/collect-payments-with-upi-seamless
         // PayU S2S API expects form-encoded parameters
         
+        // Get frontend URL for redirects
+        const frontendUrlForRedirects = process.env.NEXTJS_API_URL || 
+                                        process.env.FRONTEND_URL || 
+                                        'https://www.shaktisewafoudation.in';
+        
         // Standard payment parameters
         const paymentParams = {
             key: PAYU_KEY.trim(),
@@ -1836,8 +1841,8 @@ exports.processUPISeamless = async (req, res) => {
             firstname: firstName,
             email: email,
             phone: customer_phone.trim(),
-            surl: (success_url || finalCallbackUrl).trim(),
-            furl: (failure_url || `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed`).trim(),
+            surl: (success_url || finalCallbackUrl || `${String(frontendUrlForRedirects).replace(/\/$/, '')}/payment/success?txnid=${orderId}`).trim(),
+            furl: (failure_url || `${String(frontendUrlForRedirects).replace(/\/$/, '')}/payment/failed?txnid=${orderId}`).trim(),
             curl: payuCallbackUrl.trim(),
             service_provider: 'payu_paisa',
             pg: 'UPI',
