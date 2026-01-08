@@ -276,6 +276,7 @@ const SuperadminTransactionsPage = () => {
       'Customer Email': txn.customerEmail || 'N/A',
       'Amount': txn.amount ? `₹${txn.amount}` : 'N/A',
       'Status': txn.status || 'N/A',
+      'Payment Gateway': txn.paymentGateway || 'N/A',
       'Settlement Status': txn.settlementStatus || 'N/A',
       'Payment Method': txn.paymentMethod || 'N/A',
       'Created At': formatDate(txn.createdAt),
@@ -665,6 +666,7 @@ const SuperadminTransactionsPage = () => {
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell w-[8%]">Commission</th>
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell w-[7%]">&nbsp;GST&nbsp;</th>
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider w-[10%]">Status</th>
+                          <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden lg:table-cell w-[8%]">Gateway</th>
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden xl:table-cell w-[10%]">Settlement</th>
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider hidden md:table-cell w-[10%]">Created</th>
                           <th className="px-4 py-3 text-left text-white/70 text-xs sm:text-sm font-medium font-['Albert_Sans'] uppercase tracking-wider w-[11%]">Actions</th>
@@ -768,6 +770,16 @@ const SuperadminTransactionsPage = () => {
                           <span>{txn.status?.toUpperCase() || 'N/A'}</span>
                         </span>
                               )}
+                      </td>
+
+                            <td className="px-4 py-3 hidden lg:table-cell">
+                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium font-['Albert_Sans'] ${
+                                txn.paymentGateway 
+                                  ? 'bg-blue-500/20 text-blue-400' 
+                                  : 'bg-white/10 text-white/50'
+                              }`}>
+                                {txn.paymentGateway ? txn.paymentGateway.toUpperCase() : 'N/A'}
+                              </span>
                       </td>
 
                             <td className="px-4 py-3 hidden xl:table-cell" onClick={(e) => e.stopPropagation()}>
