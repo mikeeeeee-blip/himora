@@ -341,17 +341,25 @@ exports.createPayuPaymentLink = async (req, res) => {
         const transaction = new Transaction(transactionData);
         await transaction.save();
 
-        // Create checkout page URL - this will use form-based UPI payment
-        const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
-        const checkoutPageUrl = `${baseUrl}/api/payu/checkout/${transactionId}`;
+        // Get frontend URL for Next.js checkout page (similar to Zaakpay)
+        const frontendUrl = process.env.FRONTEND_URL || 
+                            process.env.NEXT_PUBLIC_SERVER_URL || 
+                            process.env.KRISHI_API_URL || 
+                            process.env.NEXT_PUBLIC_API_URL || 
+                            process.env.PAYU_WEBSITE_URL ||
+                            'http://localhost:3001';
 
-        // Build response with form-based payment data
+        // Create Next.js checkout page URL (not backend checkout URL)
+        const hostedRedirectLink = `${String(frontendUrl).replace(/\/$/, '')}/payu-checkout?transaction_id=${encodeURIComponent(transactionId)}`;
+        const payuHostedUrl = `${PAYU_PAYMENT_URL}`;
+
+        // Build response with Next.js page URL (similar to Zaakpay)
         const response = {
             success: true,
             transaction_id: transactionId,
             payment_link_id: orderId,
-            payment_url: checkoutPageUrl,
-            checkout_page: checkoutPageUrl,
+            payment_url: hostedRedirectLink,
+            checkout_page: hostedRedirectLink,
             order_id: orderId,
             order_amount: parseFloat(amount),
             order_currency: 'INR',
@@ -360,9 +368,12 @@ exports.createPayuPaymentLink = async (req, res) => {
             reference_id: payuReferenceId,
             callback_url: finalCallbackUrl,
             payment_mode: 'UPI',
+            gateway: 'payu',
             payu_params: payuParams,
-            payu_payment_url: PAYU_PAYMENT_URL,
-            message: 'Payment link created successfully using PayU UPI Seamless (form-based). Use the checkout_page URL to access the payment interface. Customer will be redirected to PayU to complete UPI payment.'
+            payu_payment_url: payuHostedUrl,
+            hosted_redirect_link: hostedRedirectLink,
+            redirect_url: payuHostedUrl,
+            message: 'PayU payment link created. Redirect customer to checkout_page (our Next.js redirect page -> PayU hosted checkout).'
         };
         
         res.json(response);
@@ -1829,11 +1840,59 @@ exports.processUPISeamless = async (req, res) => {
     }
 };
 
-// ============ VERIFY PAYMENT STATUS ============
+// ============ GET PAYU TRANSACTION ============
 /**
- * Verify payment status using PayU Verify Payment API
- * Reference: https://docs.payu.in/docs/verify-payment-api
+ * Get PayU transaction details (Public endpoint for Next.js)
+ * Similar to getZaakpayTransaction
  */
+exports.getPayuTransaction = async (req, res) => {
+    try {
+        const { transactionId } = req.params;
+        
+        const transaction = await Transaction.findOne({ transactionId })
+            .populate('merchantId', 'name email')
+            .select('-__v');
+        
+        if (!transaction) {
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            transaction: {
+                transactionId: transaction.transactionId,
+                orderId: transaction.orderId,
+                payuOrderId: transaction.payuOrderId,
+                amount: transaction.amount,
+                currency: transaction.currency,
+                status: transaction.status,
+                customerName: transaction.customerName,
+                customerEmail: transaction.customerEmail,
+                customerPhone: transaction.customerPhone,
+                description: transaction.description,
+                merchantName: transaction.merchantName,
+                paymentGateway: transaction.paymentGateway,
+                paymentMethod: transaction.paymentMethod,
+                payuParams: transaction.payuParams,
+                callbackUrl: transaction.callbackUrl,
+                successUrl: transaction.successUrl,
+                failureUrl: transaction.failureUrl,
+                createdAt: transaction.createdAt,
+                updatedAt: transaction.updatedAt
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error fetching PayU transaction:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to fetch transaction'
+        });
+    }
+};
+
 exports.verifyPaymentStatus = async (req, res) => {
     try {
         const { transaction_id, order_id } = req.query;
