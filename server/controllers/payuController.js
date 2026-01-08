@@ -8,15 +8,28 @@ const { calculateExpectedSettlementDate } = require('../utils/settlementCalculat
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
 const { generatePayUCheckoutHTML, generatePayUCheckoutHTMLWithForm, formatCountdown } = require('./payuCheckoutTemplate');
 
-// PayU Configuration
-const PAYU_KEY = process.env.PAYU_KEY;
-const PAYU_SALT = process.env.PAYU_SALT;
-const PAYU_CLIENT_ID = process.env.PAYU_CLIENT_ID;
-const PAYU_CLIENT_SECRET = process.env.PAYU_CLIENT_SECRET;
-const PAYU_ENVIRONMENT = process.env.PAYU_ENVIRONMENT || 'production'; // 'sandbox' or 'production'
+// PayU Configuration - Support test mode similar to Zaakpay
+// Determine mode - default to 'production' if not explicitly set to 'test' or 'sandbox'
+const PAYU_ENVIRONMENT = (process.env.PAYU_ENVIRONMENT || '').toLowerCase();
+const PAYU_MODE = (PAYU_ENVIRONMENT === 'test' || PAYU_ENVIRONMENT === 'sandbox') ? 'test' : 'production';
 
-// PayU API URLs
-const PAYU_BASE_URL = PAYU_ENVIRONMENT === 'sandbox'
+// Use test credentials when in test mode, otherwise use production credentials
+// Falls back to regular keys if test keys aren't set (backward compatibility)
+const PAYU_KEY = PAYU_MODE === 'production'
+    ? process.env.PAYU_KEY
+    : (process.env.PAYU_KEY_TEST || process.env.PAYU_KEY);
+const PAYU_SALT = PAYU_MODE === 'production'
+    ? process.env.PAYU_SALT
+    : (process.env.PAYU_SALT_TEST || process.env.PAYU_SALT);
+const PAYU_CLIENT_ID = PAYU_MODE === 'production'
+    ? process.env.PAYU_CLIENT_ID
+    : (process.env.PAYU_CLIENT_ID_TEST || process.env.PAYU_CLIENT_ID);
+const PAYU_CLIENT_SECRET = PAYU_MODE === 'production'
+    ? process.env.PAYU_CLIENT_SECRET
+    : (process.env.PAYU_CLIENT_SECRET_TEST || process.env.PAYU_CLIENT_SECRET);
+
+// PayU API URLs - Use sandbox for test mode
+const PAYU_BASE_URL = PAYU_MODE === 'test'
     ? 'https://sandboxsecure.payu.in'
     : 'https://secure.payu.in';
 
@@ -29,7 +42,7 @@ const PAYU_S2S_API_URL = `${PAYU_BASE_URL}/merchant/postservice?form=2`;
 // Reference: https://docs.payu.in/v2/reference/v2-generate-upi-intent-api
 // Note: UPI Intent API might not be available in test/sandbox mode
 // Endpoints to try (in order of preference)
-const PAYU_INTENT_API_ENDPOINTS = PAYU_ENVIRONMENT === 'sandbox'
+const PAYU_INTENT_API_ENDPOINTS = PAYU_MODE === 'test'
     ? [
         'https://test.payu.in/info/v1/intent',
         'http://test.payu.in/info/v1/intent',
@@ -204,18 +217,35 @@ exports.createPayuPaymentLink = async (req, res) => {
         // Validate credentials
         if (!PAYU_KEY || !PAYU_SALT) {
             console.error('❌ PayU credentials not configured');
+            const missingKeys = [];
+            if (!PAYU_KEY) missingKeys.push(PAYU_MODE === 'test' ? 'PAYU_KEY_TEST (or PAYU_KEY)' : 'PAYU_KEY');
+            if (!PAYU_SALT) missingKeys.push(PAYU_MODE === 'test' ? 'PAYU_SALT_TEST (or PAYU_SALT)' : 'PAYU_SALT');
             return res.status(500).json({
                 success: false,
-                error: 'PayU credentials not configured. Please set PAYU_KEY and PAYU_SALT in environment variables.'
+                error: `PayU credentials not configured. Please set ${missingKeys.join(' and ')} in environment variables.`,
+                mode: PAYU_MODE
             });
         }
 
-        // Warn if environment might be mismatched
-        if (PAYU_ENVIRONMENT === 'production' && PAYU_KEY.includes('test')) {
-            console.warn('⚠️ WARNING: Production environment detected but key appears to be test key');
+        // Log PayU configuration on first use
+        if (!global.payuConfigLogged) {
+            console.log('🔧 PayU Configuration:');
+            console.log('   Mode:', PAYU_MODE, PAYU_MODE === 'test' ? '(TEST/SANDBOX)' : '(PRODUCTION)');
+            console.log('   Environment:', PAYU_ENVIRONMENT || 'production');
+            console.log('   Base URL:', PAYU_BASE_URL);
+            console.log('   Payment URL:', PAYU_PAYMENT_URL);
+            console.log('   Key:', PAYU_KEY ? PAYU_KEY.substring(0, 10) + '...' : 'NOT SET');
+            console.log('   Salt:', PAYU_SALT ? PAYU_SALT.substring(0, 10) + '...' : 'NOT SET');
+            console.log('   Client ID:', PAYU_CLIENT_ID ? PAYU_CLIENT_ID.substring(0, 15) + '...' : 'NOT SET');
+            global.payuConfigLogged = true;
         }
-        if (PAYU_ENVIRONMENT === 'sandbox' && !PAYU_KEY.includes('test') && !PAYU_BASE_URL.includes('sandbox')) {
-            console.warn('⚠️ WARNING: Sandbox environment but key/URL might be production');
+
+        // Warn if environment might be mismatched
+        if (PAYU_MODE === 'production' && PAYU_KEY && PAYU_KEY.includes('test')) {
+            console.warn('⚠️ WARNING: Production mode detected but key appears to be test key');
+        }
+        if (PAYU_MODE === 'test' && PAYU_KEY && !PAYU_KEY.includes('test') && !PAYU_BASE_URL.includes('sandbox')) {
+            console.warn('⚠️ WARNING: Test mode but key/URL might be production');
         }
 
         // Validate input
