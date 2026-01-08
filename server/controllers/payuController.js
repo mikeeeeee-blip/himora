@@ -1325,7 +1325,7 @@ exports.getPayuCheckoutPage = async (req, res) => {
             const firstName = transaction.customerName.split(' ')[0] || transaction.customerName;
             const email = transaction.customerEmail.trim();
             
-            // PayU callback URL - points to Next.js callback handler
+            // ✅ PayU callback URL - pure API route (no Server Actions)
             const frontendUrl = process.env.NEXTJS_API_URL || 
                                 process.env.FRONTEND_URL || 
                                 process.env.NEXT_PUBLIC_SERVER_URL || 
@@ -1333,7 +1333,14 @@ exports.getPayuCheckoutPage = async (req, res) => {
                                 process.env.NEXT_PUBLIC_API_URL || 
                                 process.env.PAYU_WEBSITE_URL ||
                                 'https://www.shaktisewafoudation.in';
-            const payuCallbackUrl = `${String(frontendUrl).replace(/\/$/, '')}/api/payu/callback?transaction_id=${transactionId}`;
+            const payuCallbackUrl = `${String(frontendUrl).replace(/\/$/, '')}/api/payu/callback`;
+            
+            // Success and Failure URLs for user redirects
+            const successUrl = transaction.successUrl || 
+                              transaction.callbackUrl || 
+                              `${String(frontendUrl).replace(/\/$/, '')}/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
+            const failureUrl = transaction.failureUrl || 
+                              `${String(frontendUrl).replace(/\/$/, '')}/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
             
             payuParams = {
                 key: PAYU_KEY.trim(),
@@ -1343,9 +1350,9 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 firstname: firstName,
                 email: email,
                 phone: transaction.customerPhone.trim(),
-                surl: (transaction.successUrl || transaction.callbackUrl || `${frontendUrl}/payment-success`).trim(),
-                furl: (transaction.failureUrl || `${frontendUrl}/payment-failed`).trim(),
-                curl: payuCallbackUrl.trim(),
+                surl: successUrl.trim(), // User redirect URL after successful payment
+                furl: failureUrl.trim(), // User redirect URL after failed payment
+                curl: payuCallbackUrl.trim(), // PayU callback/webhook URL - PayU POSTs here (server-to-server)
                 service_provider: 'payu_paisa',
                 pg: 'UPI',
                 bankcode: 'UPI'
@@ -1594,7 +1601,7 @@ exports.createMerchantHostedPayment = async (req, res) => {
             merchant?.successUrl ||
             `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
 
-        // PayU callback URL - points to Next.js callback handler
+        // ✅ PayU callback URL - pure API route (no Server Actions)
         const frontendUrl = process.env.NEXTJS_API_URL || 
                             process.env.FRONTEND_URL || 
                             process.env.NEXT_PUBLIC_SERVER_URL || 
@@ -1602,7 +1609,14 @@ exports.createMerchantHostedPayment = async (req, res) => {
                             process.env.NEXT_PUBLIC_API_URL || 
                             process.env.PAYU_WEBSITE_URL ||
                             'https://www.shaktisewafoudation.in';
-        const payuCallbackUrl = `${String(frontendUrl).replace(/\/$/, '')}/api/payu/callback?transaction_id=${transactionId}`;
+        const payuCallbackUrl = `${String(frontendUrl).replace(/\/$/, '')}/api/payu/callback`;
+        
+        // Success and Failure URLs for user redirects
+        const successUrl = success_url || 
+                          finalCallbackUrl || 
+                          `${String(frontendUrl).replace(/\/$/, '')}/payment/success?txnid=${orderId}`;
+        const failureUrl = failure_url || 
+                          `${String(frontendUrl).replace(/\/$/, '')}/payment/failed?txnid=${orderId}`;
 
         // Prepare payment parameters
         const amountFormatted = amountFloat.toFixed(2);
@@ -1619,9 +1633,9 @@ exports.createMerchantHostedPayment = async (req, res) => {
             firstname: firstName,
             email: email,
             phone: customer_phone.trim(),
-            surl: (success_url || finalCallbackUrl).trim(),
-            furl: (failure_url || `${frontendUrl}/payment-failed`).trim(),
-            curl: payuCallbackUrl.trim(),
+            surl: successUrl.trim(), // User redirect URL after successful payment
+            furl: failureUrl.trim(), // User redirect URL after failed payment
+            curl: payuCallbackUrl.trim(), // PayU callback/webhook URL - PayU POSTs here (server-to-server)
             service_provider: 'payu_paisa',
             pg: payment_mode // Payment gateway mode
         };
