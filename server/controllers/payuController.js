@@ -322,6 +322,13 @@ exports.createPayuPaymentLink = async (req, res) => {
         }
         
         const payuCallbackUrl = `${payuCallbackUrlBase}/api/payu/callback`;
+        
+        // Log callback URL for debugging
+        console.log('🔧 PayU Callback URL Configuration:');
+        console.log('   Original frontendUrl:', frontendUrl);
+        console.log('   Final callback URL base:', payuCallbackUrlBase);
+        console.log('   Full callback URL (curl):', payuCallbackUrl);
+        console.log('   Is public URL:', !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1'));
 
         // Prepare amount for PayU
         // Important: Amount must be formatted correctly (2 decimal places)
