@@ -29,29 +29,35 @@ const PAYU_CLIENT_SECRET = PAYU_MODE === 'production'
     : (process.env.PAYU_CLIENT_SECRET_TEST || process.env.PAYU_CLIENT_SECRET);
 
 // PayU API URLs
-// According to PayU docs: Test credentials work on production endpoint
-// Use production URL for both test and production modes
-// Test mode is determined by credentials, not by URL
-// Reference: https://docs.payu.in/docs/test-cards-upi-id-and-wallets
-const PAYU_BASE_URL = 'https://secure.payu.in'; // Always use production URL
-// Alternative test URL (if sandboxsecure.payu.in is not accessible):
-// const PAYU_BASE_URL_TEST = 'https://test.payu.in'; // Alternative test URL
+// According to PayU docs: Use separate endpoints for test and production
+// Reference: https://docs.payu.in/docs/prebuilt-checkout-page-integration
+// Test Environment: https://test.payu.in/_payment
+// Production Environment: https://secure.payu.in/_payment
+const PAYU_BASE_URL = PAYU_MODE === 'test'
+    ? 'https://test.payu.in'  // Test/Sandbox endpoint
+    : 'https://secure.payu.in'; // Production endpoint
 
 const PAYU_PAYMENT_URL = `${PAYU_BASE_URL}/_payment`;
 // PayU S2S API endpoint for UPI Intent
 // Reference: https://docs.payu.in/docs/upi-intent-server-to-server
+// Use test endpoint for test mode, production for production
 const PAYU_S2S_API_URL = `${PAYU_BASE_URL}/merchant/postservice?form=2`;
 
 // PayU Generate UPI Intent API
 // Reference: https://docs.payu.in/v2/reference/v2-generate-upi-intent-api
-// Note: Use production endpoints - test credentials work on production endpoints
-// Endpoints to try (in order of preference)
-const PAYU_INTENT_API_ENDPOINTS = [
-    'https://info.payu.in/info/v1/intent',  // Try with /info/ path first
-    'https://info.payu.in/v1/intent',        // Original endpoint
-    'https://secure.payu.in/info/v1/intent', // Alternative endpoint
-    'https://secure.payu.in/v1/intent'       // Another alternative
-];
+// Use test endpoints for test mode, production for production
+// Note: UPI Intent may not be available in test mode per PayU docs
+const PAYU_INTENT_API_ENDPOINTS = PAYU_MODE === 'test'
+    ? [
+        'https://test.payu.in/info/v1/intent',  // Test endpoint
+        'https://test.payu.in/v1/intent'        // Alternative test endpoint
+      ]
+    : [
+        'https://info.payu.in/info/v1/intent',  // Production endpoint
+        'https://info.payu.in/v1/intent',        // Alternative production endpoint
+        'https://secure.payu.in/info/v1/intent', // Another alternative
+        'https://secure.payu.in/v1/intent'       // Another alternative
+      ];
 
 // PayU Merchant ID (mid) - required for Intent API
 // If not set, will try to extract from PAYU_KEY or use default
@@ -227,9 +233,9 @@ exports.createPayuPaymentLink = async (req, res) => {
         // Log PayU configuration on first use
         if (!global.payuConfigLogged) {
             console.log('🔧 PayU Configuration:');
-            console.log('   Mode:', PAYU_MODE, PAYU_MODE === 'test' ? '(TEST - using test credentials)' : '(PRODUCTION)');
+            console.log('   Mode:', PAYU_MODE, PAYU_MODE === 'test' ? '(TEST - using test endpoint and credentials)' : '(PRODUCTION)');
             console.log('   Environment:', PAYU_ENVIRONMENT || 'production');
-            console.log('   Base URL:', PAYU_BASE_URL, '(Always production URL - test credentials work on production endpoint)');
+            console.log('   Base URL:', PAYU_BASE_URL, PAYU_MODE === 'test' ? '(TEST endpoint)' : '(PRODUCTION endpoint)');
             console.log('   Payment URL:', PAYU_PAYMENT_URL);
             console.log('   Key:', PAYU_KEY ? PAYU_KEY.substring(0, 10) + '...' : 'NOT SET');
             console.log('   Salt:', PAYU_SALT ? PAYU_SALT.substring(0, 10) + '...' : 'NOT SET');
