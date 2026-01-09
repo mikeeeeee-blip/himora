@@ -1581,11 +1581,24 @@ exports.getPayuFormParams = async (req, res) => {
             
             // Success and Failure URLs for user redirects
             // CRITICAL: Ensure URLs are production URLs, never localhost
+            // Also filter stored URLs from database that might contain localhost
             const cleanFrontendUrl = String(frontendUrl).replace(/\/$/, '');
-            const successUrl = transaction.successUrl || 
-                              transaction.callbackUrl || 
+            
+            // Get stored URLs but filter out localhost
+            let storedSuccessUrl = transaction.successUrl || transaction.callbackUrl;
+            let storedFailureUrl = transaction.failureUrl;
+            
+            // CRITICAL: Filter localhost from stored URLs
+            if (storedSuccessUrl && (storedSuccessUrl.includes('localhost') || storedSuccessUrl.includes('127.0.0.1') || storedSuccessUrl.includes(':3001'))) {
+                storedSuccessUrl = null; // Ignore stored localhost URL
+            }
+            if (storedFailureUrl && (storedFailureUrl.includes('localhost') || storedFailureUrl.includes('127.0.0.1') || storedFailureUrl.includes(':3001'))) {
+                storedFailureUrl = null; // Ignore stored localhost URL
+            }
+            
+            const successUrl = storedSuccessUrl || 
                               `${cleanFrontendUrl}/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
-            const failureUrl = transaction.failureUrl || 
+            const failureUrl = storedFailureUrl || 
                               `${cleanFrontendUrl}/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
             
             // Final validation: Never allow localhost in production URLs
@@ -1771,11 +1784,24 @@ exports.getPayuCheckoutPage = async (req, res) => {
             
             // Success and Failure URLs for user redirects
             // CRITICAL: Ensure URLs are production URLs, never localhost
+            // Also filter stored URLs from database that might contain localhost
             const cleanFrontendUrl = String(frontendUrl).replace(/\/$/, '');
-            const successUrl = transaction.successUrl || 
-                              transaction.callbackUrl || 
+            
+            // Get stored URLs but filter out localhost
+            let storedSuccessUrl = transaction.successUrl || transaction.callbackUrl;
+            let storedFailureUrl = transaction.failureUrl;
+            
+            // CRITICAL: Filter localhost from stored URLs
+            if (storedSuccessUrl && (storedSuccessUrl.includes('localhost') || storedSuccessUrl.includes('127.0.0.1') || storedSuccessUrl.includes(':3001'))) {
+                storedSuccessUrl = null; // Ignore stored localhost URL
+            }
+            if (storedFailureUrl && (storedFailureUrl.includes('localhost') || storedFailureUrl.includes('127.0.0.1') || storedFailureUrl.includes(':3001'))) {
+                storedFailureUrl = null; // Ignore stored localhost URL
+            }
+            
+            const successUrl = storedSuccessUrl || 
                               `${cleanFrontendUrl}/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
-            const failureUrl = transaction.failureUrl || 
+            const failureUrl = storedFailureUrl || 
                               `${cleanFrontendUrl}/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
             
             // Final validation: Never allow localhost in production URLs
