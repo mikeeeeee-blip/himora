@@ -1633,7 +1633,7 @@ exports.getPayuFormParams = async (req, res) => {
             const hash = generatePayUHash(hashParams);
             payuParams.hash = hash;
             
-            // Save params to transaction
+            // Save params to transaction (with hardcoded URLs)
             transaction.payuParams = payuParams;
             await transaction.save();
         }
