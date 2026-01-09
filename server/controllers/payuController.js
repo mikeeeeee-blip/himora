@@ -592,18 +592,19 @@ async function createPayuFormBasedPayment(req, res, data) {
                       `${String(frontendUrl || process.env.FRONTEND_URL || 'https://www.shaktisewafoudation.in').replace(/\/$/, '')}/payment/failed?txnid=${orderId}`;
 
     // Standard form-based parameters
+    // CRITICAL: PayU is strict about parameter format - trim all values
     const payuParams = {
         key: PAYU_KEY.trim(),
-        txnid: orderId,
-        amount: amountFormatted,
-        productinfo: productInfo,
-        firstname: firstName,
-        email: email,
+        txnid: orderId.trim(),
+        amount: amountFormatted.trim(),
+        productinfo: productInfo.trim(),
+        firstname: firstName.trim(),
+        email: email.trim().toLowerCase(), // PayU expects lowercase email
         phone: customer_phone.trim(),
         surl: successUrl.trim(), // User redirect URL after successful payment
         furl: failureUrl.trim(), // User redirect URL after failed payment
-        service_provider: 'payu_paisa',
         pg: 'UPI'
+        // Note: service_provider removed - can cause issues with UPI
     };
     
     // ✅ CRITICAL: Only include curl if it's publicly accessible
@@ -1545,19 +1546,20 @@ exports.getPayuCheckoutPage = async (req, res) => {
             const failureUrl = transaction.failureUrl || 
                               `${String(frontendUrl).replace(/\/$/, '')}/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
             
+            // PayU form parameters - CRITICAL: Trim all values, PayU is strict
             payuParams = {
                 key: PAYU_KEY.trim(),
-                txnid: transaction.payuOrderId || transaction.orderId,
-                amount: amountFormatted,
-                productinfo: productInfo,
-                firstname: firstName,
-                email: email,
+                txnid: (transaction.payuOrderId || transaction.orderId).trim(),
+                amount: amountFormatted.trim(),
+                productinfo: productInfo.trim(),
+                firstname: firstName.trim(),
+                email: email.trim().toLowerCase(), // PayU expects lowercase email
                 phone: transaction.customerPhone.trim(),
                 surl: successUrl.trim(), // User redirect URL after successful payment
                 furl: failureUrl.trim(), // User redirect URL after failed payment
-                service_provider: 'payu_paisa',
-                pg: 'UPI' // Payment gateway: UPI (don't set bankcode when pg is set)
-                // Note: bankcode is not needed when pg is set - PayU will handle it
+                pg: 'UPI' // Payment gateway: UPI (PayU handles bankcode internally)
+                // Note: service_provider removed - can cause issues with UPI
+                // Note: bankcode is not needed when pg is set - PayU handles it
             };
             
             // ✅ CRITICAL: Only include curl if it's publicly accessible
