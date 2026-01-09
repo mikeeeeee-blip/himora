@@ -440,13 +440,14 @@ exports.createPayuPaymentLink = async (req, res) => {
             console.log('   📝 For webhooks, use ngrok (https://ngrok.com) or deploy to a public URL');
         }
         
-        // ✅ CRITICAL: Add environment parameter for test/sandbox mode
-        // According to PayU docs: Set environment=1 for test/sandbox mode
-        // Reference: https://docs.payu.in/docs/pythonsdk-test-integration
-        if (PAYU_MODE === 'test') {
-            payuParams.environment = '1'; // Test/Sandbox mode
-            console.log('   ✅ Test mode enabled - environment=1 added to form parameters');
-        }
+        // ✅ CRITICAL: DO NOT add environment parameter for form submissions
+        // The 'environment' parameter is only for API calls, NOT for form submissions
+        // For form submissions, test mode is determined by the endpoint URL (test.payu.in vs secure.payu.in)
+        // Reference: https://docs.payu.in/docs/prebuilt-checkout-page-integration
+        // The environment=1 parameter can cause "Pardon, Some Problem Occurred" errors
+        // We're already using test endpoint: https://test.payu.in/_payment (configured above)
+        
+        // NO environment parameter needed - test mode is handled by endpoint URL
         
         // Generate hash for payment
         const hashParams = {
@@ -613,12 +614,12 @@ async function createPayuFormBasedPayment(req, res, data) {
         payuParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL
     }
     
-    // ✅ CRITICAL: Add environment parameter for test/sandbox mode
-    // According to PayU docs: Set environment=1 for test/sandbox mode
-    // Reference: https://docs.payu.in/docs/pythonsdk-test-integration
-    if (PAYU_MODE === 'test') {
-        payuParams.environment = '1'; // Test/Sandbox mode
-    }
+    // ✅ CRITICAL: DO NOT add environment parameter for form submissions
+    // The 'environment' parameter is only for API calls, NOT for form submissions
+    // Test mode is handled by endpoint URL (test.payu.in vs secure.payu.in)
+    // Adding environment=1 to form submissions causes "Pardon, Some Problem Occurred" errors
+    
+    // NO environment parameter needed
 
     // Generate hash
     const hashParams = {
@@ -1576,11 +1577,12 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 payuParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL
             }
             
-            // ✅ CRITICAL: Add environment parameter for test/sandbox mode
-            // According to PayU docs: Set environment=1 for test/sandbox mode
-            if (PAYU_MODE === 'test') {
-                payuParams.environment = '1'; // Test/Sandbox mode
-            }
+            // ✅ CRITICAL: DO NOT add environment parameter for form submissions
+            // The 'environment' parameter is only for API calls, NOT for form submissions
+            // Test mode is handled by endpoint URL (test.payu.in vs secure.payu.in)
+            // Adding environment=1 causes "Pardon, Some Problem Occurred" errors
+            
+            // NO environment parameter needed
             
             // Generate hash
             const hashParams = {
