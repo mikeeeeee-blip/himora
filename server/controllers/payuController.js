@@ -1633,10 +1633,9 @@ exports.getPayuFormParams = async (req, res) => {
             const hash = generatePayUHash(hashParams);
             payuParams.hash = hash;
             
-            // Save params to transaction (with hardcoded URLs)
-            transaction.payuParams = payuParams;
-            await transaction.save();
-        }
+        // Save params to transaction (with hardcoded URLs)
+        transaction.payuParams = payuParams;
+        await transaction.save();
         
         // Return parameters as JSON
         return res.json({
@@ -1836,10 +1835,9 @@ exports.getPayuCheckoutPage = async (req, res) => {
             const hash = generatePayUHash(hashParams);
             payuParams.hash = hash;
             
-            // Save params to transaction
-            transaction.payuParams = payuParams;
-            await transaction.save();
-        }
+        // Save params to transaction (with hardcoded URLs)
+        transaction.payuParams = payuParams;
+        await transaction.save();
         
         // Build form inputs for PayU payment form
         const formInputs = Object.entries(payuParams)
