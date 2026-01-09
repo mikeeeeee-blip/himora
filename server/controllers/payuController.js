@@ -1686,7 +1686,6 @@ exports.getPayuCheckoutPage = async (req, res) => {
             const email = transaction.customerEmail.trim();
             
             // ✅ PayU callback URL - pure API route (no Server Actions)
-            // ✅ PayU callback URL - pure API route (no Server Actions)
             // CRITICAL: Filter out localhost URLs in production - use hardcoded production URL
             let frontendUrl = process.env.NEXTJS_API_URL || 
                              process.env.FRONTEND_URL || 
@@ -1744,6 +1743,10 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 ? `https://shaktisewafoudation.in/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`
                 : failureUrl;
             
+            console.log('🔧 PayU Redirect URLs:');
+            console.log('   Success URL (surl):', finalSuccessUrl);
+            console.log('   Failure URL (furl):', finalFailureUrl);
+            
             // PayU form parameters - CRITICAL: Trim all values, PayU is strict
             payuParams = {
                 key: PAYU_KEY.trim(),
@@ -1753,8 +1756,8 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 firstname: firstName.trim(),
                 email: email.trim().toLowerCase(), // PayU expects lowercase email
                 phone: transaction.customerPhone.trim(),
-                surl: successUrl.trim(), // User redirect URL after successful payment
-                furl: failureUrl.trim(), // User redirect URL after failed payment
+                surl: finalSuccessUrl.trim(), // User redirect URL after successful payment
+                furl: finalFailureUrl.trim(), // User redirect URL after failed payment
                 pg: 'UPI' // Payment gateway: UPI (PayU handles bankcode internally)
                 // Note: service_provider removed - can cause issues with UPI
                 // Note: bankcode is not needed when pg is set - PayU handles it
@@ -1767,9 +1770,6 @@ exports.getPayuCheckoutPage = async (req, res) => {
             } else {
                 console.log('   ⚠️ Skipping curl (callback URL) - localhost not accessible to PayU servers');
             }
-            
-            // ✅ CRITICAL: Only include curl if it's publicly accessible
-            // In test mode with localhost, PayU cannot access callback URL
             if (payuCallbackUrl && !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1')) {
                 payuParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL
             }
