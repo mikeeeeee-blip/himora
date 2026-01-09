@@ -345,17 +345,12 @@ exports.createPayuPaymentLink = async (req, res) => {
         const merchant = await User.findById(merchantId);
         const finalCallbackUrl = callback_url ||
             merchant?.successUrl ||
-            `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
+            `${process.env.KRISHI_API_URL || 'https://shaktisewafoudation.in'}/payment-success`;
 
         // PayU callback URL - points to Next.js callback handler (same pattern as Zaakpay)
-        // Use NEXTJS_API_URL (like cashfreeController) for consistency (for user redirects)
+        // Use KRISHI_API_URL for frontend URL (for user redirects)
         // CRITICAL: Filter out localhost URLs in production - use hardcoded production URL
-        let frontendUrl = process.env.NEXTJS_API_URL || 
-                         process.env.FRONTEND_URL || 
-                         process.env.NEXT_PUBLIC_SERVER_URL || 
-                         process.env.KRISHI_API_URL || 
-                         process.env.NEXT_PUBLIC_API_URL || 
-                         process.env.PAYU_WEBSITE_URL ||
+        let frontendUrl = process.env.KRISHI_API_URL || 
                          'https://shaktisewafoudation.in';
         
         // CRITICAL: Never use localhost in production - always use production URL
@@ -644,7 +639,7 @@ async function createPayuFormBasedPayment(req, res, data) {
 
     // Success and Failure URLs for user redirects
     // CRITICAL: Filter out localhost URLs - use production URL
-    let cleanFrontendUrl = String(frontendUrl || process.env.FRONTEND_URL || 'https://shaktisewafoudation.in').replace(/\/$/, '');
+    let cleanFrontendUrl = String(frontendUrl || process.env.KRISHI_API_URL || 'https://shaktisewafoudation.in').replace(/\/$/, '');
     if (cleanFrontendUrl.includes('localhost') || cleanFrontendUrl.includes('127.0.0.1') || cleanFrontendUrl.includes(':3001')) {
         cleanFrontendUrl = 'https://shaktisewafoudation.in';
     }
@@ -1065,7 +1060,7 @@ exports.handlePayuCallback = async (req, res) => {
 
     } catch (error) {
         console.error('❌ PayU Callback Handler Error:', error);
-        return res.redirect(`${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-failed?error=callback_error`);
+        return res.redirect(`${process.env.KRISHI_API_URL || 'https://shaktisewafoudation.in'}/payment-failed?error=callback_error`);
     }
 };
 
@@ -1556,12 +1551,8 @@ exports.getPayuFormParams = async (req, res) => {
             
             // ✅ PayU callback URL - pure API route (no Server Actions)
             // CRITICAL: Filter out localhost URLs in production - use hardcoded production URL
-            let frontendUrl = process.env.NEXTJS_API_URL || 
-                             process.env.FRONTEND_URL || 
-                             process.env.NEXT_PUBLIC_SERVER_URL || 
-                             process.env.KRISHI_API_URL || 
-                             process.env.NEXT_PUBLIC_API_URL || 
-                             process.env.PAYU_WEBSITE_URL ||
+            // Use KRISHI_API_URL for frontend URL
+            let frontendUrl = process.env.KRISHI_API_URL || 
                              'https://shaktisewafoudation.in';
             
             // CRITICAL: Never use localhost in production - always use production URL
@@ -1743,12 +1734,8 @@ exports.getPayuCheckoutPage = async (req, res) => {
             
             // ✅ PayU callback URL - pure API route (no Server Actions)
             // CRITICAL: Filter out localhost URLs in production - use hardcoded production URL
-            let frontendUrl = process.env.NEXTJS_API_URL || 
-                             process.env.FRONTEND_URL || 
-                             process.env.NEXT_PUBLIC_SERVER_URL || 
-                             process.env.KRISHI_API_URL || 
-                             process.env.NEXT_PUBLIC_API_URL || 
-                             process.env.PAYU_WEBSITE_URL ||
+            // Use KRISHI_API_URL for frontend URL
+            let frontendUrl = process.env.KRISHI_API_URL || 
                              'https://shaktisewafoudation.in';
             
             // CRITICAL: Never use localhost in production - always use production URL
@@ -2078,7 +2065,7 @@ exports.createMerchantHostedPayment = async (req, res) => {
         const merchant = await User.findById(merchantId);
         const finalCallbackUrl = callback_url ||
             merchant?.successUrl ||
-            `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
+            `${process.env.KRISHI_API_URL || 'https://shaktisewafoudation.in'}/payment-success`;
 
         // ✅ PayU callback URL - pure API route (no Server Actions)
         // CRITICAL: Filter out localhost URLs in production - use hardcoded production URL
@@ -2331,16 +2318,11 @@ exports.processUPISeamless = async (req, res) => {
         const merchant = await User.findById(merchantId);
         const finalCallbackUrl = callback_url ||
             merchant?.successUrl ||
-            `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
+            `${process.env.KRISHI_API_URL || 'https://shaktisewafoudation.in'}/payment-success`;
 
         // PayU callback URL - points to Next.js callback handler
         // CRITICAL: Filter out localhost URLs in production - use hardcoded production URL
-        let frontendUrl = process.env.NEXTJS_API_URL || 
-                         process.env.FRONTEND_URL || 
-                         process.env.NEXT_PUBLIC_SERVER_URL || 
-                         process.env.KRISHI_API_URL || 
-                         process.env.NEXT_PUBLIC_API_URL || 
-                         process.env.PAYU_WEBSITE_URL ||
+        let frontendUrl = process.env.KRISHI_API_URL || 
                          'https://shaktisewafoudation.in';
         
         // CRITICAL: Never use localhost in production - always use production URL
@@ -2355,7 +2337,7 @@ exports.processUPISeamless = async (req, res) => {
         
         // Warning for localhost in test mode
         if (PAYU_MODE === 'test' && (frontendUrl.includes('localhost') || frontendUrl.includes('127.0.0.1'))) {
-            const publicUrl = process.env.PAYU_PUBLIC_TEST_URL || process.env.NEXTJS_API_URL || process.env.FRONTEND_URL;
+            const publicUrl = process.env.PAYU_PUBLIC_TEST_URL || process.env.KRISHI_API_URL;
             if (publicUrl && !publicUrl.includes('localhost')) {
                 payuCallbackUrl = `${String(publicUrl).replace(/\/+$/, '')}/api/payu/callback`;
             }
@@ -2377,8 +2359,8 @@ exports.processUPISeamless = async (req, res) => {
         
         // Get frontend URL for redirects
         // CRITICAL: Filter out localhost URLs in production - use hardcoded production URL
-        let frontendUrlForRedirects = process.env.NEXTJS_API_URL || 
-                                     process.env.FRONTEND_URL || 
+        // Use KRISHI_API_URL for frontend URL
+        let frontendUrlForRedirects = process.env.KRISHI_API_URL || 
                                      'https://shaktisewafoudation.in';
         
         // CRITICAL: Never use localhost in production - always use production URL
