@@ -295,8 +295,9 @@ exports.createPayuPaymentLink = async (req, res) => {
             console.log('   Salt:', PAYU_SALT ? PAYU_SALT.substring(0, 10) + '...' : 'NOT SET');
             console.log('   Client ID:', PAYU_CLIENT_ID ? PAYU_CLIENT_ID.substring(0, 15) + '...' : 'NOT SET');
             if (PAYU_MODE === 'test') {
-                console.log('   ✅ TEST MODE: environment=1 will be added to form parameters');
+                console.log('   ✅ TEST MODE: Using test endpoint URL (test.payu.in)');
                 console.log('   📝 Note: Use test credentials from PayU Dashboard → Test Mode → Key Salt Details');
+                console.log('   📝 Note: Environment parameter NOT added (only for API calls, not form submissions)');
             }
             console.log('   Note: PayU test credentials work on production endpoint (secure.payu.in)');
             console.log('   📚 Reference: https://docs.payu.in/docs/pythonsdk-test-integration');
@@ -1878,11 +1879,12 @@ exports.createMerchantHostedPayment = async (req, res) => {
             payuParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL
         }
         
-        // ✅ CRITICAL: Add environment parameter for test/sandbox mode
-        // According to PayU docs: Set environment=1 for test/sandbox mode
-        if (PAYU_MODE === 'test') {
-            payuParams.environment = '1'; // Test/Sandbox mode
-        }
+        // ✅ CRITICAL: DO NOT add environment parameter for form submissions
+        // The 'environment' parameter is only for API calls, NOT for form submissions
+        // Test mode is handled by endpoint URL (test.payu.in vs secure.payu.in)
+        // Adding environment=1 causes "Pardon, Some Problem Occurred" errors
+        
+        // NO environment parameter needed - test mode is handled by endpoint URL
 
         // Add payment mode specific parameters
         if (payment_mode === 'CC' || payment_mode === 'DC') {
