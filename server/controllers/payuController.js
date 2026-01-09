@@ -234,7 +234,12 @@ exports.createPayuPaymentLink = async (req, res) => {
             console.log('   Key:', PAYU_KEY ? PAYU_KEY.substring(0, 10) + '...' : 'NOT SET');
             console.log('   Salt:', PAYU_SALT ? PAYU_SALT.substring(0, 10) + '...' : 'NOT SET');
             console.log('   Client ID:', PAYU_CLIENT_ID ? PAYU_CLIENT_ID.substring(0, 15) + '...' : 'NOT SET');
+            if (PAYU_MODE === 'test') {
+                console.log('   ✅ TEST MODE: environment=1 will be added to form parameters');
+                console.log('   📝 Note: Use test credentials from PayU Dashboard → Test Mode → Key Salt Details');
+            }
             console.log('   Note: PayU test credentials work on production endpoint (secure.payu.in)');
+            console.log('   📚 Reference: https://docs.payu.in/docs/pythonsdk-test-integration');
             global.payuConfigLogged = true;
         }
 
@@ -332,6 +337,14 @@ exports.createPayuPaymentLink = async (req, res) => {
             bankcode: 'UPI'  // Bank code: UPI for seamless UPI payment
             // Note: vpa (VPA/UPI ID) is optional - customer can enter it on PayU page
         };
+        
+        // ✅ CRITICAL: Add environment parameter for test/sandbox mode
+        // According to PayU docs: Set environment=1 for test/sandbox mode
+        // Reference: https://docs.payu.in/docs/pythonsdk-test-integration
+        if (PAYU_MODE === 'test') {
+            payuParams.environment = '1'; // Test/Sandbox mode
+            console.log('   ✅ Test mode enabled - environment=1 added to form parameters');
+        }
         
         // Generate hash for payment
         const hashParams = {
@@ -491,6 +504,13 @@ async function createPayuFormBasedPayment(req, res, data) {
         service_provider: 'payu_paisa',
         pg: 'UPI'
     };
+    
+    // ✅ CRITICAL: Add environment parameter for test/sandbox mode
+    // According to PayU docs: Set environment=1 for test/sandbox mode
+    // Reference: https://docs.payu.in/docs/pythonsdk-test-integration
+    if (PAYU_MODE === 'test') {
+        payuParams.environment = '1'; // Test/Sandbox mode
+    }
 
     // Generate hash
     const hashParams = {
@@ -1373,6 +1393,12 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 bankcode: 'UPI'
             };
             
+            // ✅ CRITICAL: Add environment parameter for test/sandbox mode
+            // According to PayU docs: Set environment=1 for test/sandbox mode
+            if (PAYU_MODE === 'test') {
+                payuParams.environment = '1'; // Test/Sandbox mode
+            }
+            
             // Generate hash
             const hashParams = {
                 txnid: payuParams.txnid,
@@ -1654,6 +1680,12 @@ exports.createMerchantHostedPayment = async (req, res) => {
             service_provider: 'payu_paisa',
             pg: payment_mode // Payment gateway mode
         };
+        
+        // ✅ CRITICAL: Add environment parameter for test/sandbox mode
+        // According to PayU docs: Set environment=1 for test/sandbox mode
+        if (PAYU_MODE === 'test') {
+            payuParams.environment = '1'; // Test/Sandbox mode
+        }
 
         // Add payment mode specific parameters
         if (payment_mode === 'CC' || payment_mode === 'DC') {
