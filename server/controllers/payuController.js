@@ -407,6 +407,8 @@ exports.createPayuPaymentLink = async (req, res) => {
                           `${String(frontendUrl).replace(/\/$/, '')}/payment/failed?txnid=${orderId}`;
         
         // Standard PayU form parameters for UPI
+        // CRITICAL: Don't set both pg and bankcode - use only pg for UPI
+        // Reference: https://docs.payu.in/docs/prebuilt-checkout-page-integration
         const payuParams = {
             key: PAYU_KEY.trim(),
             txnid: orderId,
@@ -418,9 +420,9 @@ exports.createPayuPaymentLink = async (req, res) => {
             surl: successUrl.trim(), // User redirect URL after successful payment
             furl: failureUrl.trim(), // User redirect URL after failed payment
             service_provider: 'payu_paisa',
-            pg: 'UPI',  // Payment gateway: UPI
-            bankcode: 'UPI'  // Bank code: UPI for seamless UPI payment
+            pg: 'UPI'  // Payment gateway: UPI (PayU will handle bankcode internally)
             // Note: vpa (VPA/UPI ID) is optional - customer can enter it on PayU page
+            // Note: Don't set bankcode when pg is set - it causes conflicts
         };
         
         // ✅ CRITICAL: Only include curl if it's publicly accessible
@@ -1554,8 +1556,8 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 surl: successUrl.trim(), // User redirect URL after successful payment
                 furl: failureUrl.trim(), // User redirect URL after failed payment
                 service_provider: 'payu_paisa',
-                pg: 'UPI',
-                bankcode: 'UPI'
+                pg: 'UPI' // Payment gateway: UPI (don't set bankcode when pg is set)
+                // Note: bankcode is not needed when pg is set - PayU will handle it
             };
             
             // ✅ CRITICAL: Only include curl if it's publicly accessible
