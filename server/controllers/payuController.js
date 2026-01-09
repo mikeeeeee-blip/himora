@@ -1686,13 +1686,21 @@ exports.getPayuCheckoutPage = async (req, res) => {
             const email = transaction.customerEmail.trim();
             
             // ✅ PayU callback URL - pure API route (no Server Actions)
-            const frontendUrl = process.env.NEXTJS_API_URL || 
-                                process.env.FRONTEND_URL || 
-                                process.env.NEXT_PUBLIC_SERVER_URL || 
-                                process.env.KRISHI_API_URL || 
-                                process.env.NEXT_PUBLIC_API_URL || 
-                                process.env.PAYU_WEBSITE_URL ||
-                                'https://shaktisewafoudation.in';
+            // ✅ PayU callback URL - pure API route (no Server Actions)
+            // CRITICAL: Filter out localhost URLs in production - use hardcoded production URL
+            let frontendUrl = process.env.NEXTJS_API_URL || 
+                             process.env.FRONTEND_URL || 
+                             process.env.NEXT_PUBLIC_SERVER_URL || 
+                             process.env.KRISHI_API_URL || 
+                             process.env.NEXT_PUBLIC_API_URL || 
+                             process.env.PAYU_WEBSITE_URL ||
+                             'https://shaktisewafoudation.in';
+            
+            // CRITICAL: Never use localhost in production - always use production URL
+            if (frontendUrl.includes('localhost') || frontendUrl.includes('127.0.0.1') || frontendUrl.includes(':3001')) {
+                console.warn('   ⚠️ Frontend URL contains localhost, using production URL instead');
+                frontendUrl = 'https://shaktisewafoudation.in';
+            }
             
             // CRITICAL: Use backend URL directly for callback to bypass Next.js Server Actions
             // PayU POSTs directly to Express backend, not through Next.js
@@ -1714,16 +1722,27 @@ exports.getPayuCheckoutPage = async (req, res) => {
             
             console.log('🔧 PayU Callback URL Configuration:');
             console.log('   Backend URL:', backendUrl);
+            console.log('   Frontend URL (for redirects):', frontendUrl);
             console.log('   Final callback URL base:', payuCallbackUrlBase);
             console.log('   Full callback URL (curl):', payuCallbackUrl);
             console.log('   Is public URL:', !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1'));
             
             // Success and Failure URLs for user redirects
+            // CRITICAL: Ensure URLs are production URLs, never localhost
+            const cleanFrontendUrl = String(frontendUrl).replace(/\/$/, '');
             const successUrl = transaction.successUrl || 
                               transaction.callbackUrl || 
-                              `${String(frontendUrl).replace(/\/$/, '')}/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
+                              `${cleanFrontendUrl}/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
             const failureUrl = transaction.failureUrl || 
-                              `${String(frontendUrl).replace(/\/$/, '')}/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
+                              `${cleanFrontendUrl}/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
+            
+            // Final validation: Never allow localhost in production URLs
+            const finalSuccessUrl = (successUrl.includes('localhost') || successUrl.includes('127.0.0.1') || successUrl.includes(':3001'))
+                ? `https://shaktisewafoudation.in/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`
+                : successUrl;
+            const finalFailureUrl = (failureUrl.includes('localhost') || failureUrl.includes('127.0.0.1') || failureUrl.includes(':3001'))
+                ? `https://shaktisewafoudation.in/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`
+                : failureUrl;
             
             // PayU form parameters - CRITICAL: Trim all values, PayU is strict
             payuParams = {
