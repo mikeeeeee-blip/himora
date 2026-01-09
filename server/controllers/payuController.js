@@ -538,10 +538,15 @@ async function createPayuFormBasedPayment(req, res, data) {
         phone: customer_phone.trim(),
         surl: successUrl.trim(), // User redirect URL after successful payment
         furl: failureUrl.trim(), // User redirect URL after failed payment
-        curl: payuCallbackUrl.trim(), // PayU callback/webhook URL - PayU POSTs here (server-to-server)
         service_provider: 'payu_paisa',
         pg: 'UPI'
     };
+    
+    // ✅ CRITICAL: Only include curl if it's publicly accessible
+    // Skip curl for localhost in test mode - PayU servers cannot access localhost
+    if (payuCallbackUrl && !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1')) {
+        payuParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL
+    }
     
     // ✅ CRITICAL: Add environment parameter for test/sandbox mode
     // According to PayU docs: Set environment=1 for test/sandbox mode
@@ -1425,11 +1430,16 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 phone: transaction.customerPhone.trim(),
                 surl: successUrl.trim(), // User redirect URL after successful payment
                 furl: failureUrl.trim(), // User redirect URL after failed payment
-                curl: payuCallbackUrl.trim(), // PayU callback/webhook URL - PayU POSTs here (server-to-server)
                 service_provider: 'payu_paisa',
                 pg: 'UPI',
                 bankcode: 'UPI'
             };
+            
+            // ✅ CRITICAL: Only include curl if it's publicly accessible
+            // In test mode with localhost, PayU cannot access callback URL
+            if (payuCallbackUrl && !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1')) {
+                payuParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL
+            }
             
             // ✅ CRITICAL: Add environment parameter for test/sandbox mode
             // According to PayU docs: Set environment=1 for test/sandbox mode
@@ -1714,10 +1724,14 @@ exports.createMerchantHostedPayment = async (req, res) => {
             phone: customer_phone.trim(),
             surl: successUrl.trim(), // User redirect URL after successful payment
             furl: failureUrl.trim(), // User redirect URL after failed payment
-            curl: payuCallbackUrl.trim(), // PayU callback/webhook URL - PayU POSTs here (server-to-server)
             service_provider: 'payu_paisa',
             pg: payment_mode // Payment gateway mode
         };
+        
+        // ✅ CRITICAL: Only include curl if it's publicly accessible
+        if (payuCallbackUrl && !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1')) {
+            payuParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL
+        }
         
         // ✅ CRITICAL: Add environment parameter for test/sandbox mode
         // According to PayU docs: Set environment=1 for test/sandbox mode
@@ -1938,7 +1952,6 @@ exports.processUPISeamless = async (req, res) => {
             phone: customer_phone.trim(),
             surl: (success_url || finalCallbackUrl || `${String(frontendUrlForRedirects).replace(/\/$/, '')}/payment/success?txnid=${orderId}`).trim(),
             furl: (failure_url || `${String(frontendUrlForRedirects).replace(/\/$/, '')}/payment/failed?txnid=${orderId}`).trim(),
-            curl: payuCallbackUrl.trim(),
             service_provider: 'payu_paisa',
             pg: 'UPI',
             upi_id: upi_id,
@@ -1947,6 +1960,11 @@ exports.processUPISeamless = async (req, res) => {
             s2s_device_info: deviceInfo,
             upiAppName: 'genericintent'
         };
+        
+        // ✅ CRITICAL: Only include curl if it's publicly accessible
+        if (payuCallbackUrl && !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1')) {
+            paymentParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL
+        }
 
         // Generate S2S hash for UPI
         const hashParams = {
