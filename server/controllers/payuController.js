@@ -1833,12 +1833,13 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 email: payuParams.email
             };
             
-        const hash = generatePayUHash(hashParams);
-        payuParams.hash = hash;
-        
-        // Save params to transaction (with hardcoded URLs)
-        transaction.payuParams = payuParams;
-        await transaction.save();
+            const hash = generatePayUHash(hashParams);
+            payuParams.hash = hash;
+            
+            // Save params to transaction (with hardcoded URLs)
+            transaction.payuParams = payuParams;
+            await transaction.save();
+        }
         
         // Build form inputs for PayU payment form
         const formInputs = Object.entries(payuParams)
