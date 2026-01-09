@@ -1484,6 +1484,126 @@ async function generatePayUUPIIntent(transactionId, transactionAmount, expiryTim
     throw detailedError;
 }
 
+// ============ GET PAYU FORM PARAMETERS (JSON API) ============
+/**
+ * Get PayU form parameters as JSON
+ * This allows Next.js to fetch parameters and submit form directly to PayU
+ * Completely bypasses Server Actions by never serving HTML through Next.js
+ */
+exports.getPayuFormParams = async (req, res) => {
+    try {
+        const { transactionId } = req.params;
+
+        // Find transaction
+        const transaction = await Transaction.findOne({ transactionId: transactionId });
+
+        if (!transaction) {
+            console.warn('❌ Transaction not found:', transactionId);
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found'
+            });
+        }
+
+        if (transaction.status !== 'created' && transaction.status !== 'pending') {
+            console.warn('⚠️ Transaction already processed:', transaction.status);
+            return res.status(400).json({
+                success: false,
+                error: `Payment link already ${transaction.status}`
+            });
+        }
+
+        // Get stored PayU parameters or generate new ones
+        let payuParams = transaction.payuParams;
+        
+        if (!payuParams) {
+            // Generate payment parameters if not stored
+            const amountFormatted = transaction.amount.toFixed(2);
+            const productInfo = transaction.description || `Payment for ${transaction.merchantName}`;
+            const firstName = transaction.customerName.split(' ')[0] || transaction.customerName;
+            const email = transaction.customerEmail.trim();
+            
+            // ✅ PayU callback URL - pure API route (no Server Actions)
+            const frontendUrl = process.env.NEXTJS_API_URL || 
+                                process.env.FRONTEND_URL || 
+                                process.env.NEXT_PUBLIC_SERVER_URL || 
+                                process.env.KRISHI_API_URL || 
+                                process.env.NEXT_PUBLIC_API_URL || 
+                                process.env.PAYU_WEBSITE_URL ||
+                                'https://www.shaktisewafoudation.in';
+            
+            // For test mode with localhost, try to get public URL (ngrok)
+            let payuCallbackUrlBase = String(frontendUrl).replace(/\/$/, '');
+            if (PAYU_MODE === 'test' && (payuCallbackUrlBase.includes('localhost') || payuCallbackUrlBase.includes('127.0.0.1'))) {
+                const publicUrl = await getPublicCallbackUrl(payuCallbackUrlBase);
+                if (publicUrl && !publicUrl.includes('localhost')) {
+                    payuCallbackUrlBase = publicUrl;
+                }
+            }
+            const payuCallbackUrl = `${payuCallbackUrlBase}/api/payu/callback`;
+            
+            // Success and Failure URLs for user redirects
+            const successUrl = transaction.successUrl || 
+                              transaction.callbackUrl || 
+                              `${String(frontendUrl).replace(/\/$/, '')}/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
+            const failureUrl = transaction.failureUrl || 
+                              `${String(frontendUrl).replace(/\/$/, '')}/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
+            
+            // PayU form parameters - CRITICAL: Trim all values, PayU is strict
+            payuParams = {
+                key: PAYU_KEY.trim(),
+                txnid: (transaction.payuOrderId || transaction.orderId).trim(),
+                amount: amountFormatted.trim(),
+                productinfo: productInfo.trim(),
+                firstname: firstName.trim(),
+                email: email.trim().toLowerCase(), // PayU expects lowercase email
+                phone: transaction.customerPhone.trim(),
+                surl: successUrl.trim(), // User redirect URL after successful payment
+                furl: failureUrl.trim(), // User redirect URL after failed payment
+                pg: 'UPI' // Payment gateway: UPI (PayU handles bankcode internally)
+            };
+            
+            // ✅ CRITICAL: Only include curl if it's publicly accessible
+            if (payuCallbackUrl && !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1')) {
+                payuParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL
+                console.log('   ✅ Callback URL (curl) set:', payuCallbackUrl);
+            } else {
+                console.log('   ⚠️ Skipping curl (callback URL) - localhost not accessible to PayU servers');
+            }
+            
+            // Generate hash
+            const hashParams = {
+                txnid: payuParams.txnid,
+                amount: payuParams.amount,
+                productinfo: payuParams.productinfo,
+                firstname: payuParams.firstname,
+                email: payuParams.email
+            };
+            
+            const hash = generatePayUHash(hashParams);
+            payuParams.hash = hash;
+            
+            // Save params to transaction
+            transaction.payuParams = payuParams;
+            await transaction.save();
+        }
+        
+        // Return parameters as JSON
+        return res.json({
+            success: true,
+            paymentUrl: PAYU_PAYMENT_URL,
+            formParams: payuParams
+        });
+
+    } catch (error) {
+        console.error('❌ PayU Form Params Error:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to get PayU form parameters'
+        });
+    }
+};
+
 // ============ PAYU CHECKOUT PAGE ============
 /**
  * PayU Checkout Page - Modern UI similar to Cashfree checkout

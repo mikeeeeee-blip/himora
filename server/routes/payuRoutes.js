@@ -7,6 +7,7 @@ const {
     handlePayuWebhook,
     handlePayuCallback,
     getPayuCheckoutPage,
+    getPayuFormParams,
     createMerchantHostedPayment,
     processUPISeamless,
     verifyPaymentStatus,
@@ -25,7 +26,14 @@ router.post('/create-payment-link', apiKeyAuth, (req, res, next) => {
     next();
 }, createPayuPaymentLink);
 
+// ============ GET FORM PARAMETERS (No Auth - JSON API for Next.js) ============
+// Returns PayU form parameters as JSON so Next.js can submit form directly to PayU
+// This completely bypasses Server Actions by never serving HTML through Next.js
+router.get('/form-params/:transactionId', getPayuFormParams);
+
 // ============ CHECKOUT PAGE (No Auth - Auto-submits form to PayU) ============
+// Legacy route - kept for backward compatibility
+// Prefer using /form-params/:transactionId from Next.js
 router.get('/checkout/:transactionId', getPayuCheckoutPage);
 
 // ============ TRANSACTION (No Auth - Public endpoint for Next.js) ============
