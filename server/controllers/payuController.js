@@ -695,7 +695,7 @@ async function createPayuFormBasedPayment(req, res, data) {
 
     await transaction.save();
 
-    const baseUrl = process.env.BACKEND_URL || process.env.API_URL || 'http://localhost:5000';
+    const baseUrl = process.env.BACKEND_URL || process.env.API_URL || process.env.SERVER_URL || 'https://himora.art';
     const checkoutPageUrl = `${baseUrl}/api/payu/checkout/${transactionId}`;
 
     res.json({
@@ -2012,7 +2012,7 @@ exports.createMerchantHostedPayment = async (req, res) => {
                             process.env.KRISHI_API_URL || 
                             process.env.NEXT_PUBLIC_API_URL || 
                             process.env.PAYU_WEBSITE_URL ||
-                            'https://www.shaktisewafoudation.in';
+                            'https://shaktisewafoudation.in';
         // For test mode with localhost, try to get public URL (ngrok) for callback
         let payuCallbackUrlBase = String(frontendUrl).replace(/\/$/, '');
         if (PAYU_MODE === 'test' && (payuCallbackUrlBase.includes('localhost') || payuCallbackUrlBase.includes('127.0.0.1'))) {
@@ -2247,7 +2247,7 @@ exports.processUPISeamless = async (req, res) => {
                             process.env.KRISHI_API_URL || 
                             process.env.NEXT_PUBLIC_API_URL || 
                             process.env.PAYU_WEBSITE_URL ||
-                            'https://www.shaktisewafoudation.in';
+                            'https://shaktisewafoudation.in';
         // ✅ CRITICAL: Callback URL should NOT include query parameters
         // PayU sends transaction details (txnid, status, etc.) in POST body, not query params
         let payuCallbackUrl = `${String(frontendUrl).replace(/\/$/, '')}/api/payu/callback`;
@@ -2277,7 +2277,7 @@ exports.processUPISeamless = async (req, res) => {
         // Get frontend URL for redirects
         const frontendUrlForRedirects = process.env.NEXTJS_API_URL || 
                                         process.env.FRONTEND_URL || 
-                                        'https://www.shaktisewafoudation.in';
+                                        'https://shaktisewafoudation.in';
         
         // Standard payment parameters
         const paymentParams = {
