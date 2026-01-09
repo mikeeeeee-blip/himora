@@ -396,9 +396,20 @@ exports.createPayuPaymentLink = async (req, res) => {
         console.log('   Using form-based UPI payment (no Intent API required)');
         
         // Prepare payment parameters for UPI Seamless
-        const productInfo = description || `Payment for ${merchantName}`;
-        const firstName = customer_name.split(' ')[0] || customer_name;
-        const email = customer_email.trim();
+        // CRITICAL: Sanitize text fields to prevent special character issues
+        // PayU is strict about special characters in productinfo and firstname
+        const sanitizeText = (text, maxLength = 100) => {
+            if (!text) return '';
+            return String(text)
+                .replace(/[`"'<>]/g, '') // Remove problematic characters
+                .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+                .trim()
+                .substring(0, maxLength);
+        };
+        
+        const productInfo = sanitizeText(description || `Payment for ${merchantName}`, 100);
+        const firstName = sanitizeText(customer_name.split(' ')[0] || customer_name, 50);
+        const email = customer_email.trim().toLowerCase(); // PayU expects lowercase email
         
         // Success and Failure URLs for user redirects
         const successUrl = success_url || 
@@ -408,22 +419,24 @@ exports.createPayuPaymentLink = async (req, res) => {
                           `${String(frontendUrl).replace(/\/$/, '')}/payment/failed?txnid=${orderId}`;
         
         // Standard PayU form parameters for UPI
-        // CRITICAL: Don't set both pg and bankcode - use only pg for UPI
+        // CRITICAL: PayU is very strict about parameter format - trim all values
         // Reference: https://docs.payu.in/docs/prebuilt-checkout-page-integration
+        // Mandatory: key, txnid, amount, productinfo, firstname, email, phone, surl, furl, hash
+        // Optional: pg, curl (DO NOT include service_provider or bankcode for UPI)
         const payuParams = {
             key: PAYU_KEY.trim(),
-            txnid: orderId,
-            amount: amountFormatted,
-            productinfo: productInfo,
-            firstname: firstName,
-            email: email,
-            phone: customer_phone.trim(),
+            txnid: orderId.trim(), // CRITICAL: Trim txnid
+            amount: amountFormatted.trim(), // CRITICAL: Trim amount (must be 2 decimal places)
+            productinfo: productInfo.trim(), // CRITICAL: Trim and sanitize productinfo
+            firstname: firstName.trim(), // CRITICAL: Trim firstname
+            email: email.trim().toLowerCase(), // CRITICAL: Trim and lowercase email - PayU expects lowercase
+            phone: customer_phone.trim(), // CRITICAL: Trim phone
             surl: successUrl.trim(), // User redirect URL after successful payment
             furl: failureUrl.trim(), // User redirect URL after failed payment
-            service_provider: 'payu_paisa',
             pg: 'UPI'  // Payment gateway: UPI (PayU will handle bankcode internally)
+            // Note: service_provider removed - causes issues with UPI payments
             // Note: vpa (VPA/UPI ID) is optional - customer can enter it on PayU page
-            // Note: Don't set bankcode when pg is set - it causes conflicts
+            // Note: Don't set bankcode when pg is set - PayU handles it internally
         };
         
         // ✅ CRITICAL: Only include curl if it's publicly accessible
@@ -450,17 +463,30 @@ exports.createPayuPaymentLink = async (req, res) => {
         
         // NO environment parameter needed - test mode is handled by endpoint URL
         
-        // Generate hash for payment
+        // Generate hash for payment - CRITICAL: Must use exact trimmed values
+        // Hash format: sha512(key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|salt)
+        // Reference: https://docs.payu.in/docs/prebuilt-checkout-page-integration
+        // IMPORTANT: Use already-trimmed values from payuParams for hash
         const hashParams = {
-            txnid: payuParams.txnid,
-            amount: payuParams.amount,
-            productinfo: payuParams.productinfo,
-            firstname: payuParams.firstname,
-            email: payuParams.email
+            txnid: payuParams.txnid, // Already trimmed
+            amount: payuParams.amount, // Already trimmed (2 decimal places)
+            productinfo: payuParams.productinfo, // Already trimmed and sanitized
+            firstname: payuParams.firstname, // Already trimmed and sanitized
+            email: payuParams.email // Already trimmed and lowercased
         };
+        
+        console.log('   🔐 Generating hash with parameters:');
+        console.log('      txnid:', hashParams.txnid);
+        console.log('      amount:', hashParams.amount);
+        console.log('      productinfo:', hashParams.productinfo);
+        console.log('      firstname:', hashParams.firstname);
+        console.log('      email:', hashParams.email);
         
         const hash = generatePayUHash(hashParams);
         payuParams.hash = hash;
+        
+        console.log('   ✅ Hash generated:', hash.substring(0, 20) + '...');
+        console.log('   Hash length:', hash.length, 'characters (should be 128 for SHA512)');
         
         const payuReferenceId = orderId;
 
