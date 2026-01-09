@@ -1630,9 +1630,9 @@ exports.getPayuFormParams = async (req, res) => {
                 email: payuParams.email
             };
             
-            const hash = generatePayUHash(hashParams);
-            payuParams.hash = hash;
-            
+        const hash = generatePayUHash(hashParams);
+        payuParams.hash = hash;
+        
         // Save params to transaction (with hardcoded URLs)
         transaction.payuParams = payuParams;
         await transaction.save();
@@ -1832,9 +1832,9 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 email: payuParams.email
             };
             
-            const hash = generatePayUHash(hashParams);
-            payuParams.hash = hash;
-            
+        const hash = generatePayUHash(hashParams);
+        payuParams.hash = hash;
+        
         // Save params to transaction (with hardcoded URLs)
         transaction.payuParams = payuParams;
         await transaction.save();
