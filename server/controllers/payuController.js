@@ -355,14 +355,14 @@ exports.createPayuPaymentLink = async (req, res) => {
                             process.env.KRISHI_API_URL || 
                             process.env.NEXT_PUBLIC_API_URL || 
                             process.env.PAYU_WEBSITE_URL ||
-                            'https://www.shaktisewafoudation.in';
+                            'https://shaktisewafoudation.in';
         
         // CRITICAL: Use backend URL directly for callback to bypass Next.js Server Actions
         // PayU POSTs directly to Express backend, not through Next.js
         const backendUrl = process.env.BACKEND_URL || 
                           process.env.API_URL || 
                           process.env.SERVER_URL ||
-                          'http://localhost:5001';
+                          'https://himora.art';
         
         let payuCallbackUrlBase = String(backendUrl).replace(/\/$/, '');
         
@@ -1526,10 +1526,18 @@ exports.getPayuFormParams = async (req, res) => {
                                 process.env.KRISHI_API_URL || 
                                 process.env.NEXT_PUBLIC_API_URL || 
                                 process.env.PAYU_WEBSITE_URL ||
-                                'https://www.shaktisewafoudation.in';
+                                'https://shaktisewafoudation.in';
+            
+            // CRITICAL: Use backend URL directly for callback to bypass Next.js Server Actions
+            // PayU POSTs directly to Express backend, not through Next.js
+            const backendUrl = process.env.BACKEND_URL || 
+                              process.env.API_URL || 
+                              process.env.SERVER_URL ||
+                              'https://himora.art';
+            
+            let payuCallbackUrlBase = String(backendUrl).replace(/\/$/, '');
             
             // For test mode with localhost, try to get public URL (ngrok)
-            let payuCallbackUrlBase = String(frontendUrl).replace(/\/$/, '');
             if (PAYU_MODE === 'test' && (payuCallbackUrlBase.includes('localhost') || payuCallbackUrlBase.includes('127.0.0.1'))) {
                 const publicUrl = await getPublicCallbackUrl(payuCallbackUrlBase);
                 if (publicUrl && !publicUrl.includes('localhost')) {
@@ -1684,14 +1692,14 @@ exports.getPayuCheckoutPage = async (req, res) => {
                                 process.env.KRISHI_API_URL || 
                                 process.env.NEXT_PUBLIC_API_URL || 
                                 process.env.PAYU_WEBSITE_URL ||
-                                'https://www.shaktisewafoudation.in';
+                                'https://shaktisewafoudation.in';
             
             // CRITICAL: Use backend URL directly for callback to bypass Next.js Server Actions
             // PayU POSTs directly to Express backend, not through Next.js
             const backendUrl = process.env.BACKEND_URL || 
                               process.env.API_URL || 
                               process.env.SERVER_URL ||
-                              'http://localhost:5001';
+                              'https://himora.art';
             
             let payuCallbackUrlBase = String(backendUrl).replace(/\/$/, '');
             
