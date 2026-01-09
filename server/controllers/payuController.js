@@ -636,10 +636,28 @@ exports.handlePayuCallback = async (req, res) => {
         
         if (req.method === 'POST') {
             // PayU typically sends POST with form-encoded data
+            // Express body-parser should have parsed it, but check both req.body and raw body
             payuResponse = req.body || {};
-            // Also check if it's JSON
-            if (Object.keys(payuResponse).length === 0 && req.body && typeof req.body === 'object') {
-                payuResponse = req.body;
+            
+            // If body is empty or not parsed correctly, try to parse raw body
+            if (Object.keys(payuResponse).length === 0) {
+                // Try parsing as JSON if available
+                try {
+                    if (req.body && typeof req.body === 'string') {
+                        payuResponse = JSON.parse(req.body);
+                    } else if (req.body && typeof req.body === 'object') {
+                        payuResponse = req.body;
+                    }
+                } catch (e) {
+                    console.warn('   Could not parse POST body as JSON, treating as empty');
+                }
+            }
+            
+            // Log if body is still empty
+            if (Object.keys(payuResponse).length === 0) {
+                console.warn('   ⚠️ POST body is empty - PayU might not have sent data correctly');
+                console.warn('   Raw body type:', typeof req.body);
+                console.warn('   Raw body:', req.body);
             }
         } else {
             // GET request - data in query params
@@ -773,8 +791,9 @@ exports.handlePayuCallback = async (req, res) => {
                 
                 console.log('   Updating transaction with:', JSON.stringify(update, null, 2));
 
+                // ✅ CRITICAL: Use transaction.transactionId, not transaction_id from URL (which may be missing)
                 const updatedTransaction = await Transaction.findOneAndUpdate(
-                    { transactionId: transaction_id },
+                    { transactionId: transaction.transactionId },
                     update,
                     { new: true }
                 ).populate('merchantId');
