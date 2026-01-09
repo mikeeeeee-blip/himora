@@ -7,6 +7,7 @@ const Settings = require('../models/Settings');
 const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
 const { generatePayUCheckoutHTML, generatePayUCheckoutHTMLWithForm, formatCountdown } = require('./payuCheckoutTemplate');
+const { getPublicCallbackUrl } = require('../utils/ngrokHelper');
 
 // PayU Configuration - Support test mode similar to Zaakpay
 // Determine mode - default to 'production' if not explicitly set to 'test' or 'sandbox'
@@ -304,22 +305,23 @@ exports.createPayuPaymentLink = async (req, res) => {
         // ✅ CRITICAL: Callback URL should NOT include query parameters
         // PayU sends transaction details (txnid, status, etc.) in POST body, not query params
         // The callback handler will find the transaction using txnid from POST body
-        let payuCallbackUrl = `${String(frontendUrl).replace(/\/$/, '')}/api/payu/callback`;
+        // For test mode with localhost, use ngrok or public URL if available
+        let payuCallbackUrlBase = String(frontendUrl).replace(/\/$/, '');
         
-        // Warning for localhost in test mode - PayU servers cannot access localhost
-        if (PAYU_MODE === 'test' && (frontendUrl.includes('localhost') || frontendUrl.includes('127.0.0.1'))) {
-            console.warn('   ⚠️ WARNING: Callback URL is localhost - PayU test servers cannot access it');
-            console.warn('   💡 For testing, use ngrok (https://ngrok.com) or deploy to a public URL');
-            console.warn('   📝 Note: surl/furl redirects will still work for user redirects');
-            // For test mode with localhost, PayU might fail the callback
-            // But we'll still set it - PayU might just log a warning or skip it
-            // Alternative: Use a public URL even in test mode if configured
-            const publicUrl = process.env.PAYU_PUBLIC_TEST_URL || process.env.NEXTJS_API_URL || process.env.FRONTEND_URL;
+        // If localhost in test mode, try to get public URL (ngrok)
+        if (PAYU_MODE === 'test' && (payuCallbackUrlBase.includes('localhost') || payuCallbackUrlBase.includes('127.0.0.1'))) {
+            const publicUrl = await getPublicCallbackUrl(payuCallbackUrlBase);
             if (publicUrl && !publicUrl.includes('localhost')) {
-                payuCallbackUrl = `${String(publicUrl).replace(/\/+$/, '')}/api/payu/callback`;
-                console.log('   ✅ Using public URL for callback:', payuCallbackUrl);
+                payuCallbackUrlBase = publicUrl;
+                console.log('   ✅ Using public URL for callback:', payuCallbackUrlBase);
+            } else {
+                console.warn('   ⚠️ WARNING: Callback URL is localhost - PayU test servers cannot access it');
+                console.warn('   💡 For testing, use ngrok (https://ngrok.com) or set PAYU_PUBLIC_TEST_URL env var');
+                console.warn('   📝 Note: surl/furl redirects will still work for user redirects');
             }
         }
+        
+        const payuCallbackUrl = `${payuCallbackUrlBase}/api/payu/callback`;
 
         // Prepare amount for PayU
         // Important: Amount must be formatted correctly (2 decimal places)
@@ -1411,7 +1413,16 @@ exports.getPayuCheckoutPage = async (req, res) => {
                                 process.env.NEXT_PUBLIC_API_URL || 
                                 process.env.PAYU_WEBSITE_URL ||
                                 'https://www.shaktisewafoudation.in';
-            const payuCallbackUrl = `${String(frontendUrl).replace(/\/$/, '')}/api/payu/callback`;
+            
+            // For test mode with localhost, try to get public URL (ngrok)
+            let payuCallbackUrlBase = String(frontendUrl).replace(/\/$/, '');
+            if (PAYU_MODE === 'test' && (payuCallbackUrlBase.includes('localhost') || payuCallbackUrlBase.includes('127.0.0.1'))) {
+                const publicUrl = await getPublicCallbackUrl(payuCallbackUrlBase);
+                if (publicUrl && !publicUrl.includes('localhost')) {
+                    payuCallbackUrlBase = publicUrl;
+                }
+            }
+            const payuCallbackUrl = `${payuCallbackUrlBase}/api/payu/callback`;
             
             // Success and Failure URLs for user redirects
             const successUrl = transaction.successUrl || 
@@ -1434,6 +1445,14 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 pg: 'UPI',
                 bankcode: 'UPI'
             };
+            
+            // ✅ CRITICAL: Only include curl if it's publicly accessible
+            if (payuCallbackUrl && !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1')) {
+                payuParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL
+                console.log('   ✅ Callback URL (curl) set:', payuCallbackUrl);
+            } else {
+                console.log('   ⚠️ Skipping curl (callback URL) - localhost not accessible to PayU servers');
+            }
             
             // ✅ CRITICAL: Only include curl if it's publicly accessible
             // In test mode with localhost, PayU cannot access callback URL
@@ -1698,7 +1717,15 @@ exports.createMerchantHostedPayment = async (req, res) => {
                             process.env.NEXT_PUBLIC_API_URL || 
                             process.env.PAYU_WEBSITE_URL ||
                             'https://www.shaktisewafoudation.in';
-        const payuCallbackUrl = `${String(frontendUrl).replace(/\/$/, '')}/api/payu/callback`;
+        // For test mode with localhost, try to get public URL (ngrok) for callback
+        let payuCallbackUrlBase = String(frontendUrl).replace(/\/$/, '');
+        if (PAYU_MODE === 'test' && (payuCallbackUrlBase.includes('localhost') || payuCallbackUrlBase.includes('127.0.0.1'))) {
+            const publicUrl = await getPublicCallbackUrl(payuCallbackUrlBase);
+            if (publicUrl && !publicUrl.includes('localhost')) {
+                payuCallbackUrlBase = publicUrl;
+            }
+        }
+        const payuCallbackUrl = `${payuCallbackUrlBase}/api/payu/callback`;
         
         // Success and Failure URLs for user redirects
         const successUrl = success_url || 
