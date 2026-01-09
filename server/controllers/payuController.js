@@ -1555,13 +1555,20 @@ exports.getPayuFormParams = async (req, res) => {
             const email = transaction.customerEmail.trim();
             
             // ✅ PayU callback URL - pure API route (no Server Actions)
-            const frontendUrl = process.env.NEXTJS_API_URL || 
-                                process.env.FRONTEND_URL || 
-                                process.env.NEXT_PUBLIC_SERVER_URL || 
-                                process.env.KRISHI_API_URL || 
-                                process.env.NEXT_PUBLIC_API_URL || 
-                                process.env.PAYU_WEBSITE_URL ||
-                                'https://shaktisewafoudation.in';
+            // CRITICAL: Filter out localhost URLs in production - use hardcoded production URL
+            let frontendUrl = process.env.NEXTJS_API_URL || 
+                             process.env.FRONTEND_URL || 
+                             process.env.NEXT_PUBLIC_SERVER_URL || 
+                             process.env.KRISHI_API_URL || 
+                             process.env.NEXT_PUBLIC_API_URL || 
+                             process.env.PAYU_WEBSITE_URL ||
+                             'https://shaktisewafoudation.in';
+            
+            // CRITICAL: Never use localhost in production - always use production URL
+            if (frontendUrl.includes('localhost') || frontendUrl.includes('127.0.0.1') || frontendUrl.includes(':3001')) {
+                console.warn('   ⚠️ Frontend URL contains localhost, using production URL instead');
+                frontendUrl = 'https://shaktisewafoudation.in';
+            }
             
             // CRITICAL: Use backend URL directly for callback to bypass Next.js Server Actions
             // PayU POSTs directly to Express backend, not through Next.js
