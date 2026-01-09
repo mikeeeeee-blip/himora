@@ -2261,6 +2261,18 @@ exports.createMerchantHostedPayment = async (req, res) => {
         const hash = generatePayUHash(hashParams);
         payuParams.hash = hash;
 
+        // CRITICAL: Filter localhost URLs before storing in database
+        // Never store localhost URLs in transaction records
+        const cleanCallbackUrl = (finalCallbackUrl && (finalCallbackUrl.includes('localhost') || finalCallbackUrl.includes('127.0.0.1') || finalCallbackUrl.includes(':3001')))
+            ? null // Don't store localhost callback URL
+            : finalCallbackUrl;
+        const cleanSuccessUrl = (success_url && (success_url.includes('localhost') || success_url.includes('127.0.0.1') || success_url.includes(':3001')))
+            ? null // Don't store localhost success URL
+            : success_url;
+        const cleanFailureUrl = (failure_url && (failure_url.includes('localhost') || failure_url.includes('127.0.0.1') || failure_url.includes(':3001')))
+            ? null // Don't store localhost failure URL
+            : failure_url;
+
         // Save transaction
         const transactionData = {
             transactionId: transactionId,
@@ -2278,10 +2290,10 @@ exports.createMerchantHostedPayment = async (req, res) => {
             paymentGateway: 'payu',
             paymentMethod: payment_mode,
             payuOrderId: orderId,
-            callbackUrl: finalCallbackUrl,
-            successUrl: success_url,
-            failureUrl: failure_url,
-            payuParams: payuParams, // Store params for form submission
+            callbackUrl: cleanCallbackUrl,
+            successUrl: cleanSuccessUrl,
+            failureUrl: cleanFailureUrl,
+            payuParams: payuParams, // Store params for form submission (already filtered)
             createdAt: new Date(),
             updatedAt: new Date()
         };
