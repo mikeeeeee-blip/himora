@@ -624,9 +624,9 @@ async function createPayuFormBasedPayment(req, res, data) {
     // Success and Failure URLs for user redirects
     const successUrl = success_url || 
                       finalCallbackUrl || 
-                      `${String(frontendUrl || process.env.FRONTEND_URL || 'https://www.shaktisewafoudation.in').replace(/\/$/, '')}/payment/success?txnid=${orderId}`;
+                      `${String(frontendUrl || process.env.FRONTEND_URL || 'https://shaktisewafoudation.in').replace(/\/$/, '')}/payment/success?txnid=${orderId}`;
     const failureUrl = failure_url || 
-                      `${String(frontendUrl || process.env.FRONTEND_URL || 'https://www.shaktisewafoudation.in').replace(/\/$/, '')}/payment/failed?txnid=${orderId}`;
+                      `${String(frontendUrl || process.env.FRONTEND_URL || 'https://shaktisewafoudation.in').replace(/\/$/, '')}/payment/failed?txnid=${orderId}`;
 
     // Standard form-based parameters
     // CRITICAL: PayU is strict about parameter format - trim all values
