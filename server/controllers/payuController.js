@@ -643,11 +643,25 @@ async function createPayuFormBasedPayment(req, res, data) {
     } = data;
 
     // Success and Failure URLs for user redirects
+    // CRITICAL: Filter out localhost URLs - use production URL
+    let cleanFrontendUrl = String(frontendUrl || process.env.FRONTEND_URL || 'https://shaktisewafoudation.in').replace(/\/$/, '');
+    if (cleanFrontendUrl.includes('localhost') || cleanFrontendUrl.includes('127.0.0.1') || cleanFrontendUrl.includes(':3001')) {
+        cleanFrontendUrl = 'https://shaktisewafoudation.in';
+    }
+    
     const successUrl = success_url || 
                       finalCallbackUrl || 
-                      `${String(frontendUrl || process.env.FRONTEND_URL || 'https://shaktisewafoudation.in').replace(/\/$/, '')}/payment/success?txnid=${orderId}`;
+                      `${cleanFrontendUrl}/payment/success?txnid=${orderId}`;
     const failureUrl = failure_url || 
-                      `${String(frontendUrl || process.env.FRONTEND_URL || 'https://shaktisewafoudation.in').replace(/\/$/, '')}/payment/failed?txnid=${orderId}`;
+                      `${cleanFrontendUrl}/payment/failed?txnid=${orderId}`;
+    
+    // Final validation: Never allow localhost in production URLs
+    const finalSuccessUrl = (successUrl.includes('localhost') || successUrl.includes('127.0.0.1') || successUrl.includes(':3001'))
+        ? `https://shaktisewafoudation.in/payment/success?txnid=${orderId}`
+        : successUrl;
+    const finalFailureUrl = (failureUrl.includes('localhost') || failureUrl.includes('127.0.0.1') || failureUrl.includes(':3001'))
+        ? `https://shaktisewafoudation.in/payment/failed?txnid=${orderId}`
+        : failureUrl;
 
     // Standard form-based parameters
     // CRITICAL: PayU is strict about parameter format - trim all values
@@ -659,8 +673,8 @@ async function createPayuFormBasedPayment(req, res, data) {
         firstname: firstName.trim(),
         email: email.trim().toLowerCase(), // PayU expects lowercase email
         phone: customer_phone.trim(),
-        surl: successUrl.trim(), // User redirect URL after successful payment
-        furl: failureUrl.trim(), // User redirect URL after failed payment
+        surl: finalSuccessUrl.trim(), // User redirect URL after successful payment
+        furl: finalFailureUrl.trim(), // User redirect URL after failed payment
         pg: 'UPI'
         // Note: service_provider removed - can cause issues with UPI
     };
@@ -1568,11 +1582,25 @@ exports.getPayuFormParams = async (req, res) => {
             const payuCallbackUrl = `${payuCallbackUrlBase}/api/payu/callback`;
             
             // Success and Failure URLs for user redirects
+            // CRITICAL: Ensure URLs are production URLs, never localhost
+            const cleanFrontendUrl = String(frontendUrl).replace(/\/$/, '');
             const successUrl = transaction.successUrl || 
                               transaction.callbackUrl || 
-                              `${String(frontendUrl).replace(/\/$/, '')}/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
+                              `${cleanFrontendUrl}/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
             const failureUrl = transaction.failureUrl || 
-                              `${String(frontendUrl).replace(/\/$/, '')}/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
+                              `${cleanFrontendUrl}/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
+            
+            // Final validation: Never allow localhost in production URLs
+            const finalSuccessUrl = (successUrl.includes('localhost') || successUrl.includes('127.0.0.1') || successUrl.includes(':3001'))
+                ? `https://shaktisewafoudation.in/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`
+                : successUrl;
+            const finalFailureUrl = (failureUrl.includes('localhost') || failureUrl.includes('127.0.0.1') || failureUrl.includes(':3001'))
+                ? `https://shaktisewafoudation.in/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`
+                : failureUrl;
+            
+            console.log('🔧 PayU Redirect URLs:');
+            console.log('   Success URL (surl):', finalSuccessUrl);
+            console.log('   Failure URL (furl):', finalFailureUrl);
             
             // PayU form parameters - CRITICAL: Trim all values, PayU is strict
             payuParams = {
@@ -1583,8 +1611,8 @@ exports.getPayuFormParams = async (req, res) => {
                 firstname: firstName.trim(),
                 email: email.trim().toLowerCase(), // PayU expects lowercase email
                 phone: transaction.customerPhone.trim(),
-                surl: successUrl.trim(), // User redirect URL after successful payment
-                furl: failureUrl.trim(), // User redirect URL after failed payment
+                surl: finalSuccessUrl.trim(), // User redirect URL after successful payment
+                furl: finalFailureUrl.trim(), // User redirect URL after failed payment
                 pg: 'UPI' // Payment gateway: UPI (PayU handles bankcode internally)
             };
             
@@ -2046,13 +2074,21 @@ exports.createMerchantHostedPayment = async (req, res) => {
             `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
 
         // ✅ PayU callback URL - pure API route (no Server Actions)
-        const frontendUrl = process.env.NEXTJS_API_URL || 
-                            process.env.FRONTEND_URL || 
-                            process.env.NEXT_PUBLIC_SERVER_URL || 
-                            process.env.KRISHI_API_URL || 
-                            process.env.NEXT_PUBLIC_API_URL || 
-                            process.env.PAYU_WEBSITE_URL ||
-                            'https://shaktisewafoudation.in';
+        // CRITICAL: Filter out localhost URLs in production - use hardcoded production URL
+        let frontendUrl = process.env.NEXTJS_API_URL || 
+                         process.env.FRONTEND_URL || 
+                         process.env.NEXT_PUBLIC_SERVER_URL || 
+                         process.env.KRISHI_API_URL || 
+                         process.env.NEXT_PUBLIC_API_URL || 
+                         process.env.PAYU_WEBSITE_URL ||
+                         'https://shaktisewafoudation.in';
+        
+        // CRITICAL: Never use localhost in production - always use production URL
+        if (frontendUrl.includes('localhost') || frontendUrl.includes('127.0.0.1') || frontendUrl.includes(':3001')) {
+            console.warn('   ⚠️ Frontend URL contains localhost, using production URL instead');
+            frontendUrl = 'https://shaktisewafoudation.in';
+        }
+        
         // For test mode with localhost, try to get public URL (ngrok) for callback
         let payuCallbackUrlBase = String(frontendUrl).replace(/\/$/, '');
         if (PAYU_MODE === 'test' && (payuCallbackUrlBase.includes('localhost') || payuCallbackUrlBase.includes('127.0.0.1'))) {
@@ -2064,11 +2100,21 @@ exports.createMerchantHostedPayment = async (req, res) => {
         const payuCallbackUrl = `${payuCallbackUrlBase}/api/payu/callback`;
         
         // Success and Failure URLs for user redirects
+        // CRITICAL: Ensure URLs are production URLs, never localhost
+        const cleanFrontendUrl = String(frontendUrl).replace(/\/$/, '');
         const successUrl = success_url || 
                           finalCallbackUrl || 
-                          `${String(frontendUrl).replace(/\/$/, '')}/payment/success?txnid=${orderId}`;
+                          `${cleanFrontendUrl}/payment/success?txnid=${orderId}`;
         const failureUrl = failure_url || 
-                          `${String(frontendUrl).replace(/\/$/, '')}/payment/failed?txnid=${orderId}`;
+                          `${cleanFrontendUrl}/payment/failed?txnid=${orderId}`;
+        
+        // Final validation: Never allow localhost in production URLs
+        const finalSuccessUrl = (successUrl.includes('localhost') || successUrl.includes('127.0.0.1') || successUrl.includes(':3001'))
+            ? `https://shaktisewafoudation.in/payment/success?txnid=${orderId}`
+            : successUrl;
+        const finalFailureUrl = (failureUrl.includes('localhost') || failureUrl.includes('127.0.0.1') || failureUrl.includes(':3001'))
+            ? `https://shaktisewafoudation.in/payment/failed?txnid=${orderId}`
+            : failureUrl;
 
         // Prepare payment parameters
         const amountFormatted = amountFloat.toFixed(2);
@@ -2099,8 +2145,8 @@ exports.createMerchantHostedPayment = async (req, res) => {
             firstname: sanitizedFirstName, // CRITICAL: Sanitized firstname
             email: sanitizedEmail, // CRITICAL: Lowercased email
             phone: customer_phone.trim(), // CRITICAL: Trim phone
-            surl: successUrl.trim(), // User redirect URL after successful payment
-            furl: failureUrl.trim(), // User redirect URL after failed payment
+            surl: finalSuccessUrl.trim(), // User redirect URL after successful payment
+            furl: finalFailureUrl.trim(), // User redirect URL after failed payment
             pg: payment_mode // Payment gateway mode
             // Note: service_provider removed - can cause issues with UPI
         };
@@ -2281,13 +2327,21 @@ exports.processUPISeamless = async (req, res) => {
             `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
 
         // PayU callback URL - points to Next.js callback handler
-        const frontendUrl = process.env.NEXTJS_API_URL || 
-                            process.env.FRONTEND_URL || 
-                            process.env.NEXT_PUBLIC_SERVER_URL || 
-                            process.env.KRISHI_API_URL || 
-                            process.env.NEXT_PUBLIC_API_URL || 
-                            process.env.PAYU_WEBSITE_URL ||
-                            'https://shaktisewafoudation.in';
+        // CRITICAL: Filter out localhost URLs in production - use hardcoded production URL
+        let frontendUrl = process.env.NEXTJS_API_URL || 
+                         process.env.FRONTEND_URL || 
+                         process.env.NEXT_PUBLIC_SERVER_URL || 
+                         process.env.KRISHI_API_URL || 
+                         process.env.NEXT_PUBLIC_API_URL || 
+                         process.env.PAYU_WEBSITE_URL ||
+                         'https://shaktisewafoudation.in';
+        
+        // CRITICAL: Never use localhost in production - always use production URL
+        if (frontendUrl.includes('localhost') || frontendUrl.includes('127.0.0.1') || frontendUrl.includes(':3001')) {
+            console.warn('   ⚠️ Frontend URL contains localhost, using production URL instead');
+            frontendUrl = 'https://shaktisewafoudation.in';
+        }
+        
         // ✅ CRITICAL: Callback URL should NOT include query parameters
         // PayU sends transaction details (txnid, status, etc.) in POST body, not query params
         let payuCallbackUrl = `${String(frontendUrl).replace(/\/$/, '')}/api/payu/callback`;
@@ -2315,9 +2369,32 @@ exports.processUPISeamless = async (req, res) => {
         // PayU S2S API expects form-encoded parameters
         
         // Get frontend URL for redirects
-        const frontendUrlForRedirects = process.env.NEXTJS_API_URL || 
-                                        process.env.FRONTEND_URL || 
-                                        'https://shaktisewafoudation.in';
+        // CRITICAL: Filter out localhost URLs in production - use hardcoded production URL
+        let frontendUrlForRedirects = process.env.NEXTJS_API_URL || 
+                                     process.env.FRONTEND_URL || 
+                                     'https://shaktisewafoudation.in';
+        
+        // CRITICAL: Never use localhost in production - always use production URL
+        if (frontendUrlForRedirects.includes('localhost') || frontendUrlForRedirects.includes('127.0.0.1') || frontendUrlForRedirects.includes(':3001')) {
+            console.warn('   ⚠️ Frontend URL for redirects contains localhost, using production URL instead');
+            frontendUrlForRedirects = 'https://shaktisewafoudation.in';
+        }
+        
+        // Build success and failure URLs
+        const cleanFrontendUrlForRedirects = String(frontendUrlForRedirects).replace(/\/$/, '');
+        const successUrl = success_url || 
+                          finalCallbackUrl || 
+                          `${cleanFrontendUrlForRedirects}/payment/success?txnid=${orderId}`;
+        const failureUrl = failure_url || 
+                          `${cleanFrontendUrlForRedirects}/payment/failed?txnid=${orderId}`;
+        
+        // Final validation: Never allow localhost in production URLs
+        const finalSuccessUrl = (successUrl.includes('localhost') || successUrl.includes('127.0.0.1') || successUrl.includes(':3001'))
+            ? `https://shaktisewafoudation.in/payment/success?txnid=${orderId}`
+            : successUrl;
+        const finalFailureUrl = (failureUrl.includes('localhost') || failureUrl.includes('127.0.0.1') || failureUrl.includes(':3001'))
+            ? `https://shaktisewafoudation.in/payment/failed?txnid=${orderId}`
+            : failureUrl;
         
         // Standard payment parameters
         const paymentParams = {
@@ -2328,8 +2405,8 @@ exports.processUPISeamless = async (req, res) => {
             firstname: firstName,
             email: email,
             phone: customer_phone.trim(),
-            surl: (success_url || finalCallbackUrl || `${String(frontendUrlForRedirects).replace(/\/$/, '')}/payment/success?txnid=${orderId}`).trim(),
-            furl: (failure_url || `${String(frontendUrlForRedirects).replace(/\/$/, '')}/payment/failed?txnid=${orderId}`).trim(),
+            surl: finalSuccessUrl.trim(),
+            furl: finalFailureUrl.trim(),
             service_provider: 'payu_paisa',
             pg: 'UPI',
             upi_id: upi_id,
