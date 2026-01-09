@@ -126,6 +126,59 @@ function generatePayUHash(params) {
     return hash;
 }
 
+// ============ GENERATE PAYU RESPONSE HASH ============
+/**
+ * Generate PayU hash for response/webhook verification
+ * Hash format for response: sha512(key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|status|salt)
+ * 
+ * CRITICAL: Response hash includes 'status' parameter, which is different from request hash
+ * Reference: https://docs.payu.in/docs/webhooks
+ */
+function generatePayUResponseHash(params) {
+    const key = String(PAYU_KEY || '').trim();
+    const txnid = String(params.txnid || '').trim();
+    const amount = String(params.amount || '').trim();
+    const productinfo = String(params.productinfo || '').trim();
+    const firstname = String(params.firstname || '').trim();
+    const email = String(params.email || '').trim();
+    const udf1 = String(params.udf1 || '').trim();
+    const udf2 = String(params.udf2 || '').trim();
+    const udf3 = String(params.udf3 || '').trim();
+    const udf4 = String(params.udf4 || '').trim();
+    const udf5 = String(params.udf5 || '').trim();
+    const udf6 = String(params.udf6 || '').trim();
+    const udf7 = String(params.udf7 || '').trim();
+    const udf8 = String(params.udf8 || '').trim();
+    const udf9 = String(params.udf9 || '').trim();
+    const udf10 = String(params.udf10 || '').trim();
+    const status = String(params.status || '').trim(); // CRITICAL: Include status for response hash
+    const salt = String(PAYU_SALT || '').trim();
+
+    // Hash format for response: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|status|salt
+    const hashString = [
+        key,
+        txnid,
+        amount,
+        productinfo,
+        firstname,
+        email,
+        udf1,
+        udf2,
+        udf3,
+        udf4,
+        udf5,
+        udf6,
+        udf7,
+        udf8,
+        udf9,
+        udf10,
+        status,
+        salt
+    ].join('|');
+
+    return crypto.createHash('sha512').update(hashString, 'utf8').digest('hex');
+}
+
 // ============ GENERATE PAYU S2S HASH ============
 /**
  * Generate PayU hash for S2S UPI Intent
@@ -714,28 +767,36 @@ exports.handlePayuCallback = async (req, res) => {
         }
 
         // Verify hash (if provided)
+        // CRITICAL: Use response hash for webhooks/callbacks (includes status parameter)
+        // Reference: https://docs.payu.in/docs/webhooks
         const receivedHash = payuResponse.hash;
         if (receivedHash) {
-            const calculatedHash = generatePayUHash(payuResponse);
+            // For webhooks/callbacks, use response hash which includes status
+            const calculatedHash = generatePayUResponseHash(payuResponse);
             if (receivedHash !== calculatedHash) {
-                console.warn('❌ Invalid PayU hash in callback');
+                console.warn('❌ Invalid PayU response hash in callback');
                 console.warn('   Received hash:', receivedHash.substring(0, 20) + '...');
                 console.warn('   Calculated hash:', calculatedHash.substring(0, 20) + '...');
-                // Still process but log warning
+                console.warn('   Status used in hash:', payuResponse.status);
+                // Still process but log warning - PayU may send webhooks without hash in some cases
             } else {
-                console.log('✅ PayU hash verified successfully');
+                console.log('✅ PayU response hash verified successfully');
             }
         } else {
             console.warn('⚠️ No hash provided in PayU callback - proceeding without verification');
+            console.warn('   Note: PayU webhooks should include hash for security');
         }
 
         // Check payment status - PayU can return status in multiple fields
         // PayU status values: 'success', 'failure', 'pending', 'bounced', etc.
+        // According to PayU docs: unmappedstatus='captured' means success
+        // Reference: https://docs.payu.in/docs/webhooks
         const status = payuResponse.status || 
                       payuResponse.pg_type || 
                       payuResponse.payment_status || 
                       payuResponse.STATUS ||
-                      (payuResponse.unmappedstatus === 'captured' ? 'success' : null);
+                      (payuResponse.unmappedstatus === 'captured' ? 'success' : null) ||
+                      (payuResponse.unmappedstatus === 'Captured' ? 'success' : null);
         const txnid = payuResponse.txnid || 
                      payuResponse.mihpayid || 
                      payuResponse.pgTxnId || 
