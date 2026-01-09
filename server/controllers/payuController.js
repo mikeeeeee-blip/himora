@@ -457,8 +457,8 @@ exports.createPayuPaymentLink = async (req, res) => {
             firstname: firstName.trim(), // CRITICAL: Trim firstname
             email: email.trim().toLowerCase(), // CRITICAL: Trim and lowercase email - PayU expects lowercase
             phone: customer_phone.trim(), // CRITICAL: Trim phone
-            surl: successUrl.trim(), // User redirect URL after successful payment
-            furl: failureUrl.trim(), // User redirect URL after failed payment
+            surl: finalSuccessUrl.trim(), // User redirect URL after successful payment
+            furl: finalFailureUrl.trim(), // User redirect URL after failed payment
             pg: 'UPI'  // Payment gateway: UPI (PayU will handle bankcode internally)
             // Note: service_provider removed - causes issues with UPI payments
             // Note: vpa (VPA/UPI ID) is optional - customer can enter it on PayU page
