@@ -419,23 +419,12 @@ exports.createPayuPaymentLink = async (req, res) => {
         const email = customer_email.trim().toLowerCase(); // PayU expects lowercase email
         
         // Success and Failure URLs for user redirects
-        // CRITICAL: Ensure URLs are production URLs, never localhost
-        const cleanFrontendUrl = String(frontendUrl).replace(/\/$/, '');
-        const successUrl = success_url || 
-                          finalCallbackUrl || 
-                          `${cleanFrontendUrl}/payment/success?txnid=${orderId}`;
-        const failureUrl = failure_url || 
-                          `${cleanFrontendUrl}/payment/failed?txnid=${orderId}`;
+        // CRITICAL: HARDCODED production URLs - never use localhost or env vars
+        // Always use production URL to prevent any localhost redirects
+        const finalSuccessUrl = `https://shaktisewafoudation.in/payment/success?txnid=${orderId}`;
+        const finalFailureUrl = `https://shaktisewafoudation.in/payment/failed?txnid=${orderId}`;
         
-        // Final validation: Never allow localhost in production URLs
-        const finalSuccessUrl = (successUrl.includes('localhost') || successUrl.includes('127.0.0.1') || successUrl.includes(':3001'))
-            ? `https://shaktisewafoudation.in/payment/success?txnid=${orderId}`
-            : successUrl;
-        const finalFailureUrl = (failureUrl.includes('localhost') || failureUrl.includes('127.0.0.1') || failureUrl.includes(':3001'))
-            ? `https://shaktisewafoudation.in/payment/failed?txnid=${orderId}`
-            : failureUrl;
-        
-        console.log('🔧 PayU Redirect URLs:');
+        console.log('🔧 PayU Redirect URLs (HARDCODED):');
         console.log('   Success URL (surl):', finalSuccessUrl);
         console.log('   Failure URL (furl):', finalFailureUrl);
         
@@ -650,25 +639,10 @@ async function createPayuFormBasedPayment(req, res, data) {
     } = data;
 
     // Success and Failure URLs for user redirects
-    // CRITICAL: Filter out localhost URLs - use production URL
-    let cleanFrontendUrl = String(frontendUrl || process.env.KRISHI_API_URL || 'https://shaktisewafoudation.in').replace(/\/$/, '');
-    if (cleanFrontendUrl.includes('localhost') || cleanFrontendUrl.includes('127.0.0.1') || cleanFrontendUrl.includes(':3001')) {
-        cleanFrontendUrl = 'https://shaktisewafoudation.in';
-    }
-    
-    const successUrl = success_url || 
-                      finalCallbackUrl || 
-                      `${cleanFrontendUrl}/payment/success?txnid=${orderId}`;
-    const failureUrl = failure_url || 
-                      `${cleanFrontendUrl}/payment/failed?txnid=${orderId}`;
-    
-    // Final validation: Never allow localhost in production URLs
-    const finalSuccessUrl = (successUrl.includes('localhost') || successUrl.includes('127.0.0.1') || successUrl.includes(':3001'))
-        ? `https://shaktisewafoudation.in/payment/success?txnid=${orderId}`
-        : successUrl;
-    const finalFailureUrl = (failureUrl.includes('localhost') || failureUrl.includes('127.0.0.1') || failureUrl.includes(':3001'))
-        ? `https://shaktisewafoudation.in/payment/failed?txnid=${orderId}`
-        : failureUrl;
+    // CRITICAL: HARDCODED production URLs - never use localhost or env vars
+    // Always use production URL to prevent any localhost redirects
+    const finalSuccessUrl = `https://shaktisewafoudation.in/payment/success?txnid=${orderId}`;
+    const finalFailureUrl = `https://shaktisewafoudation.in/payment/failed?txnid=${orderId}`;
 
     // Standard form-based parameters
     // CRITICAL: PayU is strict about parameter format - trim all values
@@ -1616,36 +1590,12 @@ exports.getPayuFormParams = async (req, res) => {
             const payuCallbackUrl = `${payuCallbackUrlBase}/api/payu/callback`;
             
             // Success and Failure URLs for user redirects
-            // CRITICAL: Ensure URLs are production URLs, never localhost
-            // Also filter stored URLs from database that might contain localhost
-            const cleanFrontendUrl = String(frontendUrl).replace(/\/$/, '');
+            // CRITICAL: HARDCODED production URLs - never use localhost or stored URLs
+            // Always use production URL to prevent any localhost redirects
+            const finalSuccessUrl = `https://shaktisewafoudation.in/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
+            const finalFailureUrl = `https://shaktisewafoudation.in/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
             
-            // Get stored URLs but filter out localhost
-            let storedSuccessUrl = transaction.successUrl || transaction.callbackUrl;
-            let storedFailureUrl = transaction.failureUrl;
-            
-            // CRITICAL: Filter localhost from stored URLs
-            if (storedSuccessUrl && (storedSuccessUrl.includes('localhost') || storedSuccessUrl.includes('127.0.0.1') || storedSuccessUrl.includes(':3001'))) {
-                storedSuccessUrl = null; // Ignore stored localhost URL
-            }
-            if (storedFailureUrl && (storedFailureUrl.includes('localhost') || storedFailureUrl.includes('127.0.0.1') || storedFailureUrl.includes(':3001'))) {
-                storedFailureUrl = null; // Ignore stored localhost URL
-            }
-            
-            const successUrl = storedSuccessUrl || 
-                              `${cleanFrontendUrl}/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
-            const failureUrl = storedFailureUrl || 
-                              `${cleanFrontendUrl}/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
-            
-            // Final validation: Never allow localhost in production URLs
-            const finalSuccessUrl = (successUrl.includes('localhost') || successUrl.includes('127.0.0.1') || successUrl.includes(':3001'))
-                ? `https://shaktisewafoudation.in/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`
-                : successUrl;
-            const finalFailureUrl = (failureUrl.includes('localhost') || failureUrl.includes('127.0.0.1') || failureUrl.includes(':3001'))
-                ? `https://shaktisewafoudation.in/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`
-                : failureUrl;
-            
-            console.log('🔧 PayU Redirect URLs:');
+            console.log('🔧 PayU Redirect URLs (HARDCODED):');
             console.log('   Success URL (surl):', finalSuccessUrl);
             console.log('   Failure URL (furl):', finalFailureUrl);
             
@@ -1831,36 +1781,12 @@ exports.getPayuCheckoutPage = async (req, res) => {
             console.log('   Is public URL:', !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1'));
             
             // Success and Failure URLs for user redirects
-            // CRITICAL: Ensure URLs are production URLs, never localhost
-            // Also filter stored URLs from database that might contain localhost
-            const cleanFrontendUrl = String(frontendUrl).replace(/\/$/, '');
+            // CRITICAL: HARDCODED production URLs - never use localhost or stored URLs
+            // Always use production URL to prevent any localhost redirects
+            const finalSuccessUrl = `https://shaktisewafoudation.in/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
+            const finalFailureUrl = `https://shaktisewafoudation.in/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
             
-            // Get stored URLs but filter out localhost
-            let storedSuccessUrl = transaction.successUrl || transaction.callbackUrl;
-            let storedFailureUrl = transaction.failureUrl;
-            
-            // CRITICAL: Filter localhost from stored URLs
-            if (storedSuccessUrl && (storedSuccessUrl.includes('localhost') || storedSuccessUrl.includes('127.0.0.1') || storedSuccessUrl.includes(':3001'))) {
-                storedSuccessUrl = null; // Ignore stored localhost URL
-            }
-            if (storedFailureUrl && (storedFailureUrl.includes('localhost') || storedFailureUrl.includes('127.0.0.1') || storedFailureUrl.includes(':3001'))) {
-                storedFailureUrl = null; // Ignore stored localhost URL
-            }
-            
-            const successUrl = storedSuccessUrl || 
-                              `${cleanFrontendUrl}/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
-            const failureUrl = storedFailureUrl || 
-                              `${cleanFrontendUrl}/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
-            
-            // Final validation: Never allow localhost in production URLs
-            const finalSuccessUrl = (successUrl.includes('localhost') || successUrl.includes('127.0.0.1') || successUrl.includes(':3001'))
-                ? `https://shaktisewafoudation.in/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`
-                : successUrl;
-            const finalFailureUrl = (failureUrl.includes('localhost') || failureUrl.includes('127.0.0.1') || failureUrl.includes(':3001'))
-                ? `https://shaktisewafoudation.in/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`
-                : failureUrl;
-            
-            console.log('🔧 PayU Redirect URLs:');
+            console.log('🔧 PayU Redirect URLs (HARDCODED):');
             console.log('   Success URL (surl):', finalSuccessUrl);
             console.log('   Failure URL (furl):', finalFailureUrl);
             
@@ -2168,21 +2094,10 @@ exports.createMerchantHostedPayment = async (req, res) => {
         const payuCallbackUrl = `${payuCallbackUrlBase}/api/payu/callback`;
         
         // Success and Failure URLs for user redirects
-        // CRITICAL: Ensure URLs are production URLs, never localhost
-        const cleanFrontendUrl = String(frontendUrl).replace(/\/$/, '');
-        const successUrl = success_url || 
-                          finalCallbackUrl || 
-                          `${cleanFrontendUrl}/payment/success?txnid=${orderId}`;
-        const failureUrl = failure_url || 
-                          `${cleanFrontendUrl}/payment/failed?txnid=${orderId}`;
-        
-        // Final validation: Never allow localhost in production URLs
-        const finalSuccessUrl = (successUrl.includes('localhost') || successUrl.includes('127.0.0.1') || successUrl.includes(':3001'))
-            ? `https://shaktisewafoudation.in/payment/success?txnid=${orderId}`
-            : successUrl;
-        const finalFailureUrl = (failureUrl.includes('localhost') || failureUrl.includes('127.0.0.1') || failureUrl.includes(':3001'))
-            ? `https://shaktisewafoudation.in/payment/failed?txnid=${orderId}`
-            : failureUrl;
+        // CRITICAL: HARDCODED production URLs - never use localhost or env vars
+        // Always use production URL to prevent any localhost redirects
+        const finalSuccessUrl = `https://shaktisewafoudation.in/payment/success?txnid=${orderId}`;
+        const finalFailureUrl = `https://shaktisewafoudation.in/payment/failed?txnid=${orderId}`;
 
         // Prepare payment parameters
         const amountFormatted = amountFloat.toFixed(2);
@@ -2455,21 +2370,11 @@ exports.processUPISeamless = async (req, res) => {
             frontendUrlForRedirects = 'https://shaktisewafoudation.in';
         }
         
-        // Build success and failure URLs
-        const cleanFrontendUrlForRedirects = String(frontendUrlForRedirects).replace(/\/$/, '');
-        const successUrl = success_url || 
-                          finalCallbackUrl || 
-                          `${cleanFrontendUrlForRedirects}/payment/success?txnid=${orderId}`;
-        const failureUrl = failure_url || 
-                          `${cleanFrontendUrlForRedirects}/payment/failed?txnid=${orderId}`;
-        
-        // Final validation: Never allow localhost in production URLs
-        const finalSuccessUrl = (successUrl.includes('localhost') || successUrl.includes('127.0.0.1') || successUrl.includes(':3001'))
-            ? `https://shaktisewafoudation.in/payment/success?txnid=${orderId}`
-            : successUrl;
-        const finalFailureUrl = (failureUrl.includes('localhost') || failureUrl.includes('127.0.0.1') || failureUrl.includes(':3001'))
-            ? `https://shaktisewafoudation.in/payment/failed?txnid=${orderId}`
-            : failureUrl;
+        // Success and Failure URLs for user redirects
+        // CRITICAL: HARDCODED production URLs - never use localhost or env vars
+        // Always use production URL to prevent any localhost redirects
+        const finalSuccessUrl = `https://shaktisewafoudation.in/payment/success?txnid=${orderId}`;
+        const finalFailureUrl = `https://shaktisewafoudation.in/payment/failed?txnid=${orderId}`;
         
         // Standard payment parameters
         const paymentParams = {
