@@ -1681,8 +1681,16 @@ exports.getPayuCheckoutPage = async (req, res) => {
                                 process.env.PAYU_WEBSITE_URL ||
                                 'https://www.shaktisewafoudation.in';
             
+            // CRITICAL: Use backend URL directly for callback to bypass Next.js Server Actions
+            // PayU POSTs directly to Express backend, not through Next.js
+            const backendUrl = process.env.BACKEND_URL || 
+                              process.env.API_URL || 
+                              process.env.SERVER_URL ||
+                              'http://localhost:5001';
+            
+            let payuCallbackUrlBase = String(backendUrl).replace(/\/$/, '');
+            
             // For test mode with localhost, try to get public URL (ngrok)
-            let payuCallbackUrlBase = String(frontendUrl).replace(/\/$/, '');
             if (PAYU_MODE === 'test' && (payuCallbackUrlBase.includes('localhost') || payuCallbackUrlBase.includes('127.0.0.1'))) {
                 const publicUrl = await getPublicCallbackUrl(payuCallbackUrlBase);
                 if (publicUrl && !publicUrl.includes('localhost')) {
@@ -1690,6 +1698,12 @@ exports.getPayuCheckoutPage = async (req, res) => {
                 }
             }
             const payuCallbackUrl = `${payuCallbackUrlBase}/api/payu/callback`;
+            
+            console.log('🔧 PayU Callback URL Configuration:');
+            console.log('   Backend URL:', backendUrl);
+            console.log('   Final callback URL base:', payuCallbackUrlBase);
+            console.log('   Full callback URL (curl):', payuCallbackUrl);
+            console.log('   Is public URL:', !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1'));
             
             // Success and Failure URLs for user redirects
             const successUrl = transaction.successUrl || 
@@ -1716,7 +1730,7 @@ exports.getPayuCheckoutPage = async (req, res) => {
             
             // ✅ CRITICAL: Only include curl if it's publicly accessible
             if (payuCallbackUrl && !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1')) {
-                payuParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL
+                payuParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL - goes to Express backend
                 console.log('   ✅ Callback URL (curl) set:', payuCallbackUrl);
             } else {
                 console.log('   ⚠️ Skipping curl (callback URL) - localhost not accessible to PayU servers');
