@@ -348,7 +348,7 @@ exports.createPayuPaymentLink = async (req, res) => {
             `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
 
         // PayU callback URL - points to Next.js callback handler (same pattern as Zaakpay)
-        // Use NEXTJS_API_URL (like cashfreeController) for consistency
+        // Use NEXTJS_API_URL (like cashfreeController) for consistency (for user redirects)
         const frontendUrl = process.env.NEXTJS_API_URL || 
                             process.env.FRONTEND_URL || 
                             process.env.NEXT_PUBLIC_SERVER_URL || 
@@ -356,11 +356,15 @@ exports.createPayuPaymentLink = async (req, res) => {
                             process.env.NEXT_PUBLIC_API_URL || 
                             process.env.PAYU_WEBSITE_URL ||
                             'https://www.shaktisewafoudation.in';
-        // ✅ CRITICAL: Callback URL should NOT include query parameters
-        // PayU sends transaction details (txnid, status, etc.) in POST body, not query params
-        // The callback handler will find the transaction using txnid from POST body
-        // For test mode with localhost, use ngrok or public URL if available
-        let payuCallbackUrlBase = String(frontendUrl).replace(/\/$/, '');
+        
+        // CRITICAL: Use backend URL directly for callback to bypass Next.js Server Actions
+        // PayU POSTs directly to Express backend, not through Next.js
+        const backendUrl = process.env.BACKEND_URL || 
+                          process.env.API_URL || 
+                          process.env.SERVER_URL ||
+                          'http://localhost:5001';
+        
+        let payuCallbackUrlBase = String(backendUrl).replace(/\/$/, '');
         
         // If localhost in test mode, try to get public URL (ngrok)
         if (PAYU_MODE === 'test' && (payuCallbackUrlBase.includes('localhost') || payuCallbackUrlBase.includes('127.0.0.1'))) {
@@ -379,7 +383,8 @@ exports.createPayuPaymentLink = async (req, res) => {
         
         // Log callback URL for debugging
         console.log('🔧 PayU Callback URL Configuration:');
-        console.log('   Original frontendUrl:', frontendUrl);
+        console.log('   Backend URL:', backendUrl);
+        console.log('   Frontend URL (for user redirects):', frontendUrl);
         console.log('   Final callback URL base:', payuCallbackUrlBase);
         console.log('   Full callback URL (curl):', payuCallbackUrl);
         console.log('   Is public URL:', !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1'));
