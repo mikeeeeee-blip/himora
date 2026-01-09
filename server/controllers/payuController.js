@@ -1630,12 +1630,13 @@ exports.getPayuFormParams = async (req, res) => {
                 email: payuParams.email
             };
             
-        const hash = generatePayUHash(hashParams);
-        payuParams.hash = hash;
-        
-        // Save params to transaction (with hardcoded URLs)
-        transaction.payuParams = payuParams;
-        await transaction.save();
+            const hash = generatePayUHash(hashParams);
+            payuParams.hash = hash;
+            
+            // Save params to transaction (with hardcoded URLs)
+            transaction.payuParams = payuParams;
+            await transaction.save();
+        }
         
         // Return parameters as JSON
         return res.json({
