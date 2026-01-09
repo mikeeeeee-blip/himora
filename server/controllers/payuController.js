@@ -1885,19 +1885,33 @@ exports.createMerchantHostedPayment = async (req, res) => {
         const firstName = customer_name.split(' ')[0] || customer_name;
         const email = customer_email.trim();
 
-        // Prepare PayU parameters
+        // Prepare PayU parameters - CRITICAL: PayU is strict about format
+        // Sanitize text fields to prevent special character issues
+        const sanitizeText = (text, maxLength = 100) => {
+            if (!text) return '';
+            return String(text)
+                .replace(/[`"'<>]/g, '') // Remove problematic characters
+                .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+                .trim()
+                .substring(0, maxLength);
+        };
+        
+        const sanitizedProductInfo = sanitizeText(productInfo, 100);
+        const sanitizedFirstName = sanitizeText(firstName, 50);
+        const sanitizedEmail = email.trim().toLowerCase(); // PayU expects lowercase email
+        
         const payuParams = {
             key: PAYU_KEY.trim(),
-            txnid: orderId,
-            amount: amountFormatted,
-            productinfo: productInfo,
-            firstname: firstName,
-            email: email,
-            phone: customer_phone.trim(),
+            txnid: orderId.trim(), // CRITICAL: Trim txnid
+            amount: amountFormatted.trim(), // CRITICAL: Trim amount
+            productinfo: sanitizedProductInfo, // CRITICAL: Sanitized productinfo
+            firstname: sanitizedFirstName, // CRITICAL: Sanitized firstname
+            email: sanitizedEmail, // CRITICAL: Lowercased email
+            phone: customer_phone.trim(), // CRITICAL: Trim phone
             surl: successUrl.trim(), // User redirect URL after successful payment
             furl: failureUrl.trim(), // User redirect URL after failed payment
-            service_provider: 'payu_paisa',
             pg: payment_mode // Payment gateway mode
+            // Note: service_provider removed - can cause issues with UPI
         };
         
         // ✅ CRITICAL: Only include curl if it's publicly accessible
