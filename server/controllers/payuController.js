@@ -798,48 +798,54 @@ exports.handlePayuCallback = async (req, res) => {
                     { new: true }
                 ).populate('merchantId');
 
-                if (updatedTransaction && updatedTransaction.merchantId.webhookEnabled) {
-                    const webhookPayload = {
-                        event: 'payment.success',
-                        timestamp: new Date().toISOString(),
-                        transaction_id: updatedTransaction.transactionId,
-                        order_id: updatedTransaction.orderId,
-                        merchant_id: updatedTransaction.merchantId._id.toString(),
-                        data: {
+                if (updatedTransaction) {
+                    console.log('✅ Transaction updated via callback:', transaction.transactionId);
+                    console.log('   New Status: paid');
+                    console.log('   PayU Payment ID:', updatedTransaction.payuPaymentId);
+                    
+                    if (updatedTransaction.merchantId && updatedTransaction.merchantId.webhookEnabled) {
+                        const webhookPayload = {
+                            event: 'payment.success',
+                            timestamp: new Date().toISOString(),
                             transaction_id: updatedTransaction.transactionId,
                             order_id: updatedTransaction.orderId,
-                            payu_order_id: updatedTransaction.payuOrderId,
-                            payu_payment_id: updatedTransaction.payuPaymentId,
-                            amount: updatedTransaction.amount,
-                            currency: updatedTransaction.currency,
-                            status: updatedTransaction.status,
-                            payment_method: updatedTransaction.paymentMethod,
-                            paid_at: updatedTransaction.paidAt.toISOString(),
-                            settlement_status: updatedTransaction.settlementStatus,
-                            expected_settlement_date: updatedTransaction.expectedSettlementDate.toISOString(),
-                            acquirer_data: updatedTransaction.acquirerData,
-                            customer: {
-                                customer_id: updatedTransaction.customerId,
-                                name: updatedTransaction.customerName,
-                                email: updatedTransaction.customerEmail,
-                                phone: updatedTransaction.customerPhone
-                            },
-                            merchant: {
-                                merchant_id: updatedTransaction.merchantId._id.toString(),
-                                merchant_name: updatedTransaction.merchantName
-                            },
-                            description: updatedTransaction.description,
-                            created_at: updatedTransaction.createdAt.toISOString(),
-                            updated_at: updatedTransaction.updatedAt.toISOString()
-                        }
-                    };
+                            merchant_id: updatedTransaction.merchantId._id.toString(),
+                            data: {
+                                transaction_id: updatedTransaction.transactionId,
+                                order_id: updatedTransaction.orderId,
+                                payu_order_id: updatedTransaction.payuOrderId,
+                                payu_payment_id: updatedTransaction.payuPaymentId,
+                                amount: updatedTransaction.amount,
+                                currency: updatedTransaction.currency,
+                                status: updatedTransaction.status,
+                                payment_method: updatedTransaction.paymentMethod,
+                                paid_at: updatedTransaction.paidAt.toISOString(),
+                                settlement_status: updatedTransaction.settlementStatus,
+                                expected_settlement_date: updatedTransaction.expectedSettlementDate.toISOString(),
+                                acquirer_data: updatedTransaction.acquirerData,
+                                customer: {
+                                    customer_id: updatedTransaction.customerId,
+                                    name: updatedTransaction.customerName,
+                                    email: updatedTransaction.customerEmail,
+                                    phone: updatedTransaction.customerPhone
+                                },
+                                merchant: {
+                                    merchant_id: updatedTransaction.merchantId._id.toString(),
+                                    merchant_name: updatedTransaction.merchantName
+                                },
+                                description: updatedTransaction.description,
+                                created_at: updatedTransaction.createdAt.toISOString(),
+                                updated_at: updatedTransaction.updatedAt.toISOString()
+                            }
+                        };
 
-                    await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
+                        await sendMerchantWebhook(updatedTransaction.merchantId, webhookPayload);
+                    }
+                } else {
+                    console.error('❌ Transaction update failed - updatedTransaction is null');
+                    console.error('   Transaction ID used in update:', transaction.transactionId);
+                    console.error('   PayU txnid from callback:', payuResponse.txnid);
                 }
-
-                console.log('✅ Transaction updated via callback:', transaction.transactionId);
-                console.log('   New Status: paid');
-                console.log('   PayU Payment ID:', updatedTransaction.payuPaymentId);
             } else {
                 console.log('⚠️ Transaction already marked as paid, skipping update');
             }
