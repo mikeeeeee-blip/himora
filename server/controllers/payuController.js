@@ -739,17 +739,36 @@ exports.handlePayuCallback = async (req, res) => {
         }
 
         // If not found, try to find by PayU order ID (txnid)
+        // PayU sends txnid in webhook which should match our payuOrderId or orderId
         if (!transaction && payuResponse.txnid) {
-            console.log('   Transaction not found by transaction_id, trying by PayU order ID:', payuResponse.txnid);
+            console.log('   Transaction not found by transaction_id, trying by PayU order ID (txnid):', payuResponse.txnid);
             transaction = await Transaction.findOne({ 
                 $or: [
                     { payuOrderId: payuResponse.txnid },
-                    { orderId: payuResponse.txnid }
+                    { orderId: payuResponse.txnid },
+                    // Also try matching with ORDER_ prefix removed
+                    { orderId: payuResponse.txnid.replace(/^ORDER_/, '') },
+                    { payuOrderId: payuResponse.txnid.replace(/^ORDER_/, '') }
                 ]
             }).populate('merchantId');
             
             if (transaction) {
                 console.log('   ✅ Transaction found by PayU order ID:', transaction.transactionId);
+                console.log('   Transaction orderId:', transaction.orderId);
+                console.log('   Transaction payuOrderId:', transaction.payuOrderId);
+            } else {
+                console.warn('   ⚠️ Transaction not found by PayU order ID either');
+                console.warn('   Searched txnid:', payuResponse.txnid);
+                // Try to find by mihpayid (PayU payment ID) as last resort
+                if (payuResponse.mihpayid) {
+                    console.log('   Trying to find by PayU payment ID (mihpayid):', payuResponse.mihpayid);
+                    transaction = await Transaction.findOne({ 
+                        payuPaymentId: payuResponse.mihpayid 
+                    }).populate('merchantId');
+                    if (transaction) {
+                        console.log('   ✅ Transaction found by PayU payment ID:', transaction.transactionId);
+                    }
+                }
             }
         }
 
