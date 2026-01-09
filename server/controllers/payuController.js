@@ -1542,6 +1542,18 @@ exports.getPayuFormParams = async (req, res) => {
         // Get stored PayU parameters or generate new ones
         let payuParams = transaction.payuParams;
         
+        // CRITICAL: Filter localhost URLs from stored payuParams if they exist
+        if (payuParams) {
+            if (payuParams.surl && (payuParams.surl.includes('localhost') || payuParams.surl.includes('127.0.0.1') || payuParams.surl.includes(':3001'))) {
+                console.warn('   ⚠️ Stored payuParams.surl contains localhost, will regenerate');
+                payuParams = null; // Force regeneration
+            }
+            if (payuParams.furl && (payuParams.furl.includes('localhost') || payuParams.furl.includes('127.0.0.1') || payuParams.furl.includes(':3001'))) {
+                console.warn('   ⚠️ Stored payuParams.furl contains localhost, will regenerate');
+                payuParams = null; // Force regeneration
+            }
+        }
+        
         if (!payuParams) {
             // Generate payment parameters if not stored
             const amountFormatted = transaction.amount.toFixed(2);
@@ -1737,6 +1749,18 @@ exports.getPayuCheckoutPage = async (req, res) => {
         
         // Get stored PayU parameters or generate new ones
         let payuParams = transaction.payuParams;
+        
+        // CRITICAL: Filter localhost URLs from stored payuParams if they exist
+        if (payuParams) {
+            if (payuParams.surl && (payuParams.surl.includes('localhost') || payuParams.surl.includes('127.0.0.1') || payuParams.surl.includes(':3001'))) {
+                console.warn('   ⚠️ Stored payuParams.surl contains localhost, will regenerate');
+                payuParams = null; // Force regeneration
+            }
+            if (payuParams.furl && (payuParams.furl.includes('localhost') || payuParams.furl.includes('127.0.0.1') || payuParams.furl.includes(':3001'))) {
+                console.warn('   ⚠️ Stored payuParams.furl contains localhost, will regenerate');
+                payuParams = null; // Force regeneration
+            }
+        }
         
         if (!payuParams) {
             // Generate payment parameters if not stored
