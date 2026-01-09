@@ -519,30 +519,21 @@ exports.createPayuPaymentLink = async (req, res) => {
         const transaction = new Transaction(transactionData);
         await transaction.save();
 
-        // CRITICAL: Use backend checkout URL directly - completely bypasses Next.js Server Actions
-        // Backend route returns HTML that auto-submits form to PayU
-        // This approach never goes through Next.js, so Server Actions are never triggered
-        const backendUrl = process.env.BACKEND_URL || 
-                          process.env.API_URL || 
-                          process.env.SERVER_URL ||
-                          'http://localhost:5001';
-        
-        // Backend checkout route that returns HTML with auto-submitting form
-        const backendCheckoutUrl = `${String(backendUrl).replace(/\/+$/, '')}/api/payu/checkout/${transactionId}`;
-        
-        // Also create Next.js checkout page URLs for backward compatibility (but prefer backend URL)
+        // CRITICAL: Use Next.js checkout page that fetches form params and submits directly to PayU
+        // This completely bypasses Next.js Server Actions by never accessing backend HTML routes
+        // The form submission happens entirely client-side, directly to PayU
         const normalCheckoutLink = `${String(frontendUrl).replace(/\/$/, '')}/payu-checkout?transaction_id=${encodeURIComponent(transactionId)}`;
         const iframeCheckoutLink = `${String(frontendUrl).replace(/\/$/, '')}/payu-checkout-iframe?transaction_id=${encodeURIComponent(transactionId)}`;
         const payuHostedUrl = `${PAYU_PAYMENT_URL}`;
-
+        
         // Default to iframe mode (can be overridden with use_iframe=false)
         // Check if iframe mode is disabled (default is true/iframe mode)
         const useIframe = req.query.use_iframe !== 'false' && req.query.use_iframe !== '0' && 
                          process.env.PAYU_USE_IFRAME !== 'false' && process.env.PAYU_USE_IFRAME !== '0';
         
-        // CRITICAL: Use backend checkout URL to bypass Next.js Server Actions
-        // The backend route returns HTML that auto-submits form directly to PayU
-        const checkoutPageUrl = backendCheckoutUrl;
+        // CRITICAL: Use Next.js checkout page that fetches form params and submits directly to PayU
+        // This completely bypasses Next.js Server Actions
+        const checkoutPageUrl = useIframe ? iframeCheckoutLink : normalCheckoutLink;
 
         // Build response with Next.js page URL (similar to Zaakpay)
         const response = {
