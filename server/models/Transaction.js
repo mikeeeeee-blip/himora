@@ -165,10 +165,7 @@ const TransactionSchema = new mongoose.Schema({
     type: Date,
     default: null // ✅ Will be calculated properly when payment is marked as 'paid'
 }
-,// User.js (Admin schema)
-
-
-    
+,// User.js (Admin schema)    
     // Timestamps
     paidAt: Date,
     

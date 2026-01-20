@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Settings = require('../models/Settings');
 const { calculateExpectedSettlementDate } = require('../utils/settlementCalculator');
 const { calculatePayinCommission } = require('../utils/commissionCalculator');
+const zplog = require('../utils/zaakpayLogger');
 
 // Determine mode - default to 'test' (staging) if not explicitly set to 'production'
 // For testing, always use 'test' mode to use staging endpoint: https://zaakstaging.zaakpay.com
@@ -290,6 +291,8 @@ exports.createZaakpayPaymentLink = async (req, res) => {
         const transactionId = `TXN_ZP_${Date.now()}_${Math.random().toString(36).substring(7)}`;
         const orderId = `ORDER_ZP_${Date.now()}_${Math.random().toString(36).substring(5)}`.slice(0, 20);
 
+        zplog.step('LINK_CREATE', transactionId, 'building payment link', { orderId, amount: amountFloat, merchantId });
+
         const finalCallbackUrl = callback_url ||
             merchant?.successUrl ||
             `${process.env.FRONTEND_URL || 'https://payments.ninex-group.com'}/payment-success`;
@@ -417,6 +420,8 @@ exports.createZaakpayPaymentLink = async (req, res) => {
 
         const hostedRedirectLink = `${String(frontendUrl).replace(/\/$/, '')}/zaakpay-checkout?transaction_id=${encodeURIComponent(transactionId)}`;
         const zaakpayHostedUrl = `${TRANSACT_ENDPOINT}`;
+
+        zplog.step('LINK_CREATE', transactionId, 'transaction saved, returning checkout url', { orderId, amount: amountFloat, hostedRedirectLink });
         
         // Return the hosted checkout URL with form data
         // The frontend can either:
@@ -443,7 +448,7 @@ exports.createZaakpayPaymentLink = async (req, res) => {
             message: 'Zaakpay payment link created. Redirect customer to checkout_page (our redirect page -> Zaakpay hosted checkout).'
         });
     } catch (error) {
-        console.error('❌ Zaakpay createPaymentLink error:', error);
+        zplog.err('createPaymentLink failed', error, { step: 'LINK_CREATE' });
         res.status(500).json({
             success: false,
             error: error.message || 'Failed to create Zaakpay payment link'
@@ -1514,17 +1519,21 @@ exports.getZaakpayCheckoutPage = async (req, res) => {
 exports.getZaakpayTransaction = async (req, res) => {
     try {
         const { transactionId } = req.params;
-        
+        zplog.step('TXN_FETCH', transactionId, 'fetching transaction for checkout');
+
         const transaction = await Transaction.findOne({ transactionId })
             .populate('merchantId', 'name email')
             .select('-__v');
         
         if (!transaction) {
+            zplog.step('TXN_FETCH', transactionId, 'transaction not found', {});
             return res.status(404).json({
                 success: false,
                 error: 'Transaction not found'
             });
         }
+
+        zplog.step('TXN_FETCH', transactionId, 'transaction found', { orderId: transaction.zaakpayOrderId || transaction.orderId, amount: transaction.amount, status: transaction.status });
         
         // CRITICAL: Decode customerName if it's encrypted (base64)
         // This ensures we always return plain text names to the frontend
@@ -1574,7 +1583,7 @@ exports.getZaakpayTransaction = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('❌ Error fetching Zaakpay transaction:', error);
+        zplog.err('getZaakpayTransaction failed', error, { step: 'TXN_FETCH' });
         res.status(500).json({
             success: false,
             error: error.message || 'Failed to fetch transaction'
@@ -1627,6 +1636,8 @@ exports.handleZaakpayCallback = async (req, res) => {
                 : value;
             console.log(`         ${key}: ${displayValue}`);
         });
+
+        zplog.phase('CALLBACK', transactionId || orderId, 'Zaakpay callback received', { orderId, responseCode, amount, paymentId });
         
         // Validate required fields
         if (!orderId) {
@@ -1735,6 +1746,7 @@ exports.handleZaakpayCallback = async (req, res) => {
         }
 
         if (!transaction) {
+            zplog.step('CALLBACK', orderId, 'transaction not found after all search attempts', { orderId, transactionId, paymentId });
             console.error('   ❌ [SERVER] Transaction NOT FOUND in database after all search attempts!');
             console.error(`      Searched orderId: ${orderId}`);
             console.error(`      Searched transactionId: ${transactionId || 'N/A'}`);
@@ -1791,6 +1803,8 @@ exports.handleZaakpayCallback = async (req, res) => {
         console.log(`      Merchant: ${transaction.merchantId?.merchantName || 'N/A'} (${transaction.merchantId?._id || 'N/A'})`);
         console.log(`      Created At: ${transaction.createdAt || 'N/A'}`);
 
+        zplog.step('CALLBACK', transaction.transactionId, 'transaction found', { orderId: transaction.zaakpayOrderId || transaction.orderId, amount: transaction.amount, responseCode, currentStatus: transaction.status });
+
         // Calculate amount (Zaakpay sends amount in paisa)
         const amountRupees = amount ? parseFloat(amount) / 100 : transaction.amount;
         console.log(`   💰 Amount Processing:`);
@@ -1813,6 +1827,8 @@ exports.handleZaakpayCallback = async (req, res) => {
             console.log(`      Gross Amount: ${amountRupees} rupees`);
             console.log(`      Commission: ${commissionData.commission} rupees`);
             console.log(`      Net Amount: ${amountRupees - commissionData.commission} rupees`);
+
+            zplog.step('COMMISSION', transaction.transactionId, 'commission applied', { gross: amountRupees, commission: commissionData.commission, net: parseFloat((amountRupees - commissionData.commission).toFixed(2)), rate: commissionData.commissionRate });
 
             const updateData = {
                 status: 'paid',
@@ -1840,6 +1856,7 @@ exports.handleZaakpayCallback = async (req, res) => {
             );
             
             const processingTime = Date.now() - startTime;
+            zplog.step('CALLBACK', updatedTransaction.transactionId, 'status=paid', { zaakpayPaymentId: updatedTransaction.zaakpayPaymentId, netAmount: updatedTransaction.netAmount, commission: updatedTransaction.commission, processingTimeMs: processingTime });
             console.log('   ✅ Transaction SUCCESSFULLY updated to PAID status');
             console.log(`      Processing time: ${processingTime}ms`);
             console.log(`      Transaction ID: ${updatedTransaction.transactionId}`);
@@ -1888,6 +1905,7 @@ exports.handleZaakpayCallback = async (req, res) => {
             );
             
             const processingTime = Date.now() - startTime;
+            zplog.step('CALLBACK', updatedTransaction.transactionId, 'status=failed', { responseCode, responseDescription: (responseDescription || '').substring(0, 80), processingTimeMs: processingTime });
             console.log('   ✅ Transaction SUCCESSFULLY updated to FAILED status');
             console.log(`      Processing time: ${processingTime}ms`);
             console.log(`      Transaction ID: ${updatedTransaction.transactionId}`);
@@ -1912,6 +1930,7 @@ exports.handleZaakpayCallback = async (req, res) => {
         
     } catch (error) {
         const errorTime = Date.now() - startTime;
+        zplog.err('callback handler failed', error, { requestId, step: 'CALLBACK', durationMs: errorTime });
         console.error('========================================================================');
         console.error(`❌ [SERVER] CALLBACK FATAL ERROR after ${errorTime}ms`);
         console.error('========================================================================');
