@@ -261,6 +261,66 @@ const ReconShowcasePage = () => {
                 {error}
               </div>
             )}
+            {/* Partner review – maps to client ask */}
+            <div className="rounded-xl border border-accent/40 bg-accent/5 p-4 sm:p-5 font-['Albert_Sans']">
+              <h3 className="text-sm font-semibold text-accent uppercase tracking-wider mb-3 flex items-center gap-2">
+                <FiCheckCircle /> Partner review – what you asked for
+              </h3>
+              <p className="text-white/70 text-sm mb-4">
+                Below delivers the two deliverables you requested. Once confirmed, we can schedule the technical deep dive.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-[#263F43]/60 border border-white/10">
+                  <div className="text-xs text-white/50 uppercase tracking-wider mb-1">(1) Balanced journal / postings</div>
+                  <p className="text-white/90 text-sm mb-3">
+                    Sample rows for <strong>capture + fee</strong>, <strong>partial refund</strong>, and <strong>dispute + reversal</strong>. All double-entry balanced (Dr = Cr).
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("journal")}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent/20 border border-accent/50 text-accent hover:bg-accent/30 text-xs font-medium transition-colors"
+                    >
+                      <FiFileText /> View Journal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate("/reconciliation-showcase/journal/JE_001")}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white/90 hover:bg-white/20 text-xs font-medium transition-colors"
+                    >
+                      <FiEye /> Capture+fee (JE_001)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate("/reconciliation-showcase/journal/JE_002")}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white/90 hover:bg-white/20 text-xs font-medium transition-colors"
+                    >
+                      <FiEye /> Partial refund (JE_002)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate("/reconciliation-showcase/journal/JE_003")}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white/90 hover:bg-white/20 text-xs font-medium transition-colors"
+                    >
+                      <FiEye /> Dispute+reversal (JE_003)
+                    </button>
+                  </div>
+                </div>
+                <div className="p-4 rounded-lg bg-[#263F43]/60 border border-white/10">
+                  <div className="text-xs text-white/50 uppercase tracking-wider mb-1">(2) Sample recon run</div>
+                  <p className="text-white/90 text-sm mb-3">
+                    <strong>Matched items</strong>, <strong>one exception</strong> (AMOUNT_MISMATCH), and <strong>resolution / backfill / adjustment path</strong> (Flag → Investigate → Adjust → Backfill → Re-run).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/reconciliation-showcase/runs/RECON_20260127_001")}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent/20 border border-accent/50 text-accent hover:bg-accent/30 text-xs font-medium transition-colors"
+                  >
+                    <FiEye /> View sample run (RECON_20260127_001)
+                  </button>
+                </div>
+              </div>
+            </div>
             {/* Recent Reconciliations */}
             <div className="bg-bg-secondary border border-white/10 rounded-xl overflow-hidden">
               <div className="px-5 py-4 border-b border-white/10 bg-bg-tertiary/50 flex items-center justify-between">

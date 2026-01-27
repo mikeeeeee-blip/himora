@@ -72,6 +72,11 @@ const ReconRunDetailPage = () => {
                     </h1>
                     <p className="text-white/70 text-xs sm:text-sm font-['Albert_Sans'] mt-1">
                       Reconciliation run details
+                      {run && id === "RECON_20260127_001" && (
+                        <span className="block mt-1 text-accent/90 text-xs">
+                          Sample run for partner review: matched items, one exception, resolution/backfill/adjustment path.
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
