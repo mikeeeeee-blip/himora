@@ -119,7 +119,6 @@ const Navbar = () => {
         label: "Transactions",
         icon: <HiOutlineChartBar />,
       },
-      // TODO : add api docs
       {
         path: "/admin/api-docs",
         label: "API",

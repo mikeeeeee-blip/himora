@@ -32,12 +32,64 @@ import PaymentFailed from "./components/pages/PaymentFailed";
 import SubPaisaPaymentPage from "./components/pages/SubPaisaPaymentPage";
 import SubSuperadminManagementPage from "./components/pages/SubSuperadminManagementPage";
 import SubSuperadminDashboard from "./components/SubSuperadminDashboard";
+import ReconShowcasePage from "./components/pages/ReconShowcasePage";
+import ReconRunDetailPage from "./components/pages/ReconRunDetailPage";
+import ReconJournalDetailPage from "./components/pages/ReconJournalDetailPage";
+import ReconExceptionDetailPage from "./components/pages/ReconExceptionDetailPage";
 
 function App() {
   return (
     <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route
+          path="/reconciliation-showcase"
+          element={
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <ReconShowcasePage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
+          }
+        />
+        <Route
+          path="/reconciliation-showcase/runs/:runId"
+          element={
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <ReconRunDetailPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
+          }
+        />
+        <Route
+          path="/reconciliation-showcase/journal/:id"
+          element={
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <ReconJournalDetailPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
+          }
+        />
+        <Route
+          path="/reconciliation-showcase/exceptions/:id"
+          element={
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <ReconExceptionDetailPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
+          }
+        />
         <Route
           path="/superadmin"
           element={
@@ -295,7 +347,7 @@ function App() {
             </RouteProtection>
           }
         />
-        {/* Payment Result Pages (Public - No Auth Required) */}
+        {/* Public pages (no auth) */}
         <Route path="/payment-success" element={<PaymentSuccess />} />
         <Route path="/payment-failed" element={<PaymentFailed />} />
         

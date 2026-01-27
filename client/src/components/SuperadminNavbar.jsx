@@ -11,6 +11,7 @@ import {
   FiEdit3,
   FiSettings,
   FiClock,
+  FiLayers,
 } from "react-icons/fi";
 import { TbArrowsTransferDown } from "react-icons/tb";
 import { HiOutlineChartBar } from "react-icons/hi2";
@@ -54,6 +55,11 @@ const SuperadminNavbar = () => {
       path: "/superadmin/settings/payment-gateways",
       label: "Payment Gateways",
       icon: <FiSettings />,
+    },
+    {
+      path: "/reconciliation-showcase",
+      label: "Reconciliation",
+      icon: <FiLayers />,
     },
     // Only show sub-superadmin management to superAdmin
     ...(isSuperAdmin ? [{

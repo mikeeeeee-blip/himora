@@ -1,0 +1,48 @@
+================================================================================
+  RECONCILIATION MOCK – SAMPLE RUN LOGS (DUMMY)
+  All data fictitious. For partner review before technical deep dive.
+================================================================================
+
+[2026-01-27T14:29:58Z] [RECON] Starting reconciliation run.
+[2026-01-27T14:29:58Z] [RECON] Run ID: RECON_20260127_001
+[2026-01-27T14:29:58Z] [RECON] Config: ledger_source=internal, bank_file=SETTLEMENT_BANK_20260127.csv
+[2026-01-27T14:29:58Z] [RECON] Ledger date range: 2026-01-20 .. 2026-01-22 (inclusive)
+[2026-01-27T14:29:59Z] [RECON] Loaded ledger rows: 4 (captures + refunds + reversals in range)
+[2026-01-27T14:29:59Z] [RECON] Loaded bank/settlement rows: 4
+[2026-01-27T14:30:00Z] [RECON] Matching strategy: primary_key=gateway_ref, secondary=amount+date
+[2026-01-27T14:30:00Z] [RECON] --- Phase 1: Exact match ---
+[2026-01-27T14:30:00Z] [RECON]   MATCH ledger TXN_MOCK_001 (ORD_MOCK_001) <-> bank BK_TXN_1001 | amount 1000.00 | ref pay_xxx_cf_001
+[2026-01-27T14:30:00Z] [RECON]   MATCH ledger TXN_MOCK_002 (ORD_MOCK_002) <-> bank BK_TXN_1002 | amount 2500.00 | ref pay_xxx_cf_002
+[2026-01-27T14:30:00Z] [RECON]   MATCH ledger rfd_yyy_001 (ORD_MOCK_001) <-> bank BK_REF_2001 | amount -400.00 | ref rfd_yyy_001
+[2026-01-27T14:30:00Z] [RECON]   Matched count: 3
+[2026-01-27T14:30:01Z] [RECON] --- Phase 2: Exceptions ---
+[2026-01-27T14:30:01Z] [RECON]   EXCEPTION ledger TXN_MOCK_003 (ORD_MOCK_003) <-> bank BK_TXN_1003
+[2026-01-27T14:30:01Z] [RECON]   EXCEPTION type: AMOUNT_MISMATCH | ledger_amount=750.00 | bank_amount=745.50 | delta=4.50
+[2026-01-27T14:30:01Z] [RECON]   Exception ID: RECON_EX_001 | gateway_ref=pay_xxx_cf_003
+[2026-01-27T14:30:01Z] [RECON]   Exceptions count: 1
+[2026-01-27T14:30:01Z] [RECON] --- Phase 3: Unmatched ---
+[2026-01-27T14:30:01Z] [RECON]   Unmatched ledger: 0 | Unmatched bank: 0
+[2026-01-27T14:30:01Z] [RECON] --- Summary ---
+[2026-01-27T14:30:01Z] [RECON]   Total ledger: 4 | Total bank: 4
+[2026-01-27T14:30:01Z] [RECON]   Matched: 3 | Exceptions: 1 | Unmatched: 0
+[2026-01-27T14:30:01Z] [RECON] Run RECON_20260127_001 completed. Duration: 3s
+[2026-01-27T14:30:01Z] [RECON] Result persisted: recon_results/RECON_20260127_001.json
+
+--------------------------------------------------------------------------------
+  Resolution / backfill / adjustment (RECON_EX_001)
+--------------------------------------------------------------------------------
+
+[2026-01-27T14:32:00Z] [RECON] Processing exception RECON_EX_001 (AMOUNT_MISMATCH)
+[2026-01-27T14:32:00Z] [RECON] Action: ADJUSTMENT | reason=gateway_fee_tax_at_settlement
+[2026-01-27T14:32:00Z] [RECON] Adjustment posted: ADJ_MOCK_003 | Dr gateway_fee_adjustment 4.50, Cr gateway_receivable 4.50
+[2026-01-27T14:32:00Z] [RECON] Linked to TXN_MOCK_003, RECON_EX_001
+[2026-01-27T14:32:01Z] [RECON] Backfill: exception_id=RECON_EX_001, resolution=ADJUSTMENT, adjustment_ref=ADJ_MOCK_003
+[2026-01-27T14:32:01Z] [RECON] Resolved at: 2026-01-27T14:32:01Z
+[2026-01-27T14:32:01Z] [RECON] RECON_EX_001 marked RESOLVED. Next recon run will treat TXN_MOCK_003 as matched.
+
+--------------------------------------------------------------------------------
+  End of sample logs
+--------------------------------------------------------------------------------
+
+Reference: docs/RECON_MOCK_PLAN.md, docs/RECON_MOCK_DATA.md
+Last updated: 2026-01-27

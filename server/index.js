@@ -417,10 +417,10 @@ app.use((req, res, next) => {
     next();
 });
 
-// ✅ Apply MongoDB connection check to all API routes (except /api/health)
+// ✅ Apply MongoDB connection check to all API routes (except /api/health, /api/recon)
 app.use('/api', (req, res, next) => {
-    if (req.path === '/health') {
-        return next(); // Skip MongoDB check for health endpoint
+    if (req.path === '/health' || req.path.startsWith('/recon')) {
+        return next();
     }
     checkMongoConnection(req, res, next);
 });
@@ -438,6 +438,7 @@ app.use('/api/payu', require('./routes/payuRoutes'));
 app.use('/api/sabpaisa', require('./routes/sabpaisaRoutes')); // ✅ NEW
 app.use('/api/cashfree', require('./routes/cashfreeRoutes')); // ✅ NEW
 app.use('/api/zaakpay', require('./routes/zaakpayRoutes')); // ✅ Zaakpay
+app.use('/api/recon', require('./routes/reconRoutes')); // ✅ Reconciliation dashboard (mock data + logs)
 
 // Ensure logs are flushed immediately (important for PM2)
 const originalLog = console.log;

@@ -102,6 +102,16 @@ export const API_ENDPOINTS = {
   ADMIN_UPDATE_TRANSACTION_STATUS: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}/status`,
   ADMIN_DELETE_TRANSACTION: (transactionId) => `${BASE_URL}/payments/admin/transactions/${transactionId}`,
   
+  // ============ RECONCILIATION DASHBOARD ============
+  RECON_OVERVIEW: `${BASE_URL}/recon/overview`,
+  RECON_RUNS: `${BASE_URL}/recon/runs`,
+  RECON_RUN: (runId) => `${BASE_URL}/recon/runs/${runId}`,
+  RECON_JOURNAL: `${BASE_URL}/recon/journal`,
+  RECON_JOURNAL_ENTRY: (id) => `${BASE_URL}/recon/journal/${id}`,
+  RECON_EXCEPTIONS: `${BASE_URL}/recon/exceptions`,
+  RECON_EXCEPTION: (id) => `${BASE_URL}/recon/exceptions/${id}`,
+  RECON_LOGS: (limit) => `${BASE_URL}/recon/logs${limit != null ? `?limit=${limit}` : ''}`,
+
   // ============ PAYTM WEBHOOK (No Auth) ============
   PAYTM_WEBHOOK: `${BASE_URL}/paytm/webhook`,
   // ============ EASEBUZZ WEBHOOK (No Auth) ============
