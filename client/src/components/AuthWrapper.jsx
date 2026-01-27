@@ -34,11 +34,9 @@ const AuthWrapper = ({ children, requiredRole }) => {
       </div>
     );
   }
-
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-
   // ✅ Handle array of required roles
   if (Array.isArray(requiredRole)) {
     if (requiredRole.includes(userRole)) {
