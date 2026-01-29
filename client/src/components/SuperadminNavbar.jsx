@@ -12,6 +12,7 @@ import {
   FiSettings,
   FiClock,
   FiLayers,
+  FiBook,
 } from "react-icons/fi";
 import { TbArrowsTransferDown } from "react-icons/tb";
 import { HiOutlineChartBar } from "react-icons/hi2";
@@ -60,6 +61,11 @@ const SuperadminNavbar = () => {
       path: "/reconciliation-showcase",
       label: "Reconciliation",
       icon: <FiLayers />,
+    },
+    {
+      path: "/superadmin/ledger",
+      label: "Ledger",
+      icon: <FiBook />,
     },
     // Only show sub-superadmin management to superAdmin
     ...(isSuperAdmin ? [{

@@ -439,6 +439,7 @@ app.use('/api/sabpaisa', require('./routes/sabpaisaRoutes')); // ✅ NEW
 app.use('/api/cashfree', require('./routes/cashfreeRoutes')); // ✅ NEW
 app.use('/api/zaakpay', require('./routes/zaakpayRoutes')); // ✅ Zaakpay
 app.use('/api/recon', require('./routes/reconRoutes')); // ✅ Reconciliation dashboard (mock data + logs)
+app.use('/api/ledger', require('./routes/ledgerRoutes')); // ✅ Double-entry ledger (Account, JournalEntry, Posting)
 
 // Ensure logs are flushed immediately (important for PM2)
 const originalLog = console.log;

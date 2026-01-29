@@ -112,6 +112,12 @@ export const API_ENDPOINTS = {
   RECON_EXCEPTION: (id) => `${BASE_URL}/recon/exceptions/${id}`,
   RECON_LOGS: (limit) => `${BASE_URL}/recon/logs${limit != null ? `?limit=${limit}` : ''}`,
 
+  // ============ LEDGER (Double-entry: Account, JournalEntry, Posting) ============
+  LEDGER_OVERVIEW: `${BASE_URL}/ledger/overview`,
+  LEDGER_ACCOUNTS: `${BASE_URL}/ledger/accounts`,
+  LEDGER_JOURNAL: `${BASE_URL}/ledger/journal`,
+  LEDGER_JOURNAL_ENTRY: (id) => `${BASE_URL}/ledger/journal/${id}`,
+
   // ============ PAYTM WEBHOOK (No Auth) ============
   PAYTM_WEBHOOK: `${BASE_URL}/paytm/webhook`,
   // ============ EASEBUZZ WEBHOOK (No Auth) ============

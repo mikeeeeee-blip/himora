@@ -18,12 +18,15 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiX,
+  FiBook,
+  FiLock,
 } from "react-icons/fi";
 import { HiOutlineChartBar } from "react-icons/hi2";
 import { TbArrowsTransferDown } from "react-icons/tb";
 import { RiMoneyDollarCircleLine } from "react-icons/ri";
 import { useNavigate } from "react-router-dom";
 import superadminPaymentService from "../services/superadminPaymentService";
+import ledgerService from "../services/ledgerService";
 
 const SuperadminDashboard = () => {
   const navigate = useNavigate();
@@ -50,6 +53,20 @@ const SuperadminDashboard = () => {
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [useDateRange, setUseDateRange] = useState(false);
   const [showAllTime, setShowAllTime] = useState(false);
+  const [ledgerOverview, setLedgerOverview] = useState(null);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+
+  const fetchLedgerOverview = useCallback(async () => {
+    setLedgerLoading(true);
+    try {
+      const res = await ledgerService.overview();
+      if (res?.success && res?.data) setLedgerOverview(res.data);
+    } catch (e) {
+      console.error('Ledger overview error:', e);
+    } finally {
+      setLedgerLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     // Fetch both in parallel for better performance
@@ -61,6 +78,10 @@ const SuperadminDashboard = () => {
       setError('Failed to load dashboard data');
     });
   }, [selectedDate, useDateRange, dateRange, showAllTime]);
+
+  useEffect(() => {
+    fetchLedgerOverview();
+  }, [fetchLedgerOverview]);
 
   const fetchMerchantsData = async () => {
     setLoadingMerchants(true);
@@ -695,8 +716,62 @@ const SuperadminDashboard = () => {
                         </div>
                       </div>
                     </div>
-                                        {/* Merchants Leaderboard - Payin & Payout */}
-                                        {merchantsData.length > 0 && (
+
+                    {/* Double-Entry Ledger – Control-plane */}
+                    <div className="mt-6">
+                      <div className="flex justify-between items-center mb-3">
+                        <h2 className="flex items-center gap-3 text-lg sm:text-xl text-white font-medium font-['Albert_Sans']">
+                          <FiBook /> Double-Entry Ledger
+                        </h2>
+                        <button
+                          onClick={() => navigate("/superadmin/ledger")}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent/20 border border-accent/50 text-accent hover:bg-accent/30 text-sm font-medium font-['Albert_Sans'] transition-colors"
+                        >
+                          View Ledger
+                        </button>
+                      </div>
+                      <div className="bg-[#263F43] border border-white/10 rounded-xl p-4 flex flex-wrap items-center gap-4">
+                        {ledgerLoading ? (
+                          <div className="flex items-center gap-2 text-white/60">
+                            <FiRefreshCw className="w-4 h-4 animate-spin" />
+                            <span className="text-sm">Loading…</span>
+                          </div>
+                        ) : ledgerOverview ? (
+                          <>
+                            <div className="flex items-center gap-2 text-white/90 text-sm">
+                              <span className="text-white/60">Accounts:</span>
+                              <span className="font-semibold">{ledgerOverview.accountCount ?? 0}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-white/90 text-sm">
+                              <span className="text-white/60">Journal entries:</span>
+                              <span className="font-semibold">{ledgerOverview.journalCount ?? 0}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-white/90 text-sm">
+                              <span className="text-white/60">Postings:</span>
+                              <span className="font-semibold">{ledgerOverview.postingCount ?? 0}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              {ledgerOverview.allBalanced ? (
+                                <span className="text-green-400 flex items-center gap-1">
+                                  <FiCheckCircle /> Dr = Cr enforced
+                                </span>
+                              ) : (
+                                <span className="text-amber-400">Balance check pending</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-white/70 text-xs">
+                              <FiLock className="shrink-0" />
+                              <span>Posted journals immutable · Tenant-scoped</span>
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-white/60 text-sm">Ledger not available</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Merchants Leaderboard - Payin & Payout */}
+                    {merchantsData.length > 0 && (
                       <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {/* Top Payin Merchants */}
                         <div className="bg-[#263F43] border border-white/10 rounded-xl overflow-hidden">

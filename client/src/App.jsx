@@ -36,6 +36,8 @@ import ReconShowcasePage from "./components/pages/ReconShowcasePage";
 import ReconRunDetailPage from "./components/pages/ReconRunDetailPage";
 import ReconJournalDetailPage from "./components/pages/ReconJournalDetailPage";
 import ReconExceptionDetailPage from "./components/pages/ReconExceptionDetailPage";
+import LedgerPage from "./components/pages/LedgerPage";
+import LedgerJournalDetailPage from "./components/pages/LedgerJournalDetailPage";
 
 function App() {
   return (
@@ -181,6 +183,30 @@ function App() {
               <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
                 <SuperadminLayout>
                   <SubSuperadminManagementPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
+          }
+        />
+        <Route
+          path="/superadmin/ledger"
+          element={
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <LedgerPage />
+                </SuperadminLayout>
+              </AuthWrapper>
+            </RouteProtection>
+          }
+        />
+        <Route
+          path="/superadmin/ledger/journal/:id"
+          element={
+            <RouteProtection>
+              <AuthWrapper requiredRole={USER_ROLES.SUPERADMIN}>
+                <SuperadminLayout>
+                  <LedgerJournalDetailPage />
                 </SuperadminLayout>
               </AuthWrapper>
             </RouteProtection>
